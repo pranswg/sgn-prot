@@ -86,11 +86,12 @@ export function MemberFormDialog({
 
   const handleGenderChange = (gender: 'male' | 'female') => {
     const voices = voicePositionsForGender(gender, allVoices())
+    const fallback = voices.length > 0 ? voices[0].id : ''
     setForm((f) => ({
       ...f,
       gender,
       voicePosition:
-        voices.find((v) => v.id === f.voicePosition)?.id ?? voices[0].id,
+        voices.find((v) => v.id === f.voicePosition)?.id ?? fallback,
     }))
   }
 

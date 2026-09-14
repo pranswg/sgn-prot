@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, Check, CalendarPlus, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -55,7 +55,6 @@ export function SuguanBuilderPage() {
   const suguan = useSuguanStore((s) => s.suguan)
   const createSuguan = useSuguanStore((s) => s.createSuguan)
   const updateSuguan = useSuguanStore((s) => s.updateSuguan)
-  const publishSuguan = useSuguanStore((s) => s.publishSuguan)
   const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
@@ -79,7 +78,7 @@ export function SuguanBuilderPage() {
   })
 
   useEffect(() => {
-    if (existing && existing.status === 'draft') {
+    if (existing) {
       setDraft({
         date: existing.date,
         time: existing.time,
@@ -102,7 +101,7 @@ export function SuguanBuilderPage() {
     return true
   })()
 
-  const handleFinish = (mode: 'draft' | 'publish') => {
+  const handleSave = () => {
     if (!draft.date || !draft.time || !draft.serviceTypeId) {
       toast.error('Please configure the service first.')
       return
@@ -118,12 +117,7 @@ export function SuguanBuilderPage() {
         assignments: draft.assignments,
         dutyRoles: draft.dutyRoles,
       })
-      if (mode === 'publish') publishSuguan(existing.id)
-      toast.success(
-        mode === 'publish'
-          ? 'Suguan published.'
-          : 'Draft saved.',
-      )
+      toast.success('Suguan saved.')
     } else {
       const created = createSuguan({
         date: draft.date,
@@ -137,28 +131,19 @@ export function SuguanBuilderPage() {
         assignments: draft.assignments,
         dutyRoles: draft.dutyRoles,
       })
-      if (mode === 'publish') publishSuguan(created.id)
-      toast.success(
-        mode === 'publish'
-          ? 'Suguan created and published.'
-          : 'Suguan saved as draft.',
-      )
+      toast.success('Suguan saved.')
     }
     navigate('suguan-history')
   }
 
   const cancel = () => {
-    if (existing && existing.status === 'draft') {
-      navigate('suguan-history')
-      return
-    }
     navigate('dashboard')
   }
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        title={existing ? 'Edit Draft Suguan' : 'Suguan Builder'}
+        title={existing ? 'Edit Suguan' : 'Suguan Builder'}
         description="Create and schedule a complete Suguan step by step."
         actions={
           <Button variant="ghost" onClick={cancel}>
@@ -272,7 +257,7 @@ export function SuguanBuilderPage() {
           <CardContent>
             <p className="mb-4 text-sm text-muted-foreground">
               Set the target number of members for each voice position. Sections
-              below target show a warning but do not block publication.
+              below target show a warning but do not block saving.
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {Object.entries(draft.voiceCapacities).map(([voiceId, capacity]) => {
@@ -332,15 +317,10 @@ export function SuguanBuilderPage() {
         </Button>
         <div className="flex gap-2">
           {step === 4 ? (
-            <>
-              <Button variant="outline" onClick={() => handleFinish('draft')}>
-                Save as Draft
-              </Button>
-              <Button onClick={() => handleFinish('publish')}>
-                <CalendarPlus className="size-4" />
-                Publish Suguan
-              </Button>
-            </>
+            <Button onClick={handleSave}>
+              <Check className="size-4" />
+              Save Suguan
+            </Button>
           ) : (
             <Button
               onClick={() => setStep((s) => Math.min(4, s + 1))}

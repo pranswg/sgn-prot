@@ -1,22 +1,5 @@
-import type { SuguanStatus } from '@/core/types/suguan'
-import { SUGUAN_STATUS_LABELS } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-
-const STATUS_STYLES: Record<SuguanStatus, string> = {
-  draft: 'bg-muted text-muted-foreground',
-  published: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
-  completed: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  cancelled: 'bg-red-500/15 text-red-700 dark:text-red-300',
-}
-
-export function SuguanStatusBadge({ status }: { status: SuguanStatus }) {
-  return (
-    <Badge variant="outline" className={cn('font-medium', STATUS_STYLES[status])}>
-      {SUGUAN_STATUS_LABELS[status]}
-    </Badge>
-  )
-}
 
 export function MemberStatusBadge({ active }: { active: boolean }) {
   return (

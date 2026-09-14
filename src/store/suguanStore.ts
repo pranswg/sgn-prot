@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import type { Suguan, SuguanStatus } from '@/core/types/suguan'
+import type { Suguan } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
 import { useSettingsStore } from '@/store/settingsStore'
 import { seedSuguan } from '@/lib/seedData'
@@ -18,12 +18,10 @@ interface SuguanState {
   suguan: Suguan[]
   createSuguan: (config: SuguanConfigInput) => Suguan
   updateSuguan: (id: string, patch: Partial<Suguan>) => void
-  setStatus: (id: string, status: SuguanStatus) => void
   addAssignment: (suguanId: string, assignment: { memberId: string; memberName: string; voicePosition: string }) => void
   removeAssignment: (suguanId: string, memberId: string, voicePosition: string) => void
   setDutyRole: (suguanId: string, dutyRoleId: string, memberId: string, memberName: string) => void
   removeDutyRole: (suguanId: string, dutyRoleId: string) => void
-  publishSuguan: (id: string) => void
   deleteSuguan: (id: string) => void
   resetDemoData: () => void
   importData: (suguan: Suguan[]) => void
@@ -40,7 +38,6 @@ export const useSuguanStore = create<SuguanState>()(
         const suguan: Suguan = {
           id: nanoid(),
           ...config,
-          status: 'draft',
           voiceCapacities: defaultCapacities(useSettingsStore.getState().allVoices()),
           assignments: [],
           dutyRoles: [],
@@ -56,24 +53,6 @@ export const useSuguanStore = create<SuguanState>()(
           suguan: s.suguan.map((su) =>
             su.id === id
               ? { ...su, ...patch, updatedAt: new Date().toISOString() }
-              : su,
-          ),
-        }))
-      },
-
-      setStatus: (id, status) => {
-        set((s) => ({
-          suguan: s.suguan.map((su) =>
-            su.id === id
-              ? {
-                  ...su,
-                  status,
-                  updatedAt: new Date().toISOString(),
-                  publishedAt:
-                    status === 'published' && !su.publishedAt
-                      ? new Date().toISOString()
-                      : su.publishedAt,
-                }
               : su,
           ),
         }))
@@ -144,21 +123,6 @@ export const useSuguanStore = create<SuguanState>()(
         }))
       },
 
-      publishSuguan: (id) => {
-        set((s) => ({
-          suguan: s.suguan.map((su) =>
-            su.id === id
-              ? {
-                  ...su,
-                  status: 'published',
-                  publishedAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                }
-              : su,
-          ),
-        }))
-      },
-
       deleteSuguan: (id) => {
         set((s) => ({ suguan: s.suguan.filter((su) => su.id !== id) }))
       },
@@ -177,7 +141,7 @@ export const useSuguanStore = create<SuguanState>()(
     }),
     {
       name: 'choir-suguan',
-      version: 1,
+      version: 2,
     },
   ),
 )

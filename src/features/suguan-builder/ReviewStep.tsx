@@ -28,7 +28,6 @@ export function ReviewStep({ draft }: ReviewStepProps) {
       date: draft.date,
       time: draft.time,
       serviceTypeId: draft.serviceTypeId,
-      status: 'draft',
       voiceCapacities: draft.voiceCapacities,
       assignments: draft.assignments,
       dutyRoles: draft.dutyRoles,
@@ -224,8 +223,8 @@ export function ReviewStep({ draft }: ReviewStepProps) {
           ))}
           {errors.length > 0 && (
             <p className="pt-1 text-xs text-muted-foreground">
-              Errors should be resolved before publishing. Warnings (such as
-              under-filled sections) do not block publication.
+              Errors should be resolved before saving. Warnings (such as
+              under-filled sections) do not block saving.
             </p>
           )}
         </CardContent>

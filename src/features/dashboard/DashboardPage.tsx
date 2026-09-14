@@ -17,7 +17,6 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { formatDate, formatTime, isPast } from '@/lib/format'
-import { SuguanStatusBadge } from '@/components/StatusBadges'
 
 export function DashboardPage() {
   const members = useMemberStore((s) => s.members)
@@ -35,17 +34,14 @@ export function DashboardPage() {
 
   const upcoming = useMemo(() => {
     return suguan
-      .filter(
-        (s) =>
-          (s.status === 'draft' || s.status === 'published') && !isPast(s.date),
-      )
+      .filter((s) => !isPast(s.date))
       .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
       .slice(0, 5)
   }, [suguan])
 
   const recent = useMemo(() => {
     return suguan
-      .filter((s) => s.status === 'completed')
+      .filter((s) => isPast(s.date))
       .sort(
         (a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`),
       )
@@ -135,7 +131,6 @@ export function DashboardPage() {
                     </p>
                   </div>
                 </div>
-                <SuguanStatusBadge status={s.status} />
               </button>
             ))}
           </CardContent>
@@ -149,7 +144,7 @@ export function DashboardPage() {
           <CardContent className="space-y-2">
             {recent.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No completed Suguan yet.
+                No past Suguan yet.
               </p>
             )}
             {recent.map((s) => (
@@ -167,7 +162,6 @@ export function DashboardPage() {
                     {formatDate(s.date)} · {s.assignments.length} members
                   </p>
                 </div>
-                <SuguanStatusBadge status={s.status} />
               </button>
             ))}
           </CardContent>

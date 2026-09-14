@@ -16,8 +16,6 @@ export interface ServiceType {
   name: string
 }
 
-export type SuguanStatus = 'draft' | 'published' | 'completed' | 'cancelled'
-
 export interface SuguanAssignment {
   memberId: string
   memberName: string
@@ -38,11 +36,9 @@ export interface Suguan {
   serviceTypeId: string
   location?: string
   notes?: string
-  status: SuguanStatus
   voiceCapacities: Record<string, number>
   assignments: SuguanAssignment[]
   dutyRoles: SuguanDutyRole[]
   createdAt: string
   updatedAt: string
-  publishedAt?: string
 }

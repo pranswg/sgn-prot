@@ -111,9 +111,7 @@ export function detectConflicts(input: ConflictDetectionInput): Conflict[] {
   }
 
   const sameMillis = new Date(`${suguan.date}T${suguan.time || '00:00'}`).getTime()
-  const otherSuguan = allSuguan.filter(
-    (s) => s.id !== suguan.id && s.status !== 'cancelled',
-  )
+  const otherSuguan = allSuguan.filter((s) => s.id !== suguan.id)
   const assignedMembers = new Set(suguan.assignments.map((a) => a.memberId))
   const dutyMembers = new Set(suguan.dutyRoles.map((d) => d.memberId))
   const allCurrentMembers = new Set([...assignedMembers, ...dutyMembers])

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import {
   Download,
   Eye,
+  FileUp,
   Pencil,
   Plus,
   Search,
@@ -51,6 +52,7 @@ import { formatDate } from '@/lib/format'
 import { GenderBadge, MemberStatusBadge } from '@/components/StatusBadges'
 import { MemberFormDialog } from './MemberFormDialog'
 import { MemberDetailDialog } from './MemberDetailDialog'
+import { ImportRosterDialog } from './ImportRosterDialog'
 import { exportCSV, exportExcel, membersToRows } from '@/lib/export'
 
 type GenderFilter = 'all' | 'female' | 'male'
@@ -69,6 +71,7 @@ export function MasterListPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const [formOpen, setFormOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [viewingMember, setViewingMember] = useState<Member | null>(null)
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null)
@@ -151,6 +154,10 @@ export function MasterListPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="size-4" />
+              Import Roster
+            </Button>
             <Button onClick={openAddDialog}>
               <Plus className="size-4" />
               Add Member
@@ -299,6 +306,8 @@ export function MasterListPage() {
         member={editingMember}
         onSaved={() => setViewingMember(null)}
       />
+
+      <ImportRosterDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <MemberDetailDialog
         member={viewingMember}

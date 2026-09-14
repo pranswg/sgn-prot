@@ -38,7 +38,6 @@ export function VoiceAssignmentsStep({
     const thisMillis = new Date(`${draft.date}T${draft.time || '00:00'}`).getTime()
     for (const s of allSuguan) {
       if (s.id === undefined) continue
-      if (s.status === 'cancelled') continue
       const millis = new Date(`${s.date}T${s.time || '00:00'}`).getTime()
       if (millis === thisMillis) {
         for (const a of s.assignments) ids.add(a.memberId)

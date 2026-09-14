@@ -18,7 +18,7 @@ export function buildVoiceMap(voices: VoicePosition[]): Record<string, VoicePosi
 
 export function getVoicePosition(id: string, voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS): VoicePosition {
   const map = buildVoiceMap(voices)
-  return map[id] ?? voices[0]
+  return map[id] ?? voices[0] ?? DEFAULT_VOICE_POSITIONS[0]
 }
 
 export function getVoiceName(id: string, voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS): string {

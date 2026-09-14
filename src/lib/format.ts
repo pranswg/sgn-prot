@@ -1,5 +1,4 @@
 import { format, isValid, parseISO } from 'date-fns'
-import type { SuguanStatus } from '@/core/types/suguan'
 
 export function formatDate(isoDate: string): string {
   if (!isoDate) return '—'
@@ -27,13 +26,6 @@ export function formatTime(time: string): string {
 
 export function fullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`
-}
-
-export const SUGUAN_STATUS_LABELS: Record<SuguanStatus, string> = {
-  draft: 'Draft',
-  published: 'Published',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
 }
 
 export function isPast(date: string): boolean {

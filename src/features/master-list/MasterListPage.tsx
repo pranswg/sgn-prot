@@ -47,6 +47,7 @@ import {
 import { useMemberStore } from '@/store/memberStore'
 import type { Member } from '@/core/types/member'
 import { getVoiceName } from '@/core/constants/voicePositions'
+import { positionSummary } from '@/core/constants/choirPositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { formatDate } from '@/lib/format'
 import { GenderBadge, MemberStatusBadge } from '@/components/StatusBadges'
@@ -229,6 +230,7 @@ export function MasterListPage() {
               <TableHead>Name</TableHead>
               <TableHead>Gender</TableHead>
               <TableHead>Voice Position</TableHead>
+              <TableHead className="hidden lg:table-cell">Positions</TableHead>
               <TableHead>Membership</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="hidden lg:table-cell">Date Added</TableHead>
@@ -238,10 +240,25 @@ export function MasterListPage() {
           <TableBody>
             {filteredMembers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                  {members.length === 0
-                    ? 'No members yet. Click "Add Member" to begin.'
-                    : 'No members match the current filters.'}
+                <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
+                  {members.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <p>
+                        No members yet. Import the choir roster PDF or add members
+                        manually.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setImportOpen(true)}
+                      >
+                        <FileUp className="size-4" />
+                        Import Roster
+                      </Button>
+                    </div>
+                  ) : (
+                    'No members match the current filters.'
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -256,6 +273,18 @@ export function MasterListPage() {
                     <GenderBadge gender={m.gender} />
                   </TableCell>
                   <TableCell>{getVoiceName(m.voicePosition, voices)}</TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {m.positions && m.positions.length > 0 ? (
+                      <span
+                        title={positionSummary(m.positions)}
+                        className="line-clamp-1 text-xs text-muted-foreground"
+                      >
+                        {positionSummary(m.positions)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="capitalize">{m.membershipType}</TableCell>
                   <TableCell>
                     <MemberStatusBadge active={m.isActive} />

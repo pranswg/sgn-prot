@@ -35,7 +35,6 @@ interface SettingsState {
   allServiceTypes: () => StoredServiceType[]
   allDutyRoles: () => StoredDutyRole[]
   allVoices: () => StoredVoice[]
-  resetDemoData: () => void
   importData: (
     serviceTypes: StoredServiceType[],
     dutyRoles: StoredDutyRole[],
@@ -135,14 +134,6 @@ export const useSettingsStore = create<SettingsState>()(
       allServiceTypes: () => get().serviceTypes,
       allDutyRoles: () => get().dutyRoles,
       allVoices: () => get().voices,
-
-      resetDemoData: () => {
-        set({
-          serviceTypes: seedServiceTypes(),
-          dutyRoles: seedDutyRoles(),
-          voices: seedVoices(),
-        })
-      },
 
       importData: (serviceTypes, dutyRoles, voices) => {
         set({ serviceTypes, dutyRoles, voices })

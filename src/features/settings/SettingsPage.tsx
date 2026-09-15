@@ -5,7 +5,6 @@ import {
   Download,
   Pencil,
   Plus,
-  RotateCcw,
   Trash2,
   Upload,
   X,
@@ -53,8 +52,8 @@ export function SettingsPage() {
   const suguanStore = useSuguanStore()
   const settingsStore = useSettingsStore()
 
-  const [confirmReset, setConfirmReset] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [serviceName, setServiceName] = useState('')
@@ -563,48 +562,20 @@ export function SettingsPage() {
                 e.target.value = ''
               }}
             />
-            <Button
-              variant="outline"
-              onClick={() => setConfirmReset(true)}
-            >
-              <RotateCcw className="size-4" />
-              Reset Demo Data
+            <Button variant="destructive" onClick={() => setConfirmClear(true)}>
+              <Trash2 className="size-4" />
+              Clear All Data
             </Button>
             <Button
               variant="destructive"
-              onClick={() => setConfirmClear(true)}
+              onClick={() => setConfirmClearMasterList(true)}
             >
               <Trash2 className="size-4" />
-              Clear All Data
+              Clear Master List
             </Button>
           </div>
         </CardContent>
       </Card>
-
-      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset to demo data?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will replace all current data with the STA. Monica choir
-              roster seed data. Your current records will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                memberStore.resetDemoData()
-                suguanStore.resetDemoData()
-                settingsStore.resetDemoData()
-                toast.success('Demo data restored.')
-              }}
-            >
-              Reset
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
         <AlertDialogContent>
@@ -628,6 +599,33 @@ export function SettingsPage() {
               }}
             >
               Clear Everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={confirmClearMasterList}
+        onOpenChange={setConfirmClearMasterList}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear the Master List?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all members and trainees from this
+              browser. Suguan history and settings are kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white"
+              onClick={() => {
+                memberStore.clear()
+                toast.success('Master List cleared.')
+              }}
+            >
+              Clear Master List
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

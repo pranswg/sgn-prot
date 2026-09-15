@@ -19,10 +19,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import type { Member, MemberInput } from '@/core/types/member'
+import { Checkbox } from '@/components/ui/checkbox'
+import type { Member, MemberInput, ChoirPosition } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
+import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
 
 interface MemberFormDialogProps {
   open: boolean
@@ -49,6 +51,7 @@ export function MemberFormDialog({
     membershipType: 'regular' as 'regular' | 'provisional',
     isActive: true,
     dateAdded: new Date().toISOString().slice(0, 10),
+    positions: [] as ChoirPosition[],
     notes: '',
   })
 
@@ -64,6 +67,7 @@ export function MemberFormDialog({
               membershipType: member.membershipType,
               isActive: member.isActive,
               dateAdded: member.dateAdded,
+              positions: member.positions ?? [],
               notes: member.notes ?? '',
             }
           : {
@@ -74,14 +78,24 @@ export function MemberFormDialog({
               membershipType: 'regular',
               isActive: true,
               dateAdded: new Date().toISOString().slice(0, 10),
+              positions: [],
               notes: '',
             },
       )
     }
   }, [open, member])
 
-  const set = (field: string, value: string | boolean) => {
+  const set = (field: string, value: string | boolean | ChoirPosition[]) => {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  const togglePosition = (position: ChoirPosition) => {
+    setForm((f) => ({
+      ...f,
+      positions: f.positions.includes(position)
+        ? f.positions.filter((p) => p !== position)
+        : [...f.positions, position],
+    }))
   }
 
   const handleGenderChange = (gender: 'male' | 'female') => {
@@ -108,6 +122,7 @@ export function MemberFormDialog({
       membershipType: form.membershipType,
       isActive: form.isActive,
       dateAdded: form.dateAdded || new Date().toISOString().slice(0, 10),
+      positions: form.positions,
       notes: form.notes.trim() || undefined,
     }
     if (member) {
@@ -188,6 +203,29 @@ export function MemberFormDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Choir Position / Privileges</Label>
+            <div className="grid grid-cols-2 gap-2 rounded-md border p-3">
+              {CHOIR_POSITIONS.map((position) => (
+                <label
+                  key={position.id}
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                >
+                  <Checkbox
+                    checked={form.positions.includes(position.id)}
+                    onCheckedChange={() => togglePosition(position.id)}
+                  />
+                  <span>{position.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Positions control which duty roles a member may be assigned in the
+              Suguan Builder. Organista and Assistant Tagapagturo are treated
+              as equivalent.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

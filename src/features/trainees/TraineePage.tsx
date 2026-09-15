@@ -91,7 +91,7 @@ export function TraineePage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        title="Pagsasanay / Trainees"
+        title="Nagsasanay / Trainees"
         description="Manage prospective choir members. Active trainees are not eligible for Suguan assignments."
         actions={
           <Button

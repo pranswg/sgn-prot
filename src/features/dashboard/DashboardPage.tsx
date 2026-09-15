@@ -48,8 +48,11 @@ export function DashboardPage() {
       .slice(0, 4)
   }, [suguan])
 
-  const serviceName = (id: string) =>
-    allServiceTypes().find((t) => t.id === id)?.name ?? id
+  const recordLabel = (s: (typeof suguan)[number]) =>
+    s.type === 'special'
+      ? s.eventTitle || 'Special Occasion'
+      : allServiceTypes().find((t) => t.id === s.serviceTypeId)?.name ??
+        s.serviceTypeId
 
   const stats = [
     { label: 'Total Members', value: members.length, icon: Users, color: 'text-sky-600 dark:text-sky-400' },
@@ -125,7 +128,7 @@ export function DashboardPage() {
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium">{serviceName(s.serviceTypeId)}</p>
+                    <p className="text-sm font-medium">{recordLabel(s)}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatTime(s.time)} · {s.assignments.length} assigned
                     </p>
@@ -156,7 +159,7 @@ export function DashboardPage() {
               >
                 <div>
                   <p className="text-sm font-medium">
-                    {serviceName(s.serviceTypeId)}
+                    {recordLabel(s)}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {formatDate(s.date)} · {s.assignments.length} members

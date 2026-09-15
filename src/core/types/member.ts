@@ -2,6 +2,13 @@ export type Gender = 'male' | 'female'
 
 export type MembershipType = 'regular' | 'provisional'
 
+export type ChoirPosition =
+  | 'oic'
+  | 'kalihim-ng-mang-aawit'
+  | 'pangulong-mang-aawit'
+  | 'organista'
+  | 'assistant-tagapagturo'
+
 export interface Member {
   id: string
   firstName: string
@@ -11,6 +18,7 @@ export interface Member {
   membershipType: MembershipType
   isActive: boolean
   dateAdded: string
+  positions: ChoirPosition[]
   notes?: string
 }
 
@@ -34,6 +42,7 @@ export interface MemberInput {
   membershipType: MembershipType
   isActive: boolean
   dateAdded: string
+  positions?: ChoirPosition[]
   notes?: string
 }
 

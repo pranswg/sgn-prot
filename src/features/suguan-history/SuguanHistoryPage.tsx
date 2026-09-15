@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { CalendarPlus, Eye, Pencil } from 'lucide-react'
+import { toast } from 'sonner'
+import { CalendarPlus, Eye, FileDown, FileSpreadsheet, MoreHorizontal, Pencil } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,7 +28,10 @@ import {
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useMemberStore } from '@/store/memberStore'
 import { formatDate } from '@/lib/format'
+import { exportSuguanExcel, exportSuguanPdf } from '@/lib/suguanExport'
+import type { Suguan } from '@/core/types/suguan'
 
 export function SuguanHistoryPage() {
   const suguan = useSuguanStore((s) => s.suguan)
@@ -29,12 +39,37 @@ export function SuguanHistoryPage() {
   const editSuguanInBuilder = useNavStore((s) => s.editSuguanInBuilder)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
+  const members = useMemberStore((s) => s.members)
 
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [exportingId, setExportingId] = useState<string | null>(null)
+
+  const exportOne = async (
+    suguanRecord: Suguan,
+    kind: 'excel' | 'pdf',
+  ) => {
+    setExportingId(suguanRecord.id)
+    try {
+      if (kind === 'excel')
+        await exportSuguanExcel(suguanRecord, members, suguanRecord.docFormat)
+      else await exportSuguanPdf(suguanRecord, members, suguanRecord.docFormat)
+      toast.success('SUGUAN sheet exported.')
+    } catch (err) {
+      console.error(err)
+      toast.error('Could not export the SUGUAN sheet.')
+    } finally {
+      setExportingId(null)
+    }
+  }
 
   const serviceName = (id: string) =>
     allServiceTypes().find((t) => t.id === id)?.name ?? id
+
+  const recordLabel = (s: Suguan) =>
+    s.type === 'special'
+      ? s.eventTitle || 'Special Occasion'
+      : serviceName(s.serviceTypeId)
 
   const allTypes = allServiceTypes()
 
@@ -45,10 +80,12 @@ export function SuguanHistoryPage() {
       .filter((s) => {
         if (typeFilter !== 'all' && s.serviceTypeId !== typeFilter) return false
         if (q) {
-          const typeName =
-            allTypes.find((t) => t.id === s.serviceTypeId)?.name ??
-            s.serviceTypeId
-          const joined = `${s.date} ${typeName} ${s.location ?? ''}`.toLowerCase()
+          const label =
+            s.type === 'special'
+              ? s.eventTitle || 'Special Occasion'
+              : allTypes.find((t) => t.id === s.serviceTypeId)?.name ??
+                s.serviceTypeId
+          const joined = `${s.date} ${label} ${s.location ?? ''}`.toLowerCase()
           if (!joined.includes(q)) return false
         }
         return true
@@ -96,7 +133,7 @@ export function SuguanHistoryPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Time</TableHead>
-              <TableHead>Service</TableHead>
+              <TableHead>Service / Event</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>Assigned</TableHead>
               <TableHead className="w-24 text-right">Actions</TableHead>
@@ -114,7 +151,7 @@ export function SuguanHistoryPage() {
                 <TableRow key={s.id}>
                   <TableCell>{formatDate(s.date)}</TableCell>
                   <TableCell>{s.time}</TableCell>
-                  <TableCell>{serviceName(s.serviceTypeId)}</TableCell>
+                  <TableCell>{recordLabel(s)}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {s.location ?? '—'}
                   </TableCell>
@@ -135,6 +172,27 @@ export function SuguanHistoryPage() {
                       >
                         <Eye className="size-4" />
                       </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            disabled={exportingId === s.id}
+                          >
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => exportOne(s, 'excel')}>
+                            <FileSpreadsheet className="size-4" />
+                            Export Excel (.xlsx)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => exportOne(s, 'pdf')}>
+                            <FileDown className="size-4" />
+                            Export PDF (.pdf)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>

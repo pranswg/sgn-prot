@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Check } from 'lucide-react'
+import { Search, Square, CheckSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -12,9 +12,11 @@ interface MemberSelectorProps {
   candidates: Member[]
   excludedIds: string[]
   conflictIds: Set<string>
-  onSelect: (member: Member) => void
+  onSelect: (members: Member[]) => void
   onClose: () => void
   emptyMessage?: string
+  addLabel?: string
+  singleSelect?: boolean
 }
 
 export function MemberSelector({
@@ -24,8 +26,11 @@ export function MemberSelector({
   onSelect,
   onClose,
   emptyMessage = 'No eligible members.',
+  addLabel = 'Add Selected',
+  singleSelect = false,
 }: MemberSelectorProps) {
   const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
 
@@ -45,9 +50,31 @@ export function MemberSelector({
       .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`))
   }, [candidates, excludedIds, query, voices])
 
+  const toggle = (id: string) => {
+    setSelected((s) => {
+      const next = new Set(s)
+      if (singleSelect) {
+        next.clear()
+        if (!s.has(id)) next.add(id)
+        return next
+      }
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedMembers = candidates.filter((m) => selected.has(m.id))
+
+  const handleAdd = () => {
+    if (selectedMembers.length === 0) return
+    onSelect(selectedMembers)
+    setSelected(new Set())
+  }
+
   return (
-    <div className="flex max-h-[420px] flex-col gap-2">
-      <div className="relative">
+    <div className="flex max-h-[420px] min-h-0 flex-col gap-2">
+      <div className="relative shrink-0">
         <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           autoFocus
@@ -57,7 +84,7 @@ export function MemberSelector({
           className="pl-9"
         />
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-1">
           {list.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
@@ -66,18 +93,20 @@ export function MemberSelector({
           )}
           {list.map((m) => {
             const inConflict = conflictIds.has(m.id)
+            const isSelected = selected.has(m.id)
             return (
               <button
                 key={m.id}
                 type="button"
-                onClick={() => onSelect(m)}
+                onClick={() => toggle(m.id)}
                 className={cn(
-                  'flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent',
+                  'flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent',
+                  isSelected && 'bg-accent',
                   inConflict && 'opacity-60 hover:opacity-100',
                 )}
               >
-                <span>
-                  <span className="font-medium">
+                <span className="min-w-0">
+                  <span className={cn('font-medium', isSelected && 'text-primary')}>
                     {m.firstName} {m.lastName}
                   </span>
                   <span className="ml-2 text-xs text-muted-foreground">
@@ -85,20 +114,27 @@ export function MemberSelector({
                   </span>
                 </span>
                 {inConflict ? (
-                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  <span className="shrink-0 text-xs font-medium text-amber-600 dark:text-amber-400">
                     conflict
                   </span>
+                ) : isSelected ? (
+                  <CheckSquare className="size-4 shrink-0 text-primary" />
                 ) : (
-                  <Check className="size-4 text-muted-foreground" />
+                  <Square className="size-4 shrink-0 text-muted-foreground" />
                 )}
               </button>
             )
           })}
         </div>
       </ScrollArea>
-      <Button variant="ghost" size="sm" onClick={onClose} className="self-end">
-        Close
-      </Button>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t pt-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={handleAdd} disabled={selected.size === 0}>
+          {addLabel} ({selected.size})
+        </Button>
+      </div>
     </div>
   )
 }

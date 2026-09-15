@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import type { Member } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { getVoiceName } from '@/core/constants/voicePositions'
+import { positionSummary } from '@/core/constants/choirPositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { formatDate } from '@/lib/format'
 
@@ -76,6 +77,7 @@ export function MemberDetailDialog({
             label="Membership Type"
             value={member.membershipType[0].toUpperCase() + member.membershipType.slice(1)}
           />
+          <Row label="Positions / Privileges" value={positionSummary(member.positions)} />
           <Row label="Status" value={member.isActive ? 'Active' : 'Inactive'} />
           <Row label="Date Added" value={formatDate(member.dateAdded)} />
           {member.notes && (

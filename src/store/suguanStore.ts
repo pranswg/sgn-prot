@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import type { Suguan } from '@/core/types/suguan'
+import type { Suguan, SuguanEvent, SuguanGroup, SuguanType, SuguanDocFormat, SuguanCoverage, SuguanScheduleSection } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
 import { useSettingsStore } from '@/store/settingsStore'
-import { seedSuguan } from '@/lib/seedData'
+import { defaultEventsFor, normalizeSuguanList } from '@/lib/suguanUtils'
 
 export interface SuguanConfigInput {
   date: string
@@ -12,6 +12,14 @@ export interface SuguanConfigInput {
   serviceTypeId: string
   location?: string
   notes?: string
+  type?: SuguanType
+  eventTitle?: string
+  group?: SuguanGroup
+  docFormat?: SuguanDocFormat
+  coverage?: SuguanCoverage
+  events?: SuguanEvent[]
+  schedules?: SuguanScheduleSection[]
+  destinadoName?: string
 }
 
 interface SuguanState {
@@ -23,7 +31,6 @@ interface SuguanState {
   setDutyRole: (suguanId: string, dutyRoleId: string, memberId: string, memberName: string) => void
   removeDutyRole: (suguanId: string, dutyRoleId: string) => void
   deleteSuguan: (id: string) => void
-  resetDemoData: () => void
   importData: (suguan: Suguan[]) => void
   clear: () => void
 }
@@ -31,19 +38,32 @@ interface SuguanState {
 export const useSuguanStore = create<SuguanState>()(
   persist(
     (set) => ({
-      suguan: seedSuguan(),
+      suguan: [],
 
       createSuguan: (config) => {
         const now = new Date().toISOString()
-        const suguan: Suguan = {
-          id: nanoid(),
-          ...config,
-          voiceCapacities: defaultCapacities(useSettingsStore.getState().allVoices()),
-          assignments: [],
-          dutyRoles: [],
-          createdAt: now,
-          updatedAt: now,
-        }
+        const voices = useSettingsStore.getState().allVoices()
+        const events = config.events ?? defaultEventsFor(config.date)
+        const suguan: Suguan = normalizeSuguanList(
+          [
+            {
+              id: nanoid(),
+              ...config,
+              type: config.type ?? 'regular',
+              eventTitle: config.eventTitle,
+              group: config.group ?? 'babae',
+              coverage: config.coverage ?? null,
+              events,
+              schedules: config.schedules ?? [],
+              voiceCapacities: defaultCapacities(voices),
+              assignments: [],
+              dutyRoles: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+          voices,
+        )[0]
         set((s) => ({ suguan: [...s.suguan, suguan] }))
         return suguan
       },
@@ -127,12 +147,9 @@ export const useSuguanStore = create<SuguanState>()(
         set((s) => ({ suguan: s.suguan.filter((su) => su.id !== id) }))
       },
 
-      resetDemoData: () => {
-        set({ suguan: seedSuguan() })
-      },
-
       importData: (suguan) => {
-        set({ suguan })
+        const voices = useSettingsStore.getState().allVoices()
+        set({ suguan: normalizeSuguanList(suguan, voices) })
       },
 
       clear: () => {
@@ -141,7 +158,13 @@ export const useSuguanStore = create<SuguanState>()(
     }),
     {
       name: 'choir-suguan',
-      version: 2,
+      version: 6,
+      migrate: (persisted) => {
+        const state = (persisted ?? {}) as Pick<SuguanState, 'suguan'>
+        const list = Array.isArray(state.suguan) ? state.suguan : []
+        const voices = useSettingsStore.getState().allVoices()
+        return { ...state, suguan: normalizeSuguanList(list, voices) }
+      },
     },
   ),
 )

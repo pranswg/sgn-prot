@@ -29,6 +29,80 @@ export interface SuguanDutyRole {
   dutyRoleId: string
 }
 
+export type SuguanGroup = 'babae' | 'lalaki' | 'mixed'
+
+export type SuguanEventType = 'pagsasanay' | 'pagtupad'
+
+export type SuguanType = 'regular' | 'special'
+
+export interface SuguanEvent {
+  id: string
+  type: SuguanEventType
+  date: string
+  endDate?: string
+}
+
+export interface SuguanFormationCell {
+  memberId: string
+  memberName: string
+  voicePosition: string
+  voiceName: string
+}
+
+export interface SuguanFormation {
+  rows: number
+  cols: number
+  cells: (SuguanFormationCell | null)[]
+}
+
+export type WorshipScheduleKey =
+  | 'sabado-6pm'
+  | 'linggo-6am'
+  | 'linggo-10am'
+  | 'miyerkules-7pm'
+  | 'huwebes-6am'
+  | 'huwebes-7pm'
+
+export interface SuguanScheduleSection {
+  id: string
+  scheduleKey?: WorshipScheduleKey
+  scheduleLabel: string
+  scheduleDay: string
+  scheduleTime: string
+  assignments: SuguanAssignment[]
+}
+
+export type DocPaperSize = 'letter' | 'a4' | 'legal' | 'custom'
+export type DocOrientation = 'portrait' | 'landscape'
+export type DocMargins = 'normal' | 'narrow' | 'custom'
+export type DocScaling = 'fit-width' | 'fit-page' | 'auto'
+export type DocFontSize = 'small' | 'normal' | 'large'
+
+export interface SuguanDocFormat {
+  paperSize: DocPaperSize
+  customWidthMm?: number
+  customHeightMm?: number
+  orientation: DocOrientation
+  margins: DocMargins
+  customMarginTopMm?: number
+  customMarginBottomMm?: number
+  customMarginLeftMm?: number
+  customMarginRightMm?: number
+  scaling: DocScaling
+  fontSize: DocFontSize
+}
+
+export type SuguanCoverageTemplate = 'midweek-2w' | 'weekend-2w' | 'one-week'
+
+export interface SuguanCoverage {
+  template: SuguanCoverageTemplate
+  startDate: string
+  oneWeekDate?: string
+  oneWeekPagsasanayDate?: string
+  oneWeekPagtupadDate?: string
+  oneWeekPagtupadEndDate?: string
+}
+
 export interface Suguan {
   id: string
   date: string
@@ -36,9 +110,18 @@ export interface Suguan {
   serviceTypeId: string
   location?: string
   notes?: string
+  type: SuguanType
+  eventTitle?: string
+  group: SuguanGroup
+  docFormat?: SuguanDocFormat | null
+  coverage?: SuguanCoverage | null
+  events: SuguanEvent[]
+  schedules: SuguanScheduleSection[]
+  formation?: SuguanFormation | null
   voiceCapacities: Record<string, number>
   assignments: SuguanAssignment[]
   dutyRoles: SuguanDutyRole[]
+  destinadoName?: string
   createdAt: string
   updatedAt: string
 }

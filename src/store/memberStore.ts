@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { Member, MemberInput, Trainee, TraineeInput } from '@/core/types/member'
-import { seedMembers, seedTrainees } from '@/lib/seedData'
 
 interface MemberState {
   members: Member[]
@@ -17,7 +16,6 @@ interface MemberState {
   promoteTrainee: (id: string) => Member | null
   deactivateTrainee: (id: string) => void
   removeTrainee: (id: string) => void
-  resetDemoData: () => void
   importData: (members: Member[], trainees: Trainee[]) => void
   clear: () => void
 }
@@ -25,11 +23,15 @@ interface MemberState {
 export const useMemberStore = create<MemberState>()(
   persist(
     (set, get) => ({
-      members: seedMembers(),
-      trainees: seedTrainees(),
+      members: [],
+      trainees: [],
 
       addMember: (input) => {
-        const member: Member = { ...input, id: nanoid() }
+        const member: Member = {
+          ...input,
+          positions: input.positions ?? [],
+          id: nanoid(),
+        }
         set((s) => ({ members: [...s.members, member] }))
         return member
       },
@@ -80,6 +82,7 @@ export const useMemberStore = create<MemberState>()(
           membershipType: 'regular',
           isActive: true,
           dateAdded: trainee.dateAdded,
+          positions: [],
           notes: trainee.notes,
         }
         set((s) => ({
@@ -103,10 +106,6 @@ export const useMemberStore = create<MemberState>()(
         set((s) => ({ trainees: s.trainees.filter((t) => t.id !== id) }))
       },
 
-      resetDemoData: () => {
-        set({ members: seedMembers(), trainees: seedTrainees() })
-      },
-
       importData: (members, trainees) => {
         set({ members, trainees })
       },
@@ -117,7 +116,21 @@ export const useMemberStore = create<MemberState>()(
     }),
     {
       name: 'choir-members',
-      version: 2,
+      version: 3,
+      migrate: (persisted) => {
+        const state = (persisted ?? {}) as {
+          members?: Member[]
+          trainees?: Trainee[]
+        }
+        return {
+          ...state,
+          members: (state.members ?? []).map((m) => ({
+            ...m,
+            positions: m.positions ?? [],
+          })),
+          trainees: state.trainees ?? [],
+        }
+      },
     },
   ),
 )

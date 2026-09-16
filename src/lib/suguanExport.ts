@@ -1,4 +1,10 @@
-import type { Suguan, SuguanEvent, SuguanEventType, SuguanDocFormat } from '@/core/types/suguan'
+import type {
+  Suguan,
+  SuguanEvent,
+  SuguanEventType,
+  SuguanDocFormat,
+  SuguanGroup,
+} from '@/core/types/suguan'
 import {
   assignmentDisplayName,
   docMarginsMm,
@@ -10,7 +16,7 @@ import {
   normalizeDocFormat,
   resolveSignatureNames,
   suguanFileName,
-  suguanTitle,
+  suguanSheetTitle,
   type FontSizePreset,
 } from '@/lib/suguanUtils'
 
@@ -68,6 +74,35 @@ export interface SuguanSheetSection {
   rows: { no: number; name: string }[]
 }
 
+const FEMALE_VOICE_GROUP = new Map<string, number>([
+  ['soprano-1', 0],
+  ['soprano-2', 0],
+  ['alto', 1],
+])
+const MALE_VOICE_GROUP = new Map<string, number>([
+  ['tenor', 0],
+  ['bass', 1],
+])
+
+export function sortAssignmentsByHiddenVoice(
+  assignments: Suguan['assignments'],
+  members: SheetMembers[],
+  group: SuguanGroup,
+): Suguan['assignments'] {
+  const rankOf = (voicePosition: string): number => {
+    const ranks = group === 'lalaki' ? MALE_VOICE_GROUP : FEMALE_VOICE_GROUP
+    return ranks.get(voicePosition) ?? 2
+  }
+  const nameOf = (a: Suguan['assignments'][number]) =>
+    assignmentDisplayName(a.memberName, a.memberId, members)
+  return [...assignments].sort((a, b) => {
+    const ar = rankOf(a.voicePosition)
+    const br = rankOf(b.voicePosition)
+    if (ar !== br) return ar - br
+    return nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: 'base' })
+  })
+}
+
 export function buildSections(
   suguan: Suguan,
   members: SheetMembers[],
@@ -77,10 +112,12 @@ export function buildSections(
       ? suguan.schedules
       : []
   const mapRows = (assignments: Suguan['assignments']) =>
-    assignments.map((a, i) => ({
-      no: i + 1,
-      name: assignmentDisplayName(a.memberName, a.memberId, members),
-    }))
+    sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
+      (a, i) => ({
+        no: i + 1,
+        name: assignmentDisplayName(a.memberName, a.memberId, members),
+      }),
+    )
   if (schedules.length > 0) {
     return schedules.map((sec) => ({
       sectionId: sec.id,
@@ -142,7 +179,6 @@ export interface SuguanSheetLayout {
   eventColWidthMm: number
   nameFontSize: number
   titleRowH: number
-  groupRowH: number
   headerRowH: number
   globalHeaderBlockH: number
   sectionLabelRowH: number
@@ -234,7 +270,6 @@ export function computeSuguanLayout(
     : 0
 
   const titleRowH = fs.titleRowHeight * PT_TO_MM
-  const groupRowH = (fs.headerRowHeight + 4) * PT_TO_MM
   const headerRowH = fs.headerRowHeight * PT_TO_MM
   const globalHeaderBlockH = headerRowH * 2
   const sectionLabelRowH = fs.headerRowHeight * PT_TO_MM
@@ -242,8 +277,8 @@ export function computeSuguanLayout(
   const sigRowH = fs.sigRowHeight * PT_TO_MM
   const sigGapH = rowCount > 0 ? Math.max(fs.rowHeight * PT_TO_MM, fs.bodyFontSize * PT_TO_MM) : 0
 
-  const headerTopY = margins.top + titleRowH + groupRowH
-  const topBlockH = titleRowH + groupRowH + globalHeaderBlockH
+  const headerTopY = margins.top + titleRowH
+  const topBlockH = titleRowH + globalHeaderBlockH
   const sigBlockH = sigGapH + sigRowH * 2
   const usableTableH =
     Math.max(0, dims.height - margins.top - margins.bottom - topBlockH - sigBlockH)
@@ -292,7 +327,6 @@ export function computeSuguanLayout(
     eventColWidthMm,
     nameFontSize: nameLayout.nameFontSize,
     titleRowH,
-    groupRowH,
     headerRowH,
     globalHeaderBlockH,
     sectionLabelRowH,
@@ -364,28 +398,19 @@ export async function exportSuguanExcel(
     key: `c_${i + 1}`,
   }))
 
-  sheet.pageSetup.printTitlesRow = '1:4'
+  sheet.pageSetup.printTitlesRow = '1:3'
 
   const titleRow = 1
-  const groupRow = 2
-  const headerRow1 = 3
-  const headerRow2 = 4
+  const headerRow1 = 2
+  const headerRow2 = 3
 
   sheet.mergeCells(titleRow, 1, titleRow, lastCol)
   const titleCell = sheet.getCell(titleRow, 1)
-  titleCell.value = suguanTitle(suguan)
+  titleCell.value = suguanSheetTitle(suguan)
   titleCell.font = { bold: true, size: fs.titleFontSize, family: 2 }
   titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-  titleCell.border = { top: thinBorder(), bottom: thinBorder() }
+  titleCell.border = fullBorder()
   sheet.getRow(titleRow).height = fs.titleRowHeight
-
-  sheet.mergeCells(groupRow, 1, groupRow, lastCol)
-  const groupCell = sheet.getCell(groupRow, 1)
-  groupCell.value = groupLabel(suguan.group)
-  groupCell.font = { bold: true, size: fs.headerFontSize }
-  groupCell.alignment = { horizontal: 'center', vertical: 'middle' }
-  groupCell.border = { bottom: thinBorder() }
-  sheet.getRow(groupRow).height = fs.headerRowHeight + 4
 
   events.forEach((event, i) => {
     const labelCell = sheet.getCell(headerRow1, 3 + i)
@@ -418,7 +443,7 @@ export async function exportSuguanExcel(
   sheet.getCell(headerRow1, 1).value = 'No.'
   sheet.getCell(headerRow1, 2).value = 'Pangalan'
 
-  let rn = 5
+  let rn = 4
   const sections = layout.sections
   for (let si = 0; si < sections.length; si++) {
     const section = sections[si]

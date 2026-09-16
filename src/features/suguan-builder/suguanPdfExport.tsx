@@ -3,10 +3,9 @@ import { computeSuguanLayout, type SheetMembers } from '@/lib/suguanExport'
 import {
   eventTypeLabel,
   formatEventDate,
-  groupLabel,
   resolveSignatureNames,
   suguanFileName,
-  suguanTitle,
+  suguanSheetTitle,
 } from '@/lib/suguanUtils'
 import robotoBoldUrl from '@/assets/fonts/Roboto-Bold.ttf?url'
 import robotoRegularUrl from '@/assets/fonts/Roboto-Regular.ttf?url'
@@ -96,10 +95,12 @@ export async function exportSuguanPdf(
 
     doc.setDrawColor(BORDER.r, BORDER.g, BORDER.b)
     doc.line(x0, m.top, x1, m.top)
-    doc.line(x0, m.top + layout.titleRowH, x1, m.top + layout.titleRowH)
+    doc.line(x0, headerTopY, x1, headerTopY)
+    doc.line(x0, m.top, x0, headerTopY)
+    doc.line(x1, m.top, x1, headerTopY)
 
     applyFont('bold', titleSz)
-    const titleLines = doc.splitTextToSize(suguanTitle(suguan), tableW - 1.1)
+    const titleLines = doc.splitTextToSize(suguanSheetTitle(suguan), tableW - 1.1)
     const titleLineH = titleSz * 1.15 * PT_TO_MM
     const titleBlockH = titleLines.length * titleLineH
     let titleY = m.top + Math.max(0.5, (layout.titleRowH - titleBlockH) / 2)
@@ -107,11 +108,6 @@ export async function exportSuguanPdf(
       centerText(line, x0 + tableW / 2, titleY + titleLineH / 2)
       titleY += titleLineH
     }
-
-    const groupY = m.top + layout.titleRowH
-    doc.line(x0, groupY + layout.groupRowH, x1, groupY + layout.groupRowH)
-    applyFont('bold', headerSz)
-    centerText(groupLabel(suguan.group), x0 + tableW / 2, groupY + layout.groupRowH / 2)
 
     doc.setFillColor(HEADER_FILL.r, HEADER_FILL.g, HEADER_FILL.b)
     doc.rect(x0, headerTopY, layout.noColWidthMm, layout.headerRowH * 2, 'F')

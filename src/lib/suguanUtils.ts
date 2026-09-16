@@ -226,7 +226,7 @@ export function docMarginsMm(fmt: SuguanDocFormat): {
       right: fmt.customMarginRightMm ?? 10,
     }
   }
-  return { top: 18, bottom: 18, left: 10, right: 10 }
+  return { top: 8, bottom: 8, left: 10, right: 10 }
 }
 
 export function defaultEventsFor(mainDate: string): SuguanEvent[] {
@@ -487,6 +487,10 @@ export function groupLabel(group: SuguanGroup): string {
   if (group === 'lalaki') return '(LALAKI)'
   if (group === 'mixed') return '(MIXED)'
   return '(BABAE)'
+}
+
+export function suguanSheetTitle(suguan: Suguan): string {
+  return `${suguanTitle(suguan)} ${groupLabel(suguan.group)}`
 }
 
 export function groupFileLabel(group: SuguanGroup): string {

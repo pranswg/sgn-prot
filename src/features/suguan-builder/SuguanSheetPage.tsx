@@ -3,9 +3,8 @@ import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
 import {
   eventTypeLabel,
   formatEventDate,
-  groupLabel,
   resolveSignatureNames,
-  suguanTitle,
+  suguanSheetTitle,
 } from '@/lib/suguanUtils'
 import {
   computeSuguanLayout,
@@ -242,28 +241,11 @@ export function SuguanSheetPage({
                 style={{
                   height: px(layout.titleRowH),
                   fontSize: titlePx,
-                  borderTop: `0.5px solid ${BORDER}`,
-                  borderBottom: `0.5px solid ${BORDER}`,
+                  border: `0.5px solid ${BORDER}`,
                   lineHeight: 1.15,
                 }}
               >
-                {suguanTitle(suguan)}
-              </th>
-            </tr>
-            <tr>
-              <th
-                colSpan={layout.totalCols}
-                className="py-0"
-                style={{
-                  height: px(layout.groupRowH),
-                  textAlign: 'center',
-                  fontSize: headerPx,
-                  borderBottom: `0.5px solid ${BORDER}`,
-                }}
-              >
-                <span className="text-black font-semibold">
-                  {groupLabel(suguan.group)}
-                </span>
+                {suguanSheetTitle(suguan)}
               </th>
             </tr>
             <tr>

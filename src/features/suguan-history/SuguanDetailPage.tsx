@@ -24,7 +24,8 @@ import {
   serviceTypeLabel,
   suguanTitle,
 } from '@/lib/suguanUtils'
-import { exportSuguanExcel, exportSuguanPdf } from '@/lib/suguanExport'
+import { exportSuguanExcel } from '@/lib/suguanExport'
+import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import { exportKoroPng, exportKoroPdf, koroVoiceColor } from '@/lib/koro'
 import { SuguanSheetPreview } from '@/features/suguan-builder/SuguanSheetPreview'
 

@@ -30,7 +30,8 @@ import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
 import { formatDate } from '@/lib/format'
-import { exportSuguanExcel, exportSuguanPdf } from '@/lib/suguanExport'
+import { exportSuguanExcel } from '@/lib/suguanExport'
+import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import type { Suguan } from '@/core/types/suguan'
 
 export function SuguanHistoryPage() {

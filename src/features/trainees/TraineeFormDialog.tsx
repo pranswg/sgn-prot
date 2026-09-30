@@ -22,6 +22,7 @@ import type { Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
+import { todayPHT } from '@/lib/phDate'
 
 interface TraineeFormDialogProps {
   open: boolean
@@ -44,7 +45,7 @@ export function TraineeFormDialog({
     gender: 'female' as 'male' | 'female',
     voicePosition: 'soprano-1',
     status: 'active' as 'active' | 'inactive',
-    dateAdded: new Date().toISOString().slice(0, 10),
+    dateAdded: todayPHT(),
     notes: '',
   })
 
@@ -67,7 +68,7 @@ export function TraineeFormDialog({
               gender: 'female',
               voicePosition: 'soprano-1',
               status: 'active',
-              dateAdded: new Date().toISOString().slice(0, 10),
+              dateAdded: todayPHT(),
               notes: '',
             },
       )
@@ -96,7 +97,7 @@ export function TraineeFormDialog({
       gender: form.gender,
       voicePosition: form.voicePosition,
       status: form.status,
-      dateAdded: form.dateAdded || new Date().toISOString().slice(0, 10),
+      dateAdded: form.dateAdded || todayPHT(),
       notes: form.notes.trim() || undefined,
     }
     if (trainee) {

@@ -304,8 +304,15 @@ export function SuguanDetailPage() {
           />
         )}
 
-        {s.notes && (
-          <p className="mt-4 text-xs text-muted-foreground">{s.notes}</p>
+        {s.pagsasanayDate && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Petsa ng Pagsasanay: {s.pagsasanayDate}
+          </p>
+        )}
+        {s.pagtupadDate && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Petsa ng Pagtupad: {s.pagtupadDate}
+          </p>
         )}
       </div>
 

@@ -96,11 +96,25 @@ export type SuguanCoverageTemplate = 'midweek-2w' | 'weekend-2w' | 'one-week'
 
 export interface SuguanCoverage {
   template: SuguanCoverageTemplate
+  /**
+   * Pagsasanay (rehearsal) date, stored exactly as the user entered it.
+   * Never auto-adjusted.
+   */
   startDate: string
   oneWeekDate?: string
   oneWeekPagsasanayDate?: string
   oneWeekPagtupadDate?: string
   oneWeekPagtupadEndDate?: string
+  /**
+   * Manual Pagtupad override for 2-week templates. The Pagtupad covers a range
+   * of worship days (midweek is Wednesday and Thursday; weekend is Saturday and
+   * Sunday), so both ends are overridable. When a start is set it replaces the
+   * suggested first week, and the second week is derived from it by adding
+   * seven days. Leave both undefined to always use the suggestion derived from
+   * the worship schedule.
+   */
+  pagtupadStartOverride?: string
+  pagtupadEndOverride?: string
 }
 
 export interface Suguan {
@@ -108,14 +122,14 @@ export interface Suguan {
   date: string
   time: string
   serviceTypeId: string
-  location?: string
-  notes?: string
   type: SuguanType
   eventTitle?: string
   group: SuguanGroup
   docFormat?: SuguanDocFormat | null
   coverage?: SuguanCoverage | null
   events: SuguanEvent[]
+  pagsasanayDate?: string
+  pagtupadDate?: string
   schedules: SuguanScheduleSection[]
   formation?: SuguanFormation | null
   voiceCapacities: Record<string, number>

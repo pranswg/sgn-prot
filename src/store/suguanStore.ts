@@ -10,14 +10,14 @@ export interface SuguanConfigInput {
   date: string
   time: string
   serviceTypeId: string
-  location?: string
-  notes?: string
   type?: SuguanType
   eventTitle?: string
   group?: SuguanGroup
   docFormat?: SuguanDocFormat
   coverage?: SuguanCoverage
   events?: SuguanEvent[]
+  pagsasanayDate?: string
+  pagtupadDate?: string
   schedules?: SuguanScheduleSection[]
   destinadoName?: string
 }

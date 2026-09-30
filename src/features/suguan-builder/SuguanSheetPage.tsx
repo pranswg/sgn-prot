@@ -8,6 +8,12 @@ import {
 } from '@/lib/suguanUtils'
 import {
   computeSuguanLayout,
+  fitFontSizePt,
+  PT_TO_MM,
+  SIG_LINE,
+  SIG_RULE_BORDER,
+  SIG_RULE_GAP,
+  SIG_RULE_PAD,
   type SheetMembers,
   type SheetPageBlock,
   type SuguanSheetLayout,
@@ -16,6 +22,36 @@ import {
 const BORDER = '#8b8b8b'
 const SCHEDULE_FILL = '#C6EFCE'
 const PT_TO_PX = 96 / 72
+const PX_TO_MM = 25.4 / 96
+
+/**
+ * Font stack the sheet actually paints with. Kept in one place so the text
+ * measurer below can never drift from the rendered text.
+ *
+ * `SuguanSheet` is the self-hosted Inter registered in `index.css`, and the PDF
+ * embeds those very same files, so the preview and the export use one typeface.
+ * The system stack after it is a safety net for the rare case where the webfont
+ * has not finished loading.
+ */
+const SHEET_FONT_STACK =
+  '"SuguanSheet", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "Noto Sans", sans-serif'
+
+/**
+ * Measures rendered text width in millimetres using the same font stack the
+ * preview paints with, so a long signature name is shrunk here by the same
+ * amount the PDF shrinks it. The PDF passes jsPDF's Roboto metrics instead; only
+ * the measurer differs, never the rule.
+ */
+let measureCtx: CanvasRenderingContext2D | null | undefined
+function measureTextMm(text: string, sizePt: number, bold: boolean): number {
+  if (typeof document === 'undefined') return text.length * sizePt * 0.5 * PT_TO_MM
+  if (measureCtx === undefined) {
+    measureCtx = document.createElement('canvas').getContext('2d')
+  }
+  if (!measureCtx) return text.length * sizePt * 0.5 * PT_TO_MM
+  measureCtx.font = `${bold ? '700 ' : ''}${sizePt * PT_TO_PX}px ${SHEET_FONT_STACK}`
+  return measureCtx.measureText(text).width * PX_TO_MM
+}
 
 export interface SuguanSheetReadout {
   layout: SuguanSheetLayout
@@ -54,11 +90,33 @@ export function SuguanSheetPage({
   const fs = layout.fs
   const events = layout.events
   const px = (mm: number) => mm * mmToPx
+  const sigGeo = layout.sig
 
   const titlePx = fs.titleFontSize * layout.scale * PT_TO_PX
   const headerPx = fs.headerFontSize * layout.scale * PT_TO_PX
-  const bodyPx = layout.nameFontSize * layout.scale * PT_TO_PX
-  const smallPx = fs.smallFontSize * layout.scale * PT_TO_PX
+  const bodyPx = layout.bodyFontSizePt * PT_TO_PX
+  // Locked to fixed sizes so fit-page scaling never shrinks the signatures.
+  const sigNameMm = sigGeo.nameFontSizePt * PT_TO_MM
+  const sigRolePx = sigGeo.roleFontSizePt * PT_TO_PX
+
+  // Long names shrink by the same amount in both renderers.
+  const pmNameSizePt = fitFontSizePt({
+    text: sig.pmName,
+    startSizePt: sigGeo.nameFontSizePt,
+    maxWidthMm: sigGeo.columnWidthMm - 2 * SIG_RULE_PAD,
+    measureMm: (t, s) => measureTextMm(t, s, true),
+  })
+  const destinadoNameSizePt = fitFontSizePt({
+    text: sig.destinadoName,
+    startSizePt: sigGeo.nameFontSizePt,
+    maxWidthMm: sigGeo.columnWidthMm - 2 * SIG_RULE_PAD,
+    measureMm: (t, s) => measureTextMm(t, s, true),
+  })
+
+  // Places the name's line box so its text centre lands on the shared
+  // `nameCenterMm`, and its border-bottom on `ruleOffsetMm` from that centre.
+  const nameMarginTopMm = sigGeo.nameCenterMm - (SIG_LINE * sigNameMm) / 2
+  const namePadBottomMm = SIG_RULE_GAP - SIG_RULE_BORDER / 2
 
   const renderBlock = (block: SheetPageBlock) => {
     if (block.kind === 'section-label') {
@@ -143,7 +201,13 @@ export function SuguanSheetPage({
         <tr key="sig-gap">
           <td
             colSpan={layout.totalCols}
-            style={{ height: px(layout.sigGapH), border: 'none' }}
+            style={{
+              height: px(sigGeo.gapMm),
+              padding: 0,
+              border: 'none',
+              fontSize: 0,
+              lineHeight: 0,
+            }}
           />
         </tr>
       )
@@ -154,24 +218,44 @@ export function SuguanSheetPage({
         <tr key="sig-name">
           <td
             colSpan={layout.totalCols}
-            style={{ height: px(layout.sigRowH), border: 'none' }}
+            style={{ height: px(sigGeo.nameRowMm), padding: 0, border: 'none' }}
           >
             <div
-              className="flex w-full text-black"
-              style={{ height: px(layout.sigRowH) }}
+              className="flex w-full items-start text-black"
+              style={{ height: px(sigGeo.nameRowMm) }}
             >
-              <div className="flex flex-1 items-center justify-center">
+              <div className="flex flex-1 justify-center">
                 <span
-                  className="border-b border-black px-4 pb-0.5 font-semibold"
-                  style={{ fontSize: bodyPx }}
+                  style={{
+                    display: 'inline-block',
+                    marginTop: px(nameMarginTopMm),
+                    paddingLeft: px(SIG_RULE_PAD),
+                    paddingRight: px(SIG_RULE_PAD),
+                    paddingBottom: px(namePadBottomMm),
+                    borderBottom: `${px(SIG_RULE_BORDER)} solid #000`,
+                    lineHeight: SIG_LINE,
+                    fontSize: pmNameSizePt * PT_TO_PX,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}
                 >
                   {sig.pmName}
                 </span>
               </div>
-              <div className="flex flex-1 items-center justify-center">
+              <div className="flex flex-1 justify-center">
                 <span
-                  className="border-b border-black px-4 pb-0.5 font-semibold"
-                  style={{ fontSize: bodyPx }}
+                  style={{
+                    display: 'inline-block',
+                    marginTop: px(nameMarginTopMm),
+                    paddingLeft: px(SIG_RULE_PAD),
+                    paddingRight: px(SIG_RULE_PAD),
+                    paddingBottom: px(namePadBottomMm),
+                    borderBottom: `${px(SIG_RULE_BORDER)} solid #000`,
+                    lineHeight: SIG_LINE,
+                    fontSize: destinadoNameSizePt * PT_TO_PX,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}
                 >
                   {sig.destinadoName}
                 </span>
@@ -186,18 +270,21 @@ export function SuguanSheetPage({
       <tr key="sig-title">
         <td
           colSpan={layout.totalCols}
-          style={{ height: px(layout.sigRowH), border: 'none' }}
+          style={{ height: px(sigGeo.roleRowMm), padding: 0, border: 'none' }}
         >
-          <div className="flex w-full text-black" style={{ height: px(layout.sigRowH) }}>
+          <div
+            className="flex w-full items-start text-black"
+            style={{ height: px(sigGeo.roleRowMm) }}
+          >
             <div
-              className="flex flex-1 items-start justify-center"
-              style={{ fontSize: smallPx }}
+              className="flex flex-1 justify-center text-center"
+              style={{ fontSize: sigRolePx, lineHeight: SIG_LINE }}
             >
               PANGULONG MANG-AAWIT
             </div>
             <div
-              className="flex flex-1 items-start justify-center"
-              style={{ fontSize: smallPx }}
+              className="flex flex-1 justify-center text-center"
+              style={{ fontSize: sigRolePx, lineHeight: SIG_LINE }}
             >
               DESTINADO
             </div>
@@ -207,11 +294,17 @@ export function SuguanSheetPage({
     )
   }
 
+  // Role text sits at the top of its row with the shared line height, so its
+  // centre is exactly `roleCenterMm` below the row's top edge.
   return (
     <div
       ref={pageRef}
       className="relative overflow-hidden bg-white"
-      style={{ width: px(layout.paperWidthMm), height: px(layout.paperHeightMm) }}
+      style={{
+        width: px(layout.paperWidthMm),
+        height: px(layout.paperHeightMm),
+        fontFamily: SHEET_FONT_STACK,
+      }}
     >
       <div
         className="flex flex-col"
@@ -308,8 +401,8 @@ export function SuguanSheetPage({
                       fontWeight: 600,
                     }}
                   >
-                    {formatEventDate(e)}
-                  </th>
+                      {formatEventDate(e)}
+                    </th>
                 )
               })}
             </tr>

@@ -1,5 +1,4 @@
 import { nanoid } from 'nanoid'
-import { format, parseISO, isValid, addDays } from 'date-fns'
 import type {
   Suguan,
   SuguanEvent,
@@ -17,10 +16,31 @@ import type {
 } from '@/core/types/suguan'
 import { useSettingsStore } from '@/store/settingsStore'
 import type { ChoirPosition } from '@/core/types/member'
+import {
+  formatDateKeyNumeric,
+  formatMonthYearKey,
+  isDateKey,
+  todayPHT,
+  weekdayOf,
+} from '@/lib/phDate'
+import {
+  MIDWEEK_SCHEDULES,
+  WEEKEND_SCHEDULES,
+  worshipWeekdays,
+} from '@/core/constants/worshipSchedules'
+import {
+  coverageLastDate,
+  planEventsFromCoverage,
+  suggestPagtupadBlock,
+} from '@/lib/suguanDates'
 
-export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+/** @deprecated Use `todayPHT` from `@/lib/phDate`. Kept as an alias so existing
+ * call sites keep working; both now resolve to the PHT calendar date. */
+export const todayISO = todayPHT
+
+/** Re-exported so existing `@/lib/suguanUtils` importers keep a single import. */
+export { todayPHT }
+
 
 export interface SignatureNames {
   pmName: string
@@ -75,7 +95,7 @@ export const PAPER_SIZE_LABELS: Record<
 
 export const DEFAULT_DOC_FORMAT: SuguanDocFormat = {
   paperSize: 'a4',
-  orientation: 'landscape',
+  orientation: 'portrait',
   margins: 'normal',
   scaling: 'auto',
   fontSize: 'normal',
@@ -91,6 +111,8 @@ export interface FontSizePreset {
   headerRowHeight: number
   titleRowHeight: number
   sigRowHeight: number
+  /** Fixed signature font size; never shrinks with fit-page scaling. */
+  sigFontSize: number
   cellPadding: number
   nameColWidth: number
   noColWidth: number
@@ -108,6 +130,7 @@ export const FONT_SIZE_PRESETS: Record<DocFontSize, FontSizePreset> = {
     headerRowHeight: 16,
     titleRowHeight: 32,
     sigRowHeight: 14,
+    sigFontSize: 11,
     cellPadding: 0.6,
     noColWidth: 4,
     nameColWidth: 28,
@@ -123,6 +146,7 @@ export const FONT_SIZE_PRESETS: Record<DocFontSize, FontSizePreset> = {
     headerRowHeight: 18,
     titleRowHeight: 36,
     sigRowHeight: 16,
+    sigFontSize: 12,
     cellPadding: 1,
     noColWidth: 5,
     nameColWidth: 30,
@@ -138,6 +162,7 @@ export const FONT_SIZE_PRESETS: Record<DocFontSize, FontSizePreset> = {
     headerRowHeight: 22,
     titleRowHeight: 42,
     sigRowHeight: 20,
+    sigFontSize: 14,
     cellPadding: 1.5,
     noColWidth: 6,
     nameColWidth: 32,
@@ -230,67 +255,46 @@ export function docMarginsMm(fmt: SuguanDocFormat): {
 }
 
 export function defaultEventsFor(mainDate: string): SuguanEvent[] {
-  const date = mainDate || todayISO()
+  const date = isDateKey(mainDate) ? mainDate : todayPHT()
+  const block = suggestPagtupadBlock(date)
   return [
     { id: nanoid(), type: 'pagsasanay', date },
-    { id: nanoid(), type: 'pagtupad', date },
-  ]
-}
-
-function addISO(date: string, days: number): string {
-  const d = parseISO(date)
-  return d instanceof Date && !isNaN(d.getTime())
-    ? addDays(d, days).toISOString().slice(0, 10)
-    : date
-}
-
-export function generateEventsFromCoverage(
-  coverage: SuguanCoverage,
-): SuguanEvent[] {
-  if (coverage.template === 'midweek-2w') {
-    const w1Wed = addISO(coverage.startDate, 0)
-    const w1Thu = addISO(coverage.startDate, 1)
-    const w2Wed = addISO(coverage.startDate, 7)
-    const w2Thu = addISO(coverage.startDate, 8)
-    return [
-      { id: nanoid(), type: 'pagsasanay', date: w1Wed },
-      { id: nanoid(), type: 'pagtupad', date: w1Thu, endDate: w1Thu },
-      { id: nanoid(), type: 'pagsasanay', date: w2Wed },
-      { id: nanoid(), type: 'pagtupad', date: w2Thu, endDate: w2Thu },
-    ]
-  }
-  if (coverage.template === 'weekend-2w') {
-    const w1Sat = addISO(coverage.startDate, 0)
-    const w1Sun = addISO(coverage.startDate, 1)
-    const w2Sat = addISO(coverage.startDate, 7)
-    const w2Sun = addISO(coverage.startDate, 8)
-    return [
-      { id: nanoid(), type: 'pagsasanay', date: w1Sat },
-      { id: nanoid(), type: 'pagtupad', date: w1Sun, endDate: w1Sun },
-      { id: nanoid(), type: 'pagsasanay', date: w2Sat },
-      { id: nanoid(), type: 'pagtupad', date: w2Sun, endDate: w2Sun },
-    ]
-  }
-  return [
-    {
-      id: nanoid(),
-      type: 'pagsasanay',
-      date: coverage.oneWeekPagsasanayDate ?? coverage.oneWeekDate ?? coverage.startDate,
-    },
     {
       id: nanoid(),
       type: 'pagtupad',
-      date: coverage.oneWeekPagtupadDate ?? coverage.oneWeekDate ?? coverage.startDate,
-      endDate: coverage.oneWeekPagtupadEndDate,
+      date: block?.start ?? date,
+      endDate: block?.end ?? date,
     },
   ]
 }
 
+export {
+  coverageLastDate,
+  nextWorshipBlock,
+  nextWorshipDateKey,
+  planEventsFromCoverage,
+  schedulesForTemplate,
+  suggestPagtupadBlock,
+  suggestPagtupadDate,
+} from './suguanDates'
+
+/**
+ * `planEventsFromCoverage` with a fresh id attached to each event, for callers
+ * that persist the result.
+ */
+export function generateEventsFromCoverage(
+  coverage: SuguanCoverage,
+): SuguanEvent[] {
+  return planEventsFromCoverage(coverage).map((event) => ({
+    ...event,
+    id: nanoid(),
+  }))
+}
+
+
 export function coverageLabel(coverage: SuguanCoverage | null | undefined): string {
   if (!coverage) return ''
-  const lastDate = coverage.oneWeekDate ?? addISO(coverage.startDate, 8)
-  const end = parseISO(lastDate)
-  const endLabel = isValid(end) ? format(end, 'MMMM dd, yyyy') : lastDate
+  const endLabel = formatDateKeyNumeric(coverageLastDate(coverage))
   if (coverage.template === 'midweek-2w') {
     return `2-Week Midweek — until ${endLabel}`
   }
@@ -307,13 +311,15 @@ export function inferCoverageFromEvents(
   const first = events[0]
   if (!first?.date) return null
   const startDate = first.date
-  const firstWeekday = parseISO(startDate).getDay()
+  const firstWeekday = weekdayOf(startDate)
+  const midweekDay = worshipWeekdays(MIDWEEK_SCHEDULES)
+  const weekendDay = worshipWeekdays(WEEKEND_SCHEDULES)
   const template =
-    events.length >= 4 && (firstWeekday === 3 || firstWeekday === 6)
-      ? firstWeekday === 3
-        ? 'midweek-2w'
-        : 'weekend-2w'
-      : 'one-week'
+    events.length >= 4 && midweekDay.includes(firstWeekday)
+      ? 'midweek-2w'
+      : events.length >= 4 && weekendDay.includes(firstWeekday)
+        ? 'weekend-2w'
+        : 'one-week'
   if (template === 'one-week') {
     const pagtupad = events.find((e) => e.type === 'pagtupad')
     const pagsasanay = events.find((e) => e.type === 'pagsasanay')
@@ -441,9 +447,8 @@ export function normalizeSuguanList(
 }
 
 export function monthYearLabel(date: string): string {
-  const d = parseISO(date)
-  if (!isValid(d)) return format(new Date(), 'MMMM yyyy').toUpperCase()
-  return format(d, 'MMMM yyyy').toUpperCase()
+  if (!isDateKey(date)) return formatMonthYearKey(todayPHT()).toUpperCase()
+  return formatMonthYearKey(date).toUpperCase()
 }
 
 export function weekendPhrase(serviceTypeId: string): string {
@@ -499,27 +504,25 @@ export function groupFileLabel(group: SuguanGroup): string {
   return 'Babae'
 }
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0')
-}
-
 export function formatEventDate(event: SuguanEvent): string {
-  const start = parseISO(event.date)
-  if (!event.endDate) {
-    if (!isValid(start)) return event.date
-    return `${pad2(start.getMonth() + 1)}/${pad2(start.getDate())}/${start.getFullYear()}`
+  const start = event.date
+  if (!isDateKey(start)) return start || '—'
+  if (!isDateKey(event.endDate)) {
+    return formatDateKeyNumeric(start)
   }
-  const end = parseISO(event.endDate)
-  if (!isValid(end) || !isValid(start)) {
-    return `${event.date} – ${event.endDate}`
+
+  const end = event.endDate
+  const startParts = start.split('-')
+  const endParts = end.split('-')
+  const [startYear, startMonth] = startParts
+  const [endYear, endMonth, endDay] = endParts
+  const shortYear = endYear.slice(2)
+
+  if (startYear === endYear && startMonth === endMonth) {
+    const startDay = startParts[2]
+    return `${startMonth}/${startDay}-${endDay}/${shortYear}`
   }
-  const sameYear = start.getFullYear() === end.getFullYear()
-  const sameMonth = sameYear && start.getMonth() === end.getMonth()
-  const yy = (d: Date) => String(d.getFullYear()).slice(2)
-  if (sameMonth) {
-    return `${pad2(start.getMonth() + 1)}/${pad2(start.getDate())}-${pad2(end.getDate())}/${yy(end)}`
-  }
-  return `${pad2(start.getMonth() + 1)}/${pad2(start.getDate())}/${yy(start)}-${pad2(end.getMonth())}/${pad2(end.getDate())}/${yy(end)}`
+  return `${startMonth}/${startParts[2]}/${startYear.slice(2)}-${endMonth}/${endDay}/${shortYear}`
 }
 
 export function acuteFree(name: string): string {
@@ -553,9 +556,9 @@ export function assignmentDisplayName(
 }
 
 export function suguanFileName(suguan: Suguan, ext: 'xlsx' | 'pdf'): string {
-  const d = parseISO(suguan.date)
-  const month = format(isValid(d) ? d : new Date(), 'MMMM')
-  const year = format(isValid(d) ? d : new Date(), 'yyyy')
+  const [month, year] = formatMonthYearKey(
+    isDateKey(suguan.date) ? suguan.date : todayPHT(),
+  ).split(' ')
   return `Suguan_${month}_${year}_${groupFileLabel(suguan.group)}.${ext}`
 }
 

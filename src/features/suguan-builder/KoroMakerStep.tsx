@@ -40,7 +40,7 @@ import { formatDateLong, formatTime } from '@/lib/format'
 import { exportKoroPng, exportKoroPdf, koroVoiceColor } from '@/lib/koro'
 import type { SuguanFormationCell, SuguanFormation } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
-import type { SuguanDraft } from './SuguanBuilderPage'
+import type { SuguanDraft } from './builderState'
 import { cn } from '@/lib/utils'
 
 interface KoroMakerStepProps {

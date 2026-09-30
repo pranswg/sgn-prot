@@ -1,26 +1,36 @@
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Pencil, Plus, UserCheck, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useMemo } from 'react'
+import { AlertTriangle, BadgeCheck, UserCheck } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useSettingsStore } from '@/store/settingsStore'
 import type { Member } from '@/core/types/member'
+import type { SuguanDutyRole } from '@/core/types/suguan'
 import {
   DUTY_ROLE_REQUIRED_POSITIONS,
   memberCanHoldDutyRole,
   POSITION_LABELS,
 } from '@/core/constants/choirPositions'
-import type { SuguanDraft } from './SuguanBuilderPage'
-import { MemberSelector } from './MemberSelector'
+import { VoiceBadge } from '@/components/StatusBadges'
+import { getVoiceName } from '@/core/constants/voicePositions'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface DutyRolesPanelProps {
-  draft: SuguanDraft
-  patch: (p: Partial<SuguanDraft>) => void
+  dutyRoles: SuguanDutyRole[]
+  onDutyRolesChange: (dutyRoles: SuguanDutyRole[]) => void
+  destinadoName: string
+  onDestinadoChange: (name: string) => void
   members: Member[]
   roleIds?: string[]
 }
+
+const CLEAR_VALUE = '__clear__'
 
 function eligiblePositionText(roleId: string): string {
   const required = DUTY_ROLE_REQUIRED_POSITIONS[roleId]
@@ -29,22 +39,38 @@ function eligiblePositionText(roleId: string): string {
 }
 
 export function DutyRolesPanel({
-  draft,
-  patch,
+  dutyRoles,
+  onDutyRolesChange,
+  destinadoName,
+  onDestinadoChange,
   members,
   roleIds,
 }: DutyRolesPanelProps) {
   const allDutyRoles = useSettingsStore((s) => s.allDutyRoles)
-  const [pickerRoleId, setPickerRoleId] = useState<string | null>(null)
+  const allVoices = useSettingsStore((s) => s.allVoices)
+  const voices = allVoices()
+  const destinoListId = 'suguan-destinado-name'
 
   const roles = allDutyRoles().filter(
     (role) => !roleIds || roleIds.includes(role.id),
   )
 
-  const activeMembers = members.filter((m) => m.isActive)
+  const activeMembers = useMemo(
+    () =>
+      members
+        .filter((m) => m.isActive)
+        .sort((a, b) =>
+          `${a.lastName} ${a.firstName}`.localeCompare(
+            `${b.lastName} ${b.firstName}`,
+            undefined,
+            { sensitivity: 'base' },
+          ),
+        ),
+    [members],
+  )
 
   const dutyRoleCounts = new Map<string, number>()
-  for (const d of draft.dutyRoles) {
+  for (const d of dutyRoles) {
     dutyRoleCounts.set(d.memberId, (dutyRoleCounts.get(d.memberId) ?? 0) + 1)
   }
   const duplicateIds = new Set(
@@ -53,182 +79,162 @@ export function DutyRolesPanel({
       .map(([id]) => id),
   )
 
-  const getDuty = (roleId: string) =>
-    draft.dutyRoles.find((d) => d.dutyRoleId === roleId)
+  const getDuty = (roleId: string) => dutyRoles.find((d) => d.dutyRoleId === roleId)
 
-  const pickerRole = pickerRoleId
-    ? (roles.find((r) => r.id === pickerRoleId) ?? null)
-    : null
-  const pickerCurrentId = pickerRoleId ? getDuty(pickerRoleId)?.memberId : null
+  const candidatesFor = (roleId: string) =>
+    activeMembers.filter(
+      (m) =>
+        memberCanHoldDutyRole(m, roleId) &&
+        !dutyRoles.some((d) => d.memberId === m.id && d.dutyRoleId !== roleId),
+    )
 
-  const pickerCandidates = useMemo(
-    () =>
-      activeMembers.filter(
-        (m) =>
-          memberCanHoldDutyRole(m, pickerRoleId ?? '') &&
-          !draft.dutyRoles.some(
-            (d) => d.memberId === m.id && d.dutyRoleId !== pickerRoleId,
-          ),
-      ),
-    [activeMembers, draft.dutyRoles, pickerRoleId],
-  )
+  const setDuty = (roleId: string, member: Member) =>
+    onDutyRolesChange([
+      ...dutyRoles.filter((d) => d.dutyRoleId !== roleId),
+      {
+        dutyRoleId: roleId,
+        memberId: member.id,
+        memberName: `${member.firstName} ${member.lastName}`,
+      },
+    ])
 
-  const assignMember = (roleId: string, membersToAdd: Member[]) => {
-    const member = membersToAdd[0]
-    if (!member) return
-    patch({
-      dutyRoles: [
-        ...draft.dutyRoles.filter((d) => d.dutyRoleId !== roleId),
-        {
-          dutyRoleId: roleId,
-          memberId: member.id,
-          memberName: `${member.firstName} ${member.lastName}`,
-        },
-      ],
-    })
-    setPickerRoleId(null)
+  const clearDuty = (roleId: string) =>
+    onDutyRolesChange(dutyRoles.filter((d) => d.dutyRoleId !== roleId))
+
+  const handleChange = (roleId: string, value: string) => {
+    if (value === CLEAR_VALUE) {
+      clearDuty(roleId)
+      return
+    }
+    const member = activeMembers.find((m) => m.id === value)
+    if (member) setDuty(roleId, member)
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Duty Roles & Leadership
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Only members tagged with the matching position in their Master List
-          profile are offered for each role. Organista and Assistant Tagapagturo
-          are interchangeable.
-        </p>
-      </div>
-
-      {duplicateIds.size > 0 && (
-        <div className="rounded-md border border-red-400 bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200">
-          <AlertTriangle className="mr-1 inline size-4" />
-          A member cannot hold more than one duty role in the same Suguan.
-          Review the assignments below.
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
+      <header className="flex items-start gap-2.5 border-b border-border/70 bg-brand-navy-soft/60 px-4 py-3">
+        <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand-navy/70" />
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">Duty Roles</h3>
+          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+            Only members tagged with the matching position appear as candidates.
+          </p>
         </div>
-      )}
+      </header>
 
-      <Card>
-        <CardContent className="pt-4">
-          <div className="grid items-center gap-3 md:grid-cols-[1fr_3fr]">
-            <div>
-              <Label htmlFor="destinado-name">Destinado</Label>
-              <p className="text-xs text-muted-foreground">
-                Name printed on the right side of the signature block.
-              </p>
-            </div>
-            <Input
-              id="destinado-name"
-              value={draft.destinadoName}
-              onChange={(e) => patch({ destinadoName: e.target.value })}
-              placeholder="e.g. Brother Juan Dela Cruz"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        {roles.map((role) => {
-          const current = getDuty(role.id)
-          const isDuplicate = current && duplicateIds.has(current.memberId)
-          const eligibleText = eligiblePositionText(role.id)
-          return (
-            <Card key={role.id} className={isDuplicate ? 'border-red-400' : ''}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">
-                  {role.name}
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {role.abbreviation}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {current ? (
-                  <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1.5 text-sm">
-                    <span className="min-w-0 truncate font-medium">
-                      {current.memberName}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="size-6 shrink-0 text-muted-foreground hover:text-red-600"
-                      title="Remove assignment"
-                      onClick={() =>
-                        patch({
-                          dutyRoles: draft.dutyRoles.filter(
-                            (d) => d.dutyRoleId !== role.id,
-                          ),
-                        })
-                      }
-                    >
-                      <X className="size-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="py-1 text-xs text-muted-foreground">
-                    No member assigned yet.
-                  </p>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setPickerRoleId(role.id)}
-                >
-                  {current ? (
-                    <Pencil className="size-4" />
-                  ) : (
-                    <Plus className="size-4" />
-                  )}
-                  {current ? 'Change Member' : 'Assign Member'}
-                </Button>
-                {eligibleText && (
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <UserCheck className="size-3.5 shrink-0" />
-                    Eligible: {eligibleText}
-                  </p>
-                )}
-                {isDuplicate && (
-                  <p className="text-xs text-red-600 dark:text-red-400">
-                    This member already holds another duty role.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      <Dialog
-        open={!!pickerRoleId}
-        onOpenChange={(o) => !o && setPickerRoleId(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {pickerRole ? `${pickerRole.name} — Assign Member` : ''}
-            </DialogTitle>
-          </DialogHeader>
-          {pickerRole && (
-            <MemberSelector
-              candidates={pickerCandidates}
-              excludedIds={pickerCurrentId ? [pickerCurrentId] : []}
-              conflictIds={duplicateIds}
-              singleSelect
-              onSelect={(m) => assignMember(pickerRole.id, m)}
-              onClose={() => setPickerRoleId(null)}
-              emptyMessage={
-                eligiblePositionText(pickerRole.id)
-                  ? `No active members tagged as ${eligiblePositionText(pickerRole.id)} are available for this role.`
-                  : 'No eligible active members left for this role.'
-              }
-              addLabel="Assign Member"
-            />
+      <ScrollArea className="h-[460px]">
+        <div className="flex flex-col gap-4 p-4">
+          {duplicateIds.size > 0 && (
+            <p className="flex items-start gap-1.5 rounded-md border border-red-400/50 bg-red-50 px-3 py-2 text-xs text-red-800 dark:bg-red-950/30 dark:text-red-200">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              A member cannot hold more than one duty role in the same Suguan.
+            </p>
           )}
-        </DialogContent>
-      </Dialog>
-    </div>
+
+          <div className="grid gap-1.5">
+            <label
+              htmlFor={destinoListId}
+              className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
+            >
+              Destinado
+            </label>
+            <Input
+              id={destinoListId}
+              list={`${destinoListId}-options`}
+              value={destinadoName}
+              onChange={(e) => onDestinadoChange(e.target.value)}
+              placeholder="Select or type a name…"
+              className="h-9"
+            />
+            <datalist id={`${destinoListId}-options`}>
+              {activeMembers.map((m) => (
+                <option key={m.id} value={`${m.firstName} ${m.lastName}`} />
+              ))}
+            </datalist>
+            <p className="text-[11px] text-muted-foreground">
+              Printed on the right side of the signature block.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3.5">
+            {roles.map((role) => {
+              const current = getDuty(role.id)
+              const currentMember = current
+                ? activeMembers.find((m) => m.id === current.memberId)
+                : undefined
+              const candidates = candidatesFor(role.id)
+              const eligibleText = eligiblePositionText(role.id)
+              const isDuplicate = current && duplicateIds.has(current.memberId)
+
+              return (
+                <div key={role.id} className="grid gap-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      {role.name}
+                    </span>
+                    <span className="text-[0.625rem] font-medium tracking-wide text-muted-foreground/70">
+                      {role.abbreviation}
+                    </span>
+                  </div>
+
+                  {candidates.length === 0 && !current ? (
+                    <div className="flex h-9 items-center rounded-lg border border-dashed border-border bg-muted/40 px-3 text-sm text-muted-foreground">
+                      No eligible members
+                    </div>
+                  ) : (
+                    <Select
+                      value={current?.memberId ?? ''}
+                      onValueChange={(v) => handleChange(role.id, v)}
+                    >
+                      <SelectTrigger
+                        className="h-9 w-full bg-background"
+                        aria-label={role.name}
+                      >
+                        <SelectValue placeholder="Select member…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {current && (
+                          <>
+                            <SelectItem value={CLEAR_VALUE}>
+                              Clear assignment
+                            </SelectItem>
+                            <SelectSeparator />
+                          </>
+                        )}
+                        {candidates.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.firstName} {m.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {current && currentMember && (
+                    <div className="flex items-center gap-1.5">
+                      <VoiceBadge
+                        name={getVoiceName(currentMember.voicePosition, voices)}
+                      />
+                      {isDuplicate && (
+                        <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                          duplicate role
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {eligibleText && (
+                    <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <UserCheck className="size-3 shrink-0" />
+                      {eligibleText}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </ScrollArea>
+    </section>
   )
 }

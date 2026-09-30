@@ -17,6 +17,7 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { formatDate, formatTime, isPast } from '@/lib/format'
+import { dayOfMonthKey, monthShortKey } from '@/lib/phDate'
 
 export function DashboardPage() {
   const members = useMemberStore((s) => s.members)
@@ -119,12 +120,10 @@ export function DashboardPage() {
                 <div className="flex items-center gap-3">
                   <div className="flex size-10 flex-col items-center justify-center rounded-md bg-muted">
                     <span className="text-xs font-semibold leading-none">
-                      {new Date(s.date).getDate()}
+                      {dayOfMonthKey(s.date)}
                     </span>
                     <span className="text-[10px] uppercase text-muted-foreground">
-                      {new Date(s.date)
-                        .toLocaleString('en', { month: 'short' })
-                        .slice(0, 3)}
+                      {monthShortKey(s.date)}
                     </span>
                   </div>
                   <div>

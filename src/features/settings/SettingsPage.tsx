@@ -1,26 +1,11 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  Check,
-  Download,
-  Pencil,
-  Plus,
-  Trash2,
-  Upload,
-  X,
-} from 'lucide-react'
+import { Download, Trash2, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { ListEditor } from './ListEditor'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +19,7 @@ import {
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { phtInstantISO, phtStampForFilename } from '@/lib/phDate'
 
 interface BackupFile {
   app: string
@@ -56,80 +42,15 @@ export function SettingsPage() {
   const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [serviceName, setServiceName] = useState('')
-  const [dutyName, setDutyName] = useState('')
-  const [dutyAbbr, setDutyAbbr] = useState('')
-  const [voiceName, setVoiceName] = useState('')
-  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female')
-
-  const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
-  const [editServiceName, setEditServiceName] = useState('')
-  const [editingDutyId, setEditingDutyId] = useState<string | null>(null)
-  const [editDutyName, setEditDutyName] = useState('')
-  const [editDutyAbbr, setEditDutyAbbr] = useState('')
-  const [editingVoiceId, setEditingVoiceId] = useState<string | null>(null)
-  const [editVoiceName, setEditVoiceName] = useState('')
-  const [editVoiceGender, setEditVoiceGender] = useState<'male' | 'female'>('female')
-
   const serviceTypes = settingsStore.allServiceTypes()
   const dutyRoles = settingsStore.allDutyRoles()
   const voices = settingsStore.allVoices()
-
-  const startEditService = (id: string, name: string) => {
-    setEditingServiceId(id)
-    setEditServiceName(name)
-  }
-
-  const saveEditService = () => {
-    if (!editingServiceId || !editServiceName.trim()) return
-    settingsStore.updateServiceType(editingServiceId, {
-      name: editServiceName.trim(),
-    })
-    setEditingServiceId(null)
-    toast.success('Service type updated.')
-  }
-
-  const startEditDuty = (id: string, name: string, abbreviation: string) => {
-    setEditingDutyId(id)
-    setEditDutyName(name)
-    setEditDutyAbbr(abbreviation)
-  }
-
-  const saveEditDuty = () => {
-    if (!editingDutyId || !editDutyName.trim()) return
-    settingsStore.updateDutyRole(editingDutyId, {
-      name: editDutyName.trim(),
-      abbreviation: editDutyAbbr.trim() || editDutyName.trim().slice(0, 3).toUpperCase(),
-    })
-    setEditingDutyId(null)
-    toast.success('Duty role updated.')
-  }
-
-  const startEditVoice = (
-    id: string,
-    name: string,
-    gender: 'male' | 'female',
-  ) => {
-    setEditingVoiceId(id)
-    setEditVoiceName(name)
-    setEditVoiceGender(gender)
-  }
-
-  const saveEditVoice = () => {
-    if (!editingVoiceId || !editVoiceName.trim()) return
-    settingsStore.updateVoice(editingVoiceId, {
-      name: editVoiceName.trim(),
-      gender: editVoiceGender,
-    })
-    setEditingVoiceId(null)
-    toast.success('Voice position updated.')
-  }
 
   const handleExport = () => {
     const backup: BackupFile = {
       app: 'inc-choir-manager',
       version: 2,
-      exportedAt: new Date().toISOString(),
+      exportedAt: phtInstantISO(),
       members: memberStore.members,
       trainees: memberStore.trainees,
       suguan: suguanStore.suguan,
@@ -143,7 +64,7 @@ export function SettingsPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `inc-choir-backup-${new Date().toISOString().slice(0, 10)}.json`
+    link.download = `inc-choir-backup-${phtStampForFilename()}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -191,86 +112,24 @@ export function SettingsPage() {
               entry, including the standard ones.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col gap-1 rounded-md border p-3 text-sm">
-              {serviceTypes.length === 0 && (
-                <p className="text-muted-foreground">No service types yet.</p>
-              )}
-              {serviceTypes.map((t) =>
-                editingServiceId === t.id ? (
-                  <div key={t.id} className="flex items-center gap-2 rounded px-1 py-0.5">
-                    <Input
-                      value={editServiceName}
-                      onChange={(e) => setEditServiceName(e.target.value)}
-                      className="h-8 flex-1"
-                    />
-                    <Button size="icon-sm" onClick={saveEditService}>
-                      <Check className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setEditingServiceId(null)}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between rounded px-2 py-1 hover:bg-muted"
-                  >
-                    <span className="min-w-0 flex-1">
-                      {t.name}
-                      {!t.custom && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          (standard)
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => startEditService(t.id, t.name)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-red-600 hover:text-red-600"
-                        onClick={() => {
-                          settingsStore.removeServiceType(t.id)
-                          toast.success('Service type removed.')
-                        }}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={serviceName}
-                onChange={(e) => setServiceName(e.target.value)}
-                placeholder="New service type e.g. Vespers"
-              />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!serviceName.trim()) return
-                  settingsStore.addServiceType(serviceName.trim())
-                  setServiceName('')
-                  toast.success('Service type added.')
-                }}
-              >
-                <Plus className="size-4" />
-                Add
-              </Button>
-            </div>
+          <CardContent>
+            <ListEditor
+              items={serviceTypes}
+              noun="service type"
+              fields={[
+                {
+                  key: 'name',
+                  label: 'Service type name',
+                  placeholder: 'e.g. Vespers',
+                },
+              ]}
+              getLabel={(t) => t.name}
+              onCreate={(v) => settingsStore.addServiceType(v.name.trim())}
+              onUpdate={(id, v) =>
+                settingsStore.updateServiceType(id, { name: v.name.trim() })
+              }
+              onDelete={(id) => settingsStore.removeServiceType(id)}
+            />
           </CardContent>
         </Card>
 
@@ -282,234 +141,77 @@ export function SettingsPage() {
               Organista. Rename or remove any entry.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col gap-1 rounded-md border p-3 text-sm">
-              {dutyRoles.length === 0 && (
-                <p className="text-muted-foreground">No duty roles yet.</p>
-              )}
-              {dutyRoles.map((r) =>
-                editingDutyId === r.id ? (
-                  <div key={r.id} className="flex items-center gap-2 rounded px-1 py-0.5">
-                    <Input
-                      value={editDutyName}
-                      onChange={(e) => setEditDutyName(e.target.value)}
-                      className="h-8 flex-1"
-                      placeholder="Role name"
-                    />
-                    <Input
-                      value={editDutyAbbr}
-                      onChange={(e) => setEditDutyAbbr(e.target.value)}
-                      className="h-8 w-20"
-                      placeholder="Abbr"
-                    />
-                    <Button size="icon-sm" onClick={saveEditDuty}>
-                      <Check className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setEditingDutyId(null)}
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between rounded px-2 py-1 hover:bg-muted"
-                  >
-                    <span className="min-w-0 flex-1">
-                      {r.name}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {r.abbreviation}
-                      </span>
-                      {!r.custom && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          (standard)
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => startEditDuty(r.id, r.name, r.abbreviation)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-red-600 hover:text-red-600"
-                        onClick={() => {
-                          settingsStore.removeDutyRole(r.id)
-                          toast.success('Duty role removed.')
-                        }}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={dutyName}
-                onChange={(e) => setDutyName(e.target.value)}
-                placeholder="Role name"
-                className="flex-1"
-              />
-              <Input
-                value={dutyAbbr}
-                onChange={(e) => setDutyAbbr(e.target.value)}
-                placeholder="Abbr"
-                className="w-20"
-              />
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!dutyName.trim()) return
-                  settingsStore.addDutyRole(
-                    dutyName.trim(),
-                    dutyAbbr.trim() || dutyName.trim().slice(0, 3).toUpperCase(),
-                  )
-                  setDutyName('')
-                  setDutyAbbr('')
-                  toast.success('Duty role added.')
-                }}
-              >
-                <Plus className="size-4" />
-                Add
-              </Button>
-            </div>
+          <CardContent>
+            <ListEditor
+              items={dutyRoles}
+              noun="duty role"
+              fields={[
+                { key: 'name', label: 'Role name', placeholder: 'e.g. Organista' },
+                {
+                  key: 'abbreviation',
+                  label: 'Abbreviation',
+                  placeholder: 'e.g. Org',
+                  className: 'w-24',
+                },
+              ]}
+              getLabel={(r) => r.name}
+              getMeta={(r) => r.abbreviation}
+              onCreate={(v) => {
+                const name = v.name.trim()
+                settingsStore.addDutyRole(
+                  name,
+                  v.abbreviation.trim() || name.slice(0, 3).toUpperCase(),
+                )
+              }}
+              onUpdate={(id, v) => {
+                const name = v.name.trim()
+                settingsStore.updateDutyRole(id, {
+                  name,
+                  abbreviation: v.abbreviation.trim() || name.slice(0, 3).toUpperCase(),
+                })
+              }}
+              onDelete={(id) => settingsStore.removeDutyRole(id)}
+            />
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Voice Positions</CardTitle>
-          <CardDescription>
-            The voice sections of the choir (S1, S2, Alto, Tenor, Bass). Rename,
-            remove, or add voices. They appear in forms, the Suguan Builder, and
-            exports.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-col gap-1 rounded-md border p-3 text-sm">
-            {voices.length === 0 && (
-              <p className="text-muted-foreground">No voice positions yet.</p>
-            )}
-            {voices.map((v) =>
-              editingVoiceId === v.id ? (
-                <div key={v.id} className="flex items-center gap-2 rounded px-1 py-0.5">
-                  <Input
-                    value={editVoiceName}
-                    onChange={(e) => setEditVoiceName(e.target.value)}
-                    className="h-8 flex-1"
-                    placeholder="Voice name"
-                  />
-                  <Select
-                    value={editVoiceGender}
-                    onValueChange={(val) =>
-                      setEditVoiceGender(val as 'male' | 'female')
-                    }
-                  >
-                    <SelectTrigger className="h-8 w-28">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="female">Women</SelectItem>
-                      <SelectItem value="male">Men</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button size="icon-sm" onClick={saveEditVoice}>
-                    <Check className="size-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setEditingVoiceId(null)}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div
-                  key={v.id}
-                  className="flex items-center justify-between rounded px-2 py-1 hover:bg-muted"
-                >
-                  <span className="min-w-0 flex-1">
-                    {v.name}
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {v.gender === 'female' ? 'Women' : 'Men'}
-                    </span>
-                    {!v.custom && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        (standard)
-                      </span>
-                    )}
-                  </span>
-                  <div className="flex items-center">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => startEditVoice(v.id, v.name, v.gender)}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-red-600 hover:text-red-600"
-                      onClick={() => {
-                        settingsStore.removeVoice(v.id)
-                        toast.success('Voice position removed.')
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Input
-              value={voiceName}
-              onChange={(e) => setVoiceName(e.target.value)}
-              placeholder="New voice e.g. Alto 2"
-              className="flex-1"
+        <Card>
+          <CardHeader>
+            <CardTitle>Voice Positions</CardTitle>
+            <CardDescription>
+              The voice sections of the choir (S1, S2, Alto, Tenor, Bass). Rename,
+              change the section, or remove any entry.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ListEditor
+              items={voices}
+              noun="voice position"
+              fields={[
+                { key: 'name', label: 'Voice name', placeholder: 'e.g. Soprano' },
+                {
+                  key: 'gender',
+                  label: 'Section',
+                  options: [
+                    { value: 'female', label: 'Female' },
+                    { value: 'male', label: 'Male' },
+                  ],
+                },
+              ]}
+              getLabel={(v) => v.name}
+              getMeta={(v) => v.gender === 'male' ? 'Male' : 'Female'}
+              onCreate={(v) => settingsStore.addVoice(v.name.trim(), v.gender === 'male' ? 'male' : 'female')}
+              onUpdate={(id, v) =>
+                settingsStore.updateVoice(id, {
+                  name: v.name.trim(),
+                  gender: v.gender === 'male' ? 'male' : 'female',
+                })
+              }
+              onDelete={(id) => settingsStore.removeVoice(id)}
             />
-            <Select
-              value={voiceGender}
-              onValueChange={(v) => setVoiceGender(v as 'male' | 'female')}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="female">Women</SelectItem>
-                <SelectItem value="male">Men</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!voiceName.trim()) return
-                settingsStore.addVoice(voiceName.trim(), voiceGender)
-                setVoiceName('')
-                toast.success('Voice position added.')
-              }}
-            >
-              <Plus className="size-4" />
-              Add
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
+          </CardContent>
+        </Card>
       <Card>
         <CardHeader>
           <CardTitle>Data Management</CardTitle>

@@ -25,6 +25,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
+import { todayPHT } from '@/lib/phDate'
 
 interface MemberFormDialogProps {
   open: boolean
@@ -50,7 +51,7 @@ export function MemberFormDialog({
     voicePosition: 'soprano-1',
     membershipType: 'regular' as 'regular' | 'provisional',
     isActive: true,
-    dateAdded: new Date().toISOString().slice(0, 10),
+              dateAdded: todayPHT(),
     positions: [] as ChoirPosition[],
     notes: '',
   })
@@ -77,7 +78,7 @@ export function MemberFormDialog({
               voicePosition: 'soprano-1',
               membershipType: 'regular',
               isActive: true,
-              dateAdded: new Date().toISOString().slice(0, 10),
+    dateAdded: todayPHT(),
               positions: [],
               notes: '',
             },
@@ -121,7 +122,7 @@ export function MemberFormDialog({
       voicePosition: form.voicePosition,
       membershipType: form.membershipType,
       isActive: form.isActive,
-      dateAdded: form.dateAdded || new Date().toISOString().slice(0, 10),
+      dateAdded: form.dateAdded || todayPHT(),
       positions: form.positions,
       notes: form.notes.trim() || undefined,
     }

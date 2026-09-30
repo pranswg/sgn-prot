@@ -24,7 +24,8 @@ const PAGSASANAY_FILL = 'FFF2CC'
 const PAGTUPAD_FILL = 'D9EAD3'
 const HEADER_FILL = 'F2F2F2'
 
-const PT_TO_MM = 25.4 / 72
+/** Points to millimetres; shared so every renderer converts units identically. */
+export const PT_TO_MM = 25.4 / 72
 
 const EXCEL_PAPER_SIZE: Record<'letter' | 'a4' | 'legal', number> = {
   letter: 1,
@@ -165,6 +166,124 @@ export function computeNameLayout(
   }
 }
 
+/**
+ * Signature block geometry, shared by the on-screen preview and the PDF export.
+ *
+ * Both renderers read these numbers instead of computing their own, which is what
+ * keeps "Preview = Export PDF" true. Offsets are in millimetres, font sizes in
+ * points, and the two `*CenterMm` offsets are measured from the top edge of the
+ * row they belong to. `leftCenterMm` / `rightCenterMm` are measured from the
+ * table's left edge.
+ */
+export interface SignatureGeometry {
+  /** Deliberate blank space between the last member row and the block. */
+  gapMm: number
+  /** Height of the row holding the names and their signature rules. */
+  nameRowMm: number
+  /** Height of the row holding the role titles. */
+  roleRowMm: number
+  /** `gapMm + nameRowMm + roleRowMm`; reserved before the table is flowed. */
+  totalMm: number
+  nameFontSizePt: number
+  roleFontSizePt: number
+  /** From the name row's top edge to the centre of the name text. */
+  nameCenterMm: number
+  /** From the name text centre down to its signature rule. */
+  ruleOffsetMm: number
+  /** From the role row's top edge to the centre of the role text. */
+  roleCenterMm: number
+  tableWidthMm: number
+  /** Width available to each signature column. */
+  columnWidthMm: number
+  leftCenterMm: number
+  rightCenterMm: number
+}
+
+/** Line height for signature text; the preview and PDF must both use this. */
+const SIG_LINE_HEIGHT = 1.2
+/** Blank space on each side of a name, so the rule overhangs the text. */
+const SIG_RULE_PAD_MM = 2.15
+/** Clearance between the name's text box and its rule. */
+const SIG_RULE_GAP_MM = 0.5
+/** Body-row heights of blank space kept above the signature block. */
+const SIG_GAP_ROWS = 2.5
+
+interface SignatureGeometryInput {
+  fs: FontSizePreset
+  tableWidthMm: number
+  /** Unscaled body row height, so fit-page scaling cannot move the signatures. */
+  baseBodyRowMm: number
+  hasRows: boolean
+}
+
+function computeSignatureGeometry(
+  input: SignatureGeometryInput,
+): SignatureGeometry {
+  const { fs, tableWidthMm, baseBodyRowMm, hasRows } = input
+
+  // Signature text is deliberately exempt from fit-page scaling so it never
+  // shrinks below a legible size.
+  const nameFontSizePt = fs.sigFontSize
+  const roleFontSizePt = Math.max(fs.smallFontSize, nameFontSizePt - 1)
+  const nameRowMm = Math.max(fs.sigRowHeight, nameFontSizePt * 1.9) * PT_TO_MM
+  const roleRowMm = Math.max(fs.sigRowHeight, roleFontSizePt * 1.9) * PT_TO_MM
+
+  const gapMm = hasRows
+    ? Math.max(baseBodyRowMm * SIG_GAP_ROWS, nameRowMm * 0.75)
+    : 0
+
+  const columnWidthMm = tableWidthMm / 2
+  return {
+    gapMm,
+    nameRowMm,
+    roleRowMm,
+    totalMm: gapMm + nameRowMm + roleRowMm,
+    nameFontSizePt,
+    roleFontSizePt,
+    nameCenterMm: nameRowMm / 2,
+    // Half a line box below the text centre, plus the clearance above the rule.
+    ruleOffsetMm:
+      nameFontSizePt * 0.5 * SIG_LINE_HEIGHT * PT_TO_MM + SIG_RULE_GAP_MM,
+    roleCenterMm: roleFontSizePt * 0.5 * SIG_LINE_HEIGHT * PT_TO_MM,
+    tableWidthMm,
+    columnWidthMm,
+    leftCenterMm: columnWidthMm * 0.5,
+    rightCenterMm: tableWidthMm * 0.75,
+  }
+}
+
+/**
+ * Shrinks a font size until `text` fits `maxWidthMm`.
+ *
+ * Shared so the preview and the PDF shrink a long name by the same amount. Each
+ * renderer passes its own `measureMm` because only it knows its font metrics.
+ */
+export function fitFontSizePt(args: {
+  text: string
+  startSizePt: number
+  maxWidthMm: number
+  minSizePt?: number
+  measureMm: (text: string, sizePt: number) => number
+}): number {
+  const { text, startSizePt, maxWidthMm, measureMm } = args
+  const minSizePt = args.minSizePt ?? 6
+  if (!text) return startSizePt
+  let size = startSizePt
+  while (size > minSizePt && measureMm(text, size) > maxWidthMm) {
+    size -= 0.5
+  }
+  return size
+}
+
+/** Padding on each side of a name's rule, exported for the renderers. */
+export const SIG_RULE_PAD = SIG_RULE_PAD_MM
+/** Line height for signature text, exported for the renderers. */
+export const SIG_LINE = SIG_LINE_HEIGHT
+/** Rule thickness in mm; the preview's border-bottom matches the PDF's line. */
+export const SIG_RULE_BORDER = 0.3
+/** Clearance from a name's text box down to its rule, exported for the renderers. */
+export const SIG_RULE_GAP = SIG_RULE_GAP_MM
+
 export interface SuguanSheetLayout {
   fmt: SuguanDocFormat
   paperWidthMm: number
@@ -183,11 +302,15 @@ export interface SuguanSheetLayout {
   globalHeaderBlockH: number
   sectionLabelRowH: number
   bodyRowH: number
-  sigRowH: number
-  sigGapH: number
+  /** Body font size in pt after the fit-page clamp; both renderers use this. */
+  bodyFontSizePt: number
+  /**
+   * Signature block geometry, shared by the on-screen preview and the PDF export.
+   * Neither renderer may recompute these values locally.
+   */
+  sig: SignatureGeometry
   headerTopY: number
   topBlockH: number
-  sigBlockH: number
   usableTableH: number
   rowsPerPage: number
   pageCount: number
@@ -207,9 +330,7 @@ interface FlowOptions {
   usableTableH: number
   sectionLabelRowH: number
   bodyRowH: number
-  sigGapH: number
-  sigRowH: number
-  sigBlockH: number
+  sig: SignatureGeometry
   sections: SuguanSheetSection[]
 }
 
@@ -236,9 +357,9 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
     })
   })
 
-  if (cursor + opts.sigBlockH > opts.usableTableH) breakPage()
+  if (cursor + opts.sig.totalMm > opts.usableTableH) breakPage()
   blocks.push({ kind: 'sig-gap' }, { kind: 'sig-name' }, { kind: 'sig-title' })
-  cursor += opts.sigBlockH
+  cursor += opts.sig.totalMm
 
   pages.push(blocks)
   return pages
@@ -273,28 +394,38 @@ export function computeSuguanLayout(
   const headerRowH = fs.headerRowHeight * PT_TO_MM
   const globalHeaderBlockH = headerRowH * 2
   const sectionLabelRowH = fs.headerRowHeight * PT_TO_MM
-  let bodyRowH = Math.max(fs.rowHeight * PT_TO_MM, fs.bodyFontSize * PT_TO_MM * 1.5)
-  const sigRowH = fs.sigRowHeight * PT_TO_MM
-  const sigGapH = rowCount > 0 ? Math.max(fs.rowHeight * PT_TO_MM, fs.bodyFontSize * PT_TO_MM) : 0
+  const baseBodyRowMm = Math.max(fs.rowHeight * PT_TO_MM, fs.bodyFontSize * PT_TO_MM * 1.5)
+  let bodyRowH = baseBodyRowMm
+
+  // Signature geometry is derived from the preset and the usable width only, so
+  // it stays identical between the preview and the PDF and is never affected by
+  // fit-page scaling.
+  const sig = computeSignatureGeometry({
+    fs,
+    tableWidthMm: usableWidthMm,
+    baseBodyRowMm,
+    hasRows: rowCount > 0,
+  })
 
   const headerTopY = margins.top + titleRowH
   const topBlockH = titleRowH + globalHeaderBlockH
-  const sigBlockH = sigGapH + sigRowH * 2
   const usableTableH =
-    Math.max(0, dims.height - margins.top - margins.bottom - topBlockH - sigBlockH)
+    Math.max(0, dims.height - margins.top - margins.bottom - topBlockH - sig.totalMm)
 
   const fitPage = fmt.scaling === 'fit-page'
   let scale = 1
+  let bodyFontSizePt = nameLayout.nameFontSize
 
   if (fitPage && rowCount > 0) {
     const totalContentH = sections.reduce(
       (acc, s) => acc + sectionLabelRowH + s.rows.length * bodyRowH,
       0,
     )
-    const needed = totalContentH + sigBlockH
+    const needed = totalContentH + sig.totalMm
     if (needed > usableTableH) {
       scale = Math.max(0.4, usableTableH / needed)
       bodyRowH = Math.max(fs.bodyFontSize * PT_TO_MM * 1.25, bodyRowH * scale)
+      bodyFontSizePt = Math.max(6, nameLayout.nameFontSize * scale)
     }
   }
 
@@ -302,9 +433,7 @@ export function computeSuguanLayout(
     usableTableH,
     sectionLabelRowH,
     bodyRowH,
-    sigGapH,
-    sigRowH,
-    sigBlockH,
+    sig,
     sections,
   })
 
@@ -331,11 +460,10 @@ export function computeSuguanLayout(
     globalHeaderBlockH,
     sectionLabelRowH,
     bodyRowH,
-    sigRowH,
-    sigGapH,
+    bodyFontSizePt,
+    sig,
     headerTopY,
     topBlockH,
-    sigBlockH,
     usableTableH,
     rowsPerPage,
     pageCount,
@@ -482,26 +610,34 @@ export async function exportSuguanExcel(
   }
 
   const { pmName, destinadoName } = resolveSignatureNames(suguan, members)
+  const { sig } = layout
+  // Excel row heights are in points, so convert the shared millimetre geometry.
+  const sigGapPt = sig.gapMm / PT_TO_MM
+  const sigNameRowPt = sig.nameRowMm / PT_TO_MM
+  const sigRoleRowPt = sig.roleRowMm / PT_TO_MM
+
+  // Breathing room so the signature block is not flush against the table above.
+  sheet.getRow(rn).height = sigGapPt
   const sigRow = rn + 1
   const pmCell = sheet.getCell(sigRow, 2)
   pmCell.value = pmName || ''
-  pmCell.font = { bold: true, size: fs.bodyFontSize }
+  pmCell.font = { bold: true, size: sig.nameFontSizePt }
   pmCell.alignment = { horizontal: 'center', vertical: 'middle' }
   const destCell = sheet.getCell(sigRow, lastCol)
   destCell.value = destinadoName || ''
-  destCell.font = { bold: true, size: fs.bodyFontSize }
+  destCell.font = { bold: true, size: sig.nameFontSizePt }
   destCell.alignment = { horizontal: 'center', vertical: 'middle' }
-  sheet.getRow(sigRow).height = fs.sigRowHeight
+  sheet.getRow(sigRow).height = sigNameRowPt
 
   const pmRole = sheet.getCell(sigRow + 1, 2)
   pmRole.value = 'PANGULONG MANG-AAWIT'
-  pmRole.font = { size: fs.smallFontSize }
-  pmRole.alignment = { horizontal: 'center' }
+  pmRole.font = { size: sig.roleFontSizePt }
+  pmRole.alignment = { horizontal: 'center', vertical: 'top' }
   const destRole = sheet.getCell(sigRow + 1, lastCol)
   destRole.value = 'DESTINADO'
-  destRole.font = { size: fs.smallFontSize }
-  destRole.alignment = { horizontal: 'center' }
-  sheet.getRow(sigRow + 1).height = fs.sigRowHeight
+  destRole.font = { size: sig.roleFontSizePt }
+  destRole.alignment = { horizontal: 'center', vertical: 'top' }
+  sheet.getRow(sigRow + 1).height = sigRoleRowPt
 
   sheet.pageSetup.printArea = `A1:${colLetter(lastCol)}${sigRow + 1}`
 

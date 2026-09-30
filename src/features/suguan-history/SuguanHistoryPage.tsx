@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarPlus, Eye, FileDown, FileSpreadsheet, MoreHorizontal, Pencil } from 'lucide-react'
+import {
+  CalendarPlus,
+  Eye,
+  FileDown,
+  FileSpreadsheet,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,8 +23,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Table,
   TableBody,
@@ -36,6 +55,8 @@ import type { Suguan } from '@/core/types/suguan'
 
 export function SuguanHistoryPage() {
   const suguan = useSuguanStore((s) => s.suguan)
+  const deleteSuguan = useSuguanStore((s) => s.deleteSuguan)
+  const clearHistory = useSuguanStore((s) => s.clear)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
   const editSuguanInBuilder = useNavStore((s) => s.editSuguanInBuilder)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
@@ -45,6 +66,23 @@ export function SuguanHistoryPage() {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [exportingId, setExportingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Suguan | null>(null)
+  const [clearOpen, setClearOpen] = useState(false)
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return
+    deleteSuguan(deleteTarget.id)
+    toast.success(
+      `Suguan on ${formatDate(deleteTarget.date)} deleted from history.`,
+    )
+    setDeleteTarget(null)
+  }
+
+  const confirmClear = () => {
+    clearHistory()
+    toast.success('Suguan history cleared.')
+    setClearOpen(false)
+  }
 
   const exportOne = async (
     suguanRecord: Suguan,
@@ -86,7 +124,7 @@ export function SuguanHistoryPage() {
               ? s.eventTitle || 'Special Occasion'
               : allTypes.find((t) => t.id === s.serviceTypeId)?.name ??
                 s.serviceTypeId
-          const joined = `${s.date} ${label} ${s.location ?? ''}`.toLowerCase()
+          const joined = `${s.date} ${label}`.toLowerCase()
           if (!joined.includes(q)) return false
         }
         return true
@@ -99,10 +137,20 @@ export function SuguanHistoryPage() {
         title="Suguan History"
         description={`${suguan.length} total suguan records`}
         actions={
-          <Button onClick={startNewSuguan}>
-            <CalendarPlus className="size-4" />
-            New Suguan
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setClearOpen(true)}
+              disabled={suguan.length === 0}
+            >
+              <Trash2 className="size-4" />
+              Clear history
+            </Button>
+            <Button onClick={startNewSuguan}>
+              <CalendarPlus className="size-4" />
+              New Suguan
+            </Button>
+          </>
         }
       />
 
@@ -110,7 +158,7 @@ export function SuguanHistoryPage() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by date, service, location..."
+          placeholder="Search by date, service, event..."
           className="flex-1"
         />
         <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -135,7 +183,7 @@ export function SuguanHistoryPage() {
               <TableHead>Date</TableHead>
               <TableHead>Time</TableHead>
               <TableHead>Service / Event</TableHead>
-              <TableHead>Location</TableHead>
+              <TableHead>Gender</TableHead>
               <TableHead>Assigned</TableHead>
               <TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow>
@@ -154,7 +202,11 @@ export function SuguanHistoryPage() {
                   <TableCell>{s.time}</TableCell>
                   <TableCell>{recordLabel(s)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {s.location ?? '—'}
+                    {s.group === 'babae'
+                      ? 'Babae'
+                      : s.group === 'lalaki'
+                        ? 'Lalaki'
+                        : 'Mixed'}
                   </TableCell>
                   <TableCell>{s.assignments.length}</TableCell>
                   <TableCell className="text-right">
@@ -183,7 +235,7 @@ export function SuguanHistoryPage() {
                             <MoreHorizontal className="size-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-52">
                           <DropdownMenuItem onClick={() => exportOne(s, 'excel')}>
                             <FileSpreadsheet className="size-4" />
                             Export Excel (.xlsx)
@@ -191,6 +243,14 @@ export function SuguanHistoryPage() {
                           <DropdownMenuItem onClick={() => exportOne(s, 'pdf')}>
                             <FileDown className="size-4" />
                             Export PDF (.pdf)
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setDeleteTarget(s)}
+                          >
+                            <Trash2 className="size-4" />
+                            Delete from history
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -202,6 +262,53 @@ export function SuguanHistoryPage() {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this Suguan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `${formatDate(deleteTarget.date)} — ${recordLabel(deleteTarget)}. This will permanently remove the record from history.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all Suguan history?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes all {suguan.length} Suguan record
+              {suguan.length === 1 ? '' : 's'}, including their rosters, duty
+              roles, and document settings. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={confirmClear}
+            >
+              Clear history
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

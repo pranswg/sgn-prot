@@ -12,6 +12,14 @@ export const POSITION_LABELS: Record<ChoirPosition, string> = Object.fromEntries
   CHOIR_POSITIONS.map((p) => [p.id, p.label]),
 ) as Record<ChoirPosition, string>
 
+export const POSITION_SHORT_LABELS: Record<ChoirPosition, string> = {
+  oic: 'OIC',
+  'kalihim-ng-mang-aawit': 'Kalihim',
+  'pangulong-mang-aawit': 'Pangulong',
+  organista: 'Organista',
+  'assistant-tagapagturo': 'Asst. Tagapagturo',
+}
+
 export const DUTY_ROLE_REQUIRED_POSITIONS: Record<string, ChoirPosition[]> = {
   oic: ['oic'],
   'pangulong-mang-aawit': ['pangulong-mang-aawit'],

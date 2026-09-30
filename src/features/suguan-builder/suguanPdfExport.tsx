@@ -1,5 +1,13 @@
 import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
-import { computeSuguanLayout, type SheetMembers } from '@/lib/suguanExport'
+import {
+  computeSuguanLayout,
+  fitFontSizePt,
+  PT_TO_MM,
+  SIG_RULE_BORDER,
+  SIG_RULE_PAD,
+  type SheetMembers,
+  type SheetPageBlock,
+} from '@/lib/suguanExport'
 import {
   eventTypeLabel,
   formatEventDate,
@@ -7,10 +15,9 @@ import {
   suguanFileName,
   suguanSheetTitle,
 } from '@/lib/suguanUtils'
-import robotoBoldUrl from '@/assets/fonts/Roboto-Bold.ttf?url'
-import robotoRegularUrl from '@/assets/fonts/Roboto-Regular.ttf?url'
+import sheetRegularUrl from '@/assets/fonts/Inter-Regular.ttf?url'
+import sheetBoldUrl from '@/assets/fonts/Inter-Bold.ttf?url'
 
-const PT_TO_MM = 25.4 / 72
 const BORDER = { r: 139, g: 139, b: 139 }
 const HEADER_FILL = { r: 242, g: 242, b: 242 }
 const PAGSASANAY_FILL = { r: 255, g: 242, b: 204 }
@@ -50,11 +57,12 @@ export async function exportSuguanPdf(
   const { fmt, fs } = layout
   const m = layout.margins
   const scale = layout.scale || 1
+  const sigGeo = layout.sig
 
   const titleSz = fs.titleFontSize * scale
   const headerSz = fs.headerFontSize * scale
-  const bodySz = Math.max(6, layout.nameFontSize * scale)
-  const smallSz = fs.smallFontSize * scale
+  // Shared with the preview, including the fit-page clamp.
+  const bodySz = layout.bodyFontSizePt
 
   const x0 = m.left
   const tableW = layout.paperWidthMm - m.left - m.right
@@ -64,9 +72,11 @@ export async function exportSuguanPdf(
   )
   const x1 = xName + layout.nameColWidthMm + layout.events.length * layout.eventColWidthMm
 
+  // These are the same Inter files the preview registers as `SuguanSheet`, so the
+  // export and the on-screen preview render an identical typeface.
   const [regularB64, boldB64] = await Promise.all([
-    fetchAsBase64(robotoRegularUrl),
-    fetchAsBase64(robotoBoldUrl),
+    fetchAsBase64(sheetRegularUrl),
+    fetchAsBase64(sheetBoldUrl),
   ])
 
   const doc = new jsPDF({
@@ -75,13 +85,13 @@ export async function exportSuguanPdf(
     format: [layout.paperWidthMm, layout.paperHeightMm],
   })
   doc.setLineWidth(0.13)
-  doc.addFileToVFS('Roboto-Regular.ttf', regularB64)
-  doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal')
-  doc.addFileToVFS('Roboto-Bold.ttf', boldB64)
-  doc.addFont('Roboto-Bold.ttf', 'Roboto', 'bold')
+  doc.addFileToVFS('Inter-Regular.ttf', regularB64)
+  doc.addFont('Inter-Regular.ttf', 'SuguanSheet', 'normal')
+  doc.addFileToVFS('Inter-Bold.ttf', boldB64)
+  doc.addFont('Inter-Bold.ttf', 'SuguanSheet', 'bold')
 
   const applyFont = (style: 'normal' | 'bold', sizePt: number) => {
-    doc.setFont('Roboto', style)
+    doc.setFont('SuguanSheet', style)
     doc.setFontSize(sizePt)
   }
   const textWidth = (text: string) => doc.getTextWidth(text)
@@ -155,22 +165,6 @@ export async function exportSuguanPdf(
     })
   }
 
-  const fitSizeToWidth = (
-    text: string,
-    startSize: number,
-    maxWidth: number,
-    style: 'normal' | 'bold',
-    minSize = 6,
-  ): number => {
-    let size = startSize
-    applyFont(style, size)
-    while (size > minSize && textWidth(text) > maxWidth) {
-      size -= 0.5
-      applyFont(style, size)
-    }
-    return size
-  }
-
   layout.pages.forEach((blocks, pi) => {
     if (pi > 0) doc.addPage()
     drawTop()
@@ -182,72 +176,108 @@ export async function exportSuguanPdf(
       ...eventXs.map((x, i) => ({ x, w: layout.eventColWidthMm, i })),
     ]
 
-    for (const block of blocks) {
-if (block.kind === 'section-label') {
-        const section = layout.sections[block.sectionIndex]
-        doc.setFillColor(SCHEDULE_FILL.r, SCHEDULE_FILL.g, SCHEDULE_FILL.b)
-        doc.rect(xName, y, layout.nameColWidthMm, layout.sectionLabelRowH, 'F')
-        doc.rect(x0, y, layout.noColWidthMm, layout.sectionLabelRowH, 'S')
-        doc.rect(xName, y, layout.nameColWidthMm, layout.sectionLabelRowH, 'S')
-        for (const ev of eventXs) {
-          doc.rect(ev, y, layout.eventColWidthMm, layout.sectionLabelRowH, 'S')
+    const renderBlock = (block: SheetPageBlock) => {
+      switch (block.kind) {
+        case 'section-label': {
+          const section = layout.sections[block.sectionIndex]
+          doc.setFillColor(SCHEDULE_FILL.r, SCHEDULE_FILL.g, SCHEDULE_FILL.b)
+          doc.rect(xName, y, layout.nameColWidthMm, layout.sectionLabelRowH, 'F')
+          doc.rect(x0, y, layout.noColWidthMm, layout.sectionLabelRowH, 'S')
+          doc.rect(xName, y, layout.nameColWidthMm, layout.sectionLabelRowH, 'S')
+          for (const ev of eventXs) {
+            doc.rect(ev, y, layout.eventColWidthMm, layout.sectionLabelRowH, 'S')
+          }
+          applyFont('bold', headerSz)
+          centerText(
+            section.label,
+            xName + layout.nameColWidthMm / 2,
+            y + layout.sectionLabelRowH / 2,
+          )
+          y += layout.sectionLabelRowH
+          return
         }
-        applyFont('bold', headerSz)
-        centerText(
-          section.label,
-          xName + layout.nameColWidthMm / 2,
-          y + layout.sectionLabelRowH / 2,
-        )
-        y += layout.sectionLabelRowH
-      } else if (block.kind === 'member') {
-        const section = layout.sections[block.sectionIndex]
-        const row = section.rows[block.rowIndex]
-        applyFont('normal', bodySz)
-        const nameSize = fitSizeToWidth(
-          row.name,
-          bodySz,
-          layout.nameColWidthMm - 1.6,
-          'normal',
-        )
-        for (const col of cols) {
-          doc.rect(col.x, y, col.w, layout.bodyRowH, 'S')
+        case 'member': {
+          const section = layout.sections[block.sectionIndex]
+          const row = section.rows[block.rowIndex]
+          applyFont('normal', bodySz)
+          const nameSize = fitFontSizePt({
+            text: row.name,
+            startSizePt: bodySz,
+            maxWidthMm: layout.nameColWidthMm - 1.6,
+            measureMm: (t, s) => {
+              applyFont('normal', s)
+              return textWidth(t)
+            },
+          })
+          for (const col of cols) {
+            doc.rect(col.x, y, col.w, layout.bodyRowH, 'S')
+          }
+          applyFont('normal', nameSize)
+          centerText(String(row.no), x0 + layout.noColWidthMm / 2, y + layout.bodyRowH / 2)
+          leftText(row.name, xName + 0.79, y + layout.bodyRowH / 2)
+          y += layout.bodyRowH
+          return
         }
-        applyFont('normal', nameSize)
-        centerText(String(row.no), x0 + layout.noColWidthMm / 2, y + layout.bodyRowH / 2)
-        leftText(row.name, xName + 0.79, y + layout.bodyRowH / 2)
-        y += layout.bodyRowH
-      } else if (block.kind === 'sig-name') {
-        const { pmName, destinadoName } = resolveSignatureNames(suguan, members)
-        const halfCx1 = x0 + tableW * 0.25
-        const halfCx2 = x0 + tableW * 0.75
-        const halfWidth = tableW / 2
-        const midY = y + layout.sigRowH / 2
-        applyFont('bold', bodySz)
-        ;[
-          { name: pmName, cx: halfCx1 },
-          { name: destinadoName, cx: halfCx2 },
-        ].forEach(({ name, cx }) => {
-          const size = fitSizeToWidth(name, bodySz, halfWidth - 2, 'bold')
-          centerText(name, cx, midY)
-          const ulY = y + layout.sigRowH / 2 + size * 0.75 * PT_TO_MM
-          const ulHalf = (textWidth(name) + 4.3) / 2
+        case 'sig-gap': {
+          // Deliberate blank space between the table and the signatures. This
+          // block used to be skipped here, which pulled the signatures up
+          // against the last row in the PDF.
+          y += sigGeo.gapMm
+          return
+        }
+        case 'sig-name': {
+          const { pmName, destinadoName } = resolveSignatureNames(suguan, members)
+          const maxWidthMm = sigGeo.columnWidthMm - 2 * SIG_RULE_PAD
+          const measure = (t: string, s: number) => {
+            applyFont('bold', s)
+            return textWidth(t)
+          }
+          const entries = [
+            { name: pmName, cx: x0 + sigGeo.leftCenterMm },
+            { name: destinadoName, cx: x0 + sigGeo.rightCenterMm },
+          ].map(({ name, cx }) => ({
+            name,
+            cx,
+            sizePt: fitFontSizePt({
+              text: name,
+              startSizePt: sigGeo.nameFontSizePt,
+              maxWidthMm,
+              measureMm: measure,
+            }),
+          }))
+
+          const nameCenterY = y + sigGeo.nameCenterMm
           doc.setDrawColor(0, 0, 0)
-          doc.setLineWidth(0.3)
-          doc.line(cx - ulHalf, ulY, cx + ulHalf, ulY)
+          doc.setLineWidth(SIG_RULE_BORDER)
+          for (const { name, cx, sizePt } of entries) {
+            applyFont('bold', sizePt)
+            centerText(name, cx, nameCenterY)
+            const half = textWidth(name) / 2 + SIG_RULE_PAD
+            const ruleY = nameCenterY + sigGeo.ruleOffsetMm
+            doc.line(cx - half, ruleY, cx + half, ruleY)
+          }
           doc.setDrawColor(BORDER.r, BORDER.g, BORDER.b)
           doc.setLineWidth(0.13)
-        })
-        y += layout.sigRowH
-      } else if (block.kind === 'sig-title') {
-        const halfCx1 = x0 + tableW * 0.25
-        const halfCx2 = x0 + tableW * 0.75
-        applyFont('normal', smallSz)
-        const labelY = y + smallSz * 1.05 * PT_TO_MM
-        centerText('PANGULONG MANG-AAWIT', halfCx1, labelY)
-        centerText('DESTINADO', halfCx2, labelY)
-        y += layout.sigRowH
+          y += sigGeo.nameRowMm
+          return
+        }
+        case 'sig-title': {
+          applyFont('normal', sigGeo.roleFontSizePt)
+          const roleY = y + sigGeo.roleCenterMm
+          centerText('PANGULONG MANG-AAWIT', x0 + sigGeo.leftCenterMm, roleY)
+          centerText('DESTINADO', x0 + sigGeo.rightCenterMm, roleY)
+          y += sigGeo.roleRowMm
+          return
+        }
+        default: {
+          // Exhaustiveness guard: a new block kind must not be silently dropped.
+          const unreachable: never = block
+          throw new Error(`Unhandled sheet block: ${JSON.stringify(unreachable)}`)
+        }
       }
     }
+
+    for (const block of blocks) renderBlock(block)
   })
 
   downloadBlob(doc.output('blob'), suguanFileName(suguan, 'pdf'))

@@ -1,228 +1,125 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react'
-import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Check,
+  Lock,
+  Plus,
+  RotateCcw,
+  X,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useNavStore } from '@/store/navStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
-import { defaultCapacities } from '@/core/constants/serviceTypes'
-import type {
-  SuguanAssignment,
-  SuguanDutyRole,
-  Suguan,
-  SuguanGroup,
-  SuguanEvent,
-  SuguanFormation,
-  SuguanType,
-  SuguanDocFormat,
-  SuguanCoverage,
-  SuguanScheduleSection,
-} from '@/core/types/suguan'
-import { todayISO, DEFAULT_DOC_FORMAT, inferCoverageFromEvents } from '@/lib/suguanUtils'
+import type { Suguan } from '@/core/types/suguan'
 import { cn } from '@/lib/utils'
-import { ModeSelectStep } from './ModeSelectStep'
-import { DocumentSetupStep } from './DocumentSetupStep'
+import { formatDate } from '@/lib/format'
+import { groupLabel } from '@/lib/suguanUtils'
 import { CoverageStep } from './CoverageStep'
-import { WorshipScheduleStep } from './WorshipScheduleStep'
-import { ScheduleAssignmentsStep } from './ScheduleAssignmentsStep'
-import { VoiceAssignmentsStep } from './VoiceAssignmentsStep'
-import { KoroMakerStep } from './KoroMakerStep'
-import { ReviewStep } from './ReviewStep'
+import { DocumentSetupStep } from './DocumentSetupStep'
+import { SchedulesStep } from './SchedulesStep'
+import { AssignmentWorkspace } from './AssignmentWorkspace'
+import { PreviewStep } from './PreviewStep'
+import { StartModeDialog } from './StartModeDialog'
+import {
+  BUILDER_STEPS,
+  createCopyDraft,
+  createDraftFromSuguan,
+  createEmptyDraft,
+  isStepComplete,
+  maxReachableStep,
+  saveBlockers,
+  type SuguanDraft,
+} from './builderState'
 
-export interface SuguanDraft {
-  type: SuguanType | ''
-  docFormat: SuguanDocFormat
-  coverage: SuguanCoverage | null
-  date: string
-  time: string
-  serviceTypeId: string
-  eventTitle: string
-  location: string
-  notes: string
-  group: SuguanGroup
-  events: SuguanEvent[]
-  formation: SuguanFormation | null
-  voiceCapacities: Record<string, number>
-  assignments: SuguanAssignment[]
-  schedules: SuguanScheduleSection[]
-  dutyRoles: SuguanDutyRole[]
-  destinadoName: string
-}
-
-const REGULAR_STEPS = [
-  'Mode',
-  'Document Setup',
-  'Coverage',
-  'Worship Schedules',
-  'Service',
-  'Assignments',
-  'Review',
-]
-
-const SPECIAL_STEPS = [
-  'Mode',
-  'Document Setup',
-  'Event Info',
-  'Assignments',
-  'Koro Maker',
-  'Review',
-]
+export type { SuguanDraft } from './builderState'
 
 export function SuguanBuilderPage() {
   const navigate = useNavStore((s) => s.navigate)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
+  const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const builderSuguanId = useNavStore((s) => s.builderSuguanId)
-  const suguan = useSuguanStore((s) => s.suguan)
+  const suguanList = useSuguanStore((s) => s.suguan)
   const createSuguan = useSuguanStore((s) => s.createSuguan)
   const updateSuguan = useSuguanStore((s) => s.updateSuguan)
-  const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
   const members = useMemberStore((s) => s.members)
 
-  const existing = useMemo<Suguan | null>(
-    () => suguan.find((s) => s.id === builderSuguanId) ?? null,
-    [suguan, builderSuguanId],
+  // `editingId` is what we will write back to. It starts as the store's target so
+  // deep links still work, but choosing "start new" or copying detaches it so a
+  // fresh draft can never overwrite the Suguan that was opened.
+  const [editingId, setEditingId] = useState<string | null>(
+    builderSuguanId ?? null,
   )
 
-  const [step, setStep] = useState(existing ? 1 : 0)
-  const [draft, setDraft] = useState<SuguanDraft>({
-    type: existing ? existing.type : '',
-    docFormat: existing?.docFormat ?? { ...DEFAULT_DOC_FORMAT },
-    coverage:
-      existing?.coverage ??
-      (existing?.type === 'regular'
-        ? inferCoverageFromEvents(existing?.events ?? [])
-        : null),
-    date: existing?.date ?? todayISO(),
-    time: existing?.time ?? '09:00',
-    serviceTypeId: existing?.serviceTypeId ?? 'linggo-am',
-    eventTitle: existing?.eventTitle ?? '',
-    location: existing?.location ?? '',
-    notes: existing?.notes ?? '',
-    group: existing?.group ?? 'babae',
-    events: existing?.events ?? [],
-    formation: existing?.formation ?? null,
-    voiceCapacities: existing?.voiceCapacities ?? defaultCapacities(voices),
-    assignments: existing?.assignments ?? [],
-    schedules: existing?.schedules ?? [],
-    dutyRoles: existing?.dutyRoles ?? [],
-    destinadoName: existing?.destinadoName ?? '',
-  })
+  const existing = useMemo<Suguan | null>(
+    () => suguanList.find((s) => s.id === editingId) ?? null,
+    [suguanList, editingId],
+  )
 
-  useEffect(() => {
-    if (existing) {
-      setDraft({
-        type: existing.type,
-        docFormat: existing.docFormat ?? { ...DEFAULT_DOC_FORMAT },
-        coverage:
-          existing.coverage ??
-          (existing.type === 'regular'
-            ? inferCoverageFromEvents(existing.events)
-            : null),
-        date: existing.date,
-        time: existing.time,
-        serviceTypeId: existing.serviceTypeId,
-        eventTitle: existing.eventTitle ?? '',
-        location: existing.location ?? '',
-        notes: existing.notes ?? '',
-        group: existing.group,
-        events: existing.events,
-        formation: existing.formation ?? null,
-        voiceCapacities: existing.voiceCapacities,
-        assignments: existing.assignments,
-        schedules: existing.schedules ?? [],
-        dutyRoles: existing.dutyRoles,
-        destinadoName: existing.destinadoName ?? '',
-      })
-      setStep(1)
-    }
-  }, [existing])
+  const initialKey = editingId ?? '__new__'
+  const [loadedKey, setLoadedKey] = useState(initialKey)
+  const [step, setStep] = useState(existing ? 4 : 0)
+  const [draft, setDraft] = useState<SuguanDraft>(() =>
+    existing ? createDraftFromSuguan(existing, voices) : createEmptyDraft(voices),
+  )
+  const [startOpen, setStartOpen] = useState(!existing)
 
-  const patch = (p: Partial<SuguanDraft>) => setDraft((d) => ({ ...d, ...p }))
-
-  const steps = draft.type === 'special' ? SPECIAL_STEPS : REGULAR_STEPS
-
-  const isStepComplete = (i: number): boolean => {
-    const totalAssigned =
-      draft.schedules.length > 0
-        ? draft.schedules.reduce((acc, s) => acc + s.assignments.length, 0)
-        : draft.assignments.length
-    switch (i) {
-      case 0:
-        return draft.type !== ''
-      case 1:
-        return Boolean(draft.docFormat.paperSize && draft.docFormat.orientation)
-      case 2:
-        if (draft.type === 'special') {
-          return Boolean(draft.date && draft.eventTitle.trim())
-        }
-        return draft.coverage != null
-      case 3:
-        if (draft.type === 'special') return draft.assignments.length > 0
-        return draft.schedules.length > 0
-      case 4:
-        return draft.type === 'regular' ? Boolean(draft.serviceTypeId) : true
-      case 5:
-        return draft.type === 'regular' ? totalAssigned > 0 : true
-      default:
-        return true
-    }
+  if (loadedKey !== initialKey) {
+    setLoadedKey(initialKey)
+    setDraft(
+      existing ? createDraftFromSuguan(existing, voices) : createEmptyDraft(voices),
+    )
+    setStep(existing ? 4 : 0)
+    setStartOpen(!existing)
   }
 
-  const canGoNext = isStepComplete(step)
+  const patch = (p: Partial<SuguanDraft>) =>
+    setDraft((d) => ({ ...d, ...p }))
 
-  let maxReachable = 0
-  while (maxReachable < steps.length - 1 && isStepComplete(maxReachable)) {
-    maxReachable++
+  const reach = maxReachableStep(draft)
+  const isLast = step === BUILDER_STEPS.length - 1
+  const stepComplete = isStepComplete(draft, step)
+
+  const goNext = () => {
+    if (!stepComplete) {
+      toast.error('Finish the required fields in this step first.')
+      return
+    }
+    setStep((s) => Math.min(BUILDER_STEPS.length - 1, s + 1))
   }
 
   const handleSave = () => {
-    if (draft.type === 'regular') {
-      if (!draft.coverage) {
-        toast.error('Please choose a Suguan coverage first.')
-        return
-      }
-      if (draft.events.length === 0) {
-        toast.error('No schedule events were generated. Please check the coverage.')
-        return
-      }
-      if (!draft.serviceTypeId) {
-        toast.error('Please configure the service first.')
-        return
-      }
-    } else {
-      if (!draft.date || !draft.eventTitle.trim()) {
-        toast.error('Please provide the event name and date.')
-        return
-      }
+    const blockers = saveBlockers(draft)
+    if (blockers.length > 0) {
+      toast.error(blockers[0])
+      return
     }
 
-    const patchData = {
+    const payload = {
       date: draft.date,
       time: draft.time,
       serviceTypeId: draft.serviceTypeId || '',
       eventTitle: draft.type === 'special' ? draft.eventTitle.trim() : undefined,
       group: draft.group,
-      coverage: draft.type === 'regular' ? draft.coverage : undefined,
-      location: draft.location || undefined,
-      notes: draft.notes || undefined,
       docFormat: draft.docFormat,
-      formation:
-        draft.type === 'special' ? draft.formation : undefined,
+      coverage: draft.type === 'regular' ? draft.coverage : undefined,
+      events: draft.type === 'regular' ? draft.events : [],
+      pagsasanayDate:
+        draft.type === 'regular' && draft.pagsasanayDate
+          ? draft.pagsasanayDate
+          : undefined,
+      pagtupadDate:
+        draft.type === 'regular' && draft.pagtupadDate
+          ? draft.pagtupadDate
+          : undefined,
+      formation: draft.type === 'special' ? draft.formation : undefined,
       voiceCapacities: draft.voiceCapacities,
       assignments: draft.assignments,
       schedules: draft.schedules,
@@ -230,314 +127,308 @@ export function SuguanBuilderPage() {
       destinadoName: draft.destinadoName.trim() || undefined,
     }
 
-    let savedId = existing ? existing.id : null
     if (existing) {
-      updateSuguan(existing.id, patchData)
-      toast.success('Suguan saved.')
-    } else {
-      const created = createSuguan({
-        date: draft.date,
-        time: draft.time,
-        serviceTypeId: draft.serviceTypeId || '',
-        location: draft.location || undefined,
-        notes: draft.notes || undefined,
-        type: draft.type === 'special' ? 'special' : 'regular',
-        eventTitle: draft.type === 'special' ? draft.eventTitle.trim() : undefined,
-        group: draft.group,
-        docFormat: draft.docFormat,
-        coverage: draft.type === 'regular' ? draft.coverage ?? undefined : undefined,
-        events: draft.type === 'regular' ? draft.events : [],
-        destinadoName: draft.destinadoName.trim() || undefined,
-      })
-      savedId = created.id
-      updateSuguan(created.id, {
-        formation: draft.type === 'special' ? draft.formation : undefined,
-        voiceCapacities: draft.voiceCapacities,
-        assignments: draft.assignments,
-        schedules: draft.schedules,
-        dutyRoles: draft.dutyRoles,
-      })
-      toast.success('Suguan saved.')
+      updateSuguan(existing.id, payload)
+      toast.success('Suguan updated.')
+      openSuguanDetail(existing.id)
+      return
     }
-    if (savedId) openSuguanDetail(savedId)
+
+    const created = createSuguan({
+      date: draft.date,
+      time: draft.time,
+      serviceTypeId: draft.serviceTypeId || '',
+      type: draft.type,
+      eventTitle: draft.type === 'special' ? draft.eventTitle.trim() : undefined,
+      group: draft.group,
+      docFormat: draft.docFormat,
+      coverage: draft.type === 'regular' ? (draft.coverage ?? undefined) : undefined,
+      events: draft.type === 'regular' ? draft.events : [],
+      pagsasanayDate:
+        draft.type === 'regular' && draft.pagsasanayDate
+          ? draft.pagsasanayDate
+          : undefined,
+      pagtupadDate:
+        draft.type === 'regular' && draft.pagtupadDate
+          ? draft.pagtupadDate
+          : undefined,
+      destinadoName: draft.destinadoName.trim() || undefined,
+    })
+    updateSuguan(created.id, {
+      formation: draft.type === 'special' ? draft.formation : undefined,
+      voiceCapacities: draft.voiceCapacities,
+      assignments: draft.assignments,
+      schedules: draft.schedules,
+      dutyRoles: draft.dutyRoles,
+    })
+    toast.success('Suguan saved.')
+    openSuguanDetail(created.id)
   }
 
-  const cancel = () => {
-    navigate('dashboard')
-  }
-
-  const titleLabel =
-    step === 0
-      ? 'Suguan Creator'
+  const title =
+    existing
+      ? 'Edit Suguan'
       : draft.type === 'special'
         ? 'Special Occasion Suguan'
-        : 'Regular Worship Service Suguan'
+        : 'Worship Service Suguan'
+
+  const subtitle =
+    draft.type === 'special'
+      ? draft.eventTitle.trim() || 'New special occasion'
+      : draft.date
+        ? formatDate(draft.date)
+        : 'New Suguan'
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        title={existing ? 'Edit Suguan' : titleLabel}
-        description="Create and schedule a complete Suguan step by step."
-        actions={
-          <Button variant="ghost" onClick={cancel}>
-            <X className="size-4" />
-            Cancel
-          </Button>
-        }
-      />
-
-      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-        {steps.map((title, i) => {
-          const clickable = i <= maxReachable
-          const isPast = i < step
-          return (
-            <button
-              key={title}
-              type="button"
-              disabled={!clickable}
-              onClick={() => clickable && setStep(i)}
-              className={cn(
-                'flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                i === step
-                  ? 'bg-primary text-primary-foreground'
-                  : clickable
-                    ? 'text-primary hover:bg-accent'
-                    : 'cursor-not-allowed text-muted-foreground',
-              )}
-            >
-              {isPast ? (
-                <Check className="size-4" />
-              ) : (
-                <span className="flex size-5 items-center justify-center rounded-full border text-xs">
-                  {i + 1}
+    <div className="flex flex-col gap-4 pb-24 xl:pb-0">
+      {/* Page header */}
+      <div className="flex flex-col gap-3.5 rounded-xl border border-border/70 bg-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
+              <CalendarDays className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                Suguan Builder
+              </h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Create and manage your choir service schedules and assignments.
+              </p>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span className="truncate font-medium text-foreground">
+                  {title} · {subtitle}
                 </span>
-              )}
-              {title}
-            </button>
-          )
-        })}
+                <span>·</span>
+                <span>{groupLabel(draft.group)}</span>
+                <span>·</span>
+                <span>
+                  Step {step + 1} of {BUILDER_STEPS.length}
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="tabular-nums">
+              {draft.schedules.length > 0
+                ? `${draft.schedules.length} schedule${draft.schedules.length !== 1 ? 's' : ''}`
+                : draft.type === 'special'
+                  ? 'Special occasion'
+                  : 'No schedule'}
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => setStartOpen(true)}>
+              <Plus className="size-4" />
+              Start new / copy
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Close builder"
+              onClick={() => navigate('dashboard')}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Stepper */}
+        <ol className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
+          {BUILDER_STEPS.map((s, i) => {
+            const complete = isStepComplete(draft, i)
+            const reachable = i <= reach
+            const isCurrent = i === step
+            return (
+              <li key={s.id} className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  disabled={!reachable}
+                  onClick={() => reachable && setStep(i)}
+                  title={s.description}
+                  className={cn(
+                    'group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                    isCurrent
+                      ? 'border-brand-navy bg-brand-navy text-white'
+                      : 'border-border/70 bg-background hover:border-brand-teal/50 hover:bg-brand-teal-soft/40',
+                    !reachable && 'cursor-not-allowed opacity-50 hover:border-border/70 hover:bg-background',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex size-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-semibold',
+                      isCurrent
+                        ? 'bg-white/15 text-white ring-1 ring-inset ring-white/25'
+                        : complete
+                          ? 'bg-brand-teal-soft text-brand-teal ring-1 ring-inset ring-brand-teal/25'
+                          : 'bg-muted text-muted-foreground ring-1 ring-inset ring-border',
+                    )}
+                  >
+                    {complete && !isCurrent ? (
+                      <Check className="size-3.5" />
+                    ) : !reachable ? (
+                      <Lock className="size-3" />
+                    ) : (
+                      i + 1
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        'block truncate text-[0.8125rem] font-semibold leading-tight',
+                        isCurrent ? 'text-white' : 'text-foreground',
+                      )}
+                    >
+                      {s.title}
+                    </span>
+                    <span
+                      className={cn(
+                        'mt-0.5 hidden truncate text-[0.625rem] leading-tight sm:block',
+                        isCurrent ? 'text-white/65' : 'text-muted-foreground',
+                      )}
+                    >
+                      {s.description}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ol>
       </div>
 
-      {step === 0 && (
-        <ModeSelectStep
-          value={draft.type}
-          onSelect={(type) => {
-            patch({ type })
-            setStep((s) => Math.min(1, s + 1))
-          }}
-        />
-      )}
-
-      {step === 1 && (
-        <DocumentSetupStep
-          value={draft.docFormat}
-          onChange={(f) => patch({ docFormat: f })}
-        />
-      )}
-
-      {step === 2 && draft.type === 'special' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Event Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4">
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                <div className="grid gap-2 md:col-span-2">
-                  <Label htmlFor="eventTitle">Event Name</Label>
-                  <Input
-                    id="eventTitle"
-                    value={draft.eventTitle}
-                    onChange={(e) => patch({ eventTitle: e.target.value })}
-                    placeholder="e.g. 50th Anniversary, District Event"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="date">Date</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={draft.date}
-                    onChange={(e) => patch({ date: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="time">Time</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={draft.time}
-                    onChange={(e) => patch({ time: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div className="grid gap-2">
-                  <Label>Group</Label>
-                  <Select
-                    value={draft.group}
-                    onValueChange={(v) => patch({ group: v as SuguanGroup })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="babae">Babae</SelectItem>
-                      <SelectItem value="lalaki">Lalaki</SelectItem>
-                      <SelectItem value="mixed">Mixed (Babae & Lalaki)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="location">Venue / Location</Label>
-                  <Input
-                    id="location"
-                    value={draft.location}
-                    onChange={(e) => patch({ location: e.target.value })}
-                    placeholder="e.g. Lokal ng Kamuning"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={draft.notes}
-                  onChange={(e) => patch({ notes: e.target.value })}
-                  placeholder="Optional notes for this event"
-                  rows={2}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 2 && draft.type === 'regular' && (
-        <CoverageStep draft={draft} patch={patch} />
-      )}
-
-      {step === 3 && draft.type === 'regular' && (
-        <WorshipScheduleStep draft={draft} patch={patch} />
-      )}
-
-      {step === 4 && draft.type === 'regular' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Service Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                <div className="grid gap-2">
-                  <Label>Service Type</Label>
-                  <Select
-                    value={draft.serviceTypeId}
-                    onValueChange={(v) => patch({ serviceTypeId: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allServiceTypes().map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Group</Label>
-                  <Select
-                    value={draft.group}
-                    onValueChange={(v) => patch({ group: v as SuguanGroup })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="babae">Babae</SelectItem>
-                      <SelectItem value="lalaki">Lalaki</SelectItem>
-                      <SelectItem value="mixed">Mixed (Babae & Lalaki)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="location">Location</Label>
-                  <Input
-                    id="location"
-                    value={draft.location}
-                    onChange={(e) => patch({ location: e.target.value })}
-                    placeholder="e.g. Lokal ng Kamuning"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={draft.notes}
-                  onChange={(e) => patch({ notes: e.target.value })}
-                  placeholder="Optional notes for this service"
-                  rows={2}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 3 && draft.type === 'special' && (
-        <VoiceAssignmentsStep
+      {/* Step body */}
+      {step === 3 ? (
+        <AssignmentWorkspace
           draft={draft}
           patch={patch}
           members={members}
-          includeDutyRoles
+          editingId={editingId}
         />
+      ) : (
+        <div
+          className={cn(
+            'min-w-0 rounded-xl border border-border/70 bg-card p-4',
+            // Form-only step: keep the column readable instead of stretching
+            // inputs across very wide monitors. Schedules and review are dense
+            // tables and should use the full width.
+            step === 0 && 'mx-auto w-full xl:max-w-5xl',
+          )}
+        >
+          {step === 0 && <CoverageStep draft={draft} patch={patch} />}
+          {step === 1 && (
+            <DocumentSetupStep
+              value={draft.docFormat}
+              onChange={(docFormat) => patch({ docFormat })}
+            />
+          )}
+          {step === 2 && <SchedulesStep draft={draft} patch={patch} />}
+          {step === 4 && (
+            <PreviewStep
+              draft={draft}
+              onSave={handleSave}
+              isExisting={Boolean(existing)}
+              editingId={editingId}
+            />
+          )}
+        </div>
       )}
 
-      {step === 5 && draft.type === 'regular' && (
-        <ScheduleAssignmentsStep draft={draft} patch={patch} members={members} />
-      )}
-
-      {step === 5 && draft.type === 'special' && (
-        <KoroMakerStep draft={draft} patch={patch} members={members} />
-      )}
-
-      {step === 6 && <ReviewStep draft={draft} />}
-
-      <div className="flex items-center justify-between">
+      {/* Bottom navigation */}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur xl:hidden">
         <Button
           variant="outline"
+          className="flex-1"
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0}
         >
           <ArrowLeft className="size-4" />
           Back
         </Button>
+        {!existing && !startOpen && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Start over"
+            aria-label="Start over"
+            onClick={startNewSuguan}
+          >
+            <RotateCcw className="size-4" />
+          </Button>
+        )}
+        {isLast ? (
+          <Button className="flex-1" onClick={handleSave}>
+            <Check className="size-4" />
+            Save
+          </Button>
+        ) : (
+          <Button className="flex-1" onClick={goNext} disabled={!stepComplete}>
+            Next
+            <ArrowRight className="size-4" />
+          </Button>
+        )}
+      </div>
+
+      <div className="hidden items-center justify-between gap-3 xl:flex">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0}
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+          {!existing && !startOpen && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={startNewSuguan}
+            >
+              <RotateCcw className="size-4" />
+              Start over
+            </Button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
-          {step !== steps.length - 1 && !canGoNext && (
+          {!isLast && !stepComplete && (
             <p className="text-xs text-muted-foreground">
               Complete the required fields for this step to continue.
             </p>
           )}
-          {step === steps.length - 1 ? (
-            <Button onClick={handleSave}>
+          {isLast ? (
+            <Button onClick={handleSave} disabled={saveBlockers(draft).length > 0}>
               <Check className="size-4" />
               Save Suguan
             </Button>
           ) : (
-            <Button
-              onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))}
-              disabled={!canGoNext}
-            >
+            <Button onClick={goNext} disabled={!stepComplete}>
               Next
               <ArrowRight className="size-4" />
             </Button>
           )}
         </div>
       </div>
+
+      <StartModeDialog
+        open={startOpen}
+        onOpenChange={setStartOpen}
+        suguan={suguanList}
+        onStartNew={() => {
+          setEditingId(null)
+          setLoadedKey('__new__')
+          setDraft(createEmptyDraft(voices))
+          setStep(0)
+          setStartOpen(false)
+        }}
+        onCopy={(source) => {
+          setEditingId(null)
+          setLoadedKey('__new__')
+          setDraft(createCopyDraft(source, voices))
+          setStep(0)
+          setStartOpen(false)
+          toast.success(`Copied "${source.eventTitle || source.date}".`)
+        }}
+      />
     </div>
   )
 }

@@ -4,6 +4,13 @@ import type { AssignmentPreset } from '@/store/assignmentPresetStore'
 export interface WorshipSchedule {
   id: WorshipScheduleKey
   scheduleDay: string
+  /**
+   * Day-of-week index for this schedule, `0` = Sunday ... `6` = Saturday.
+   * Stored on the record so the date calculator reads the configuration
+   * instead of re-deriving it from `scheduleDay` text at every call site.
+   * See `weekdayIndexForLabel` for the Tagalog/English resolver.
+   */
+  weekday: number
   scheduleTime: string
   label: string
   presetHint: string
@@ -13,6 +20,7 @@ export const WEEKEND_SCHEDULES: WorshipSchedule[] = [
   {
     id: 'sabado-6pm',
     scheduleDay: 'SABADO',
+    weekday: 6,
     scheduleTime: '6:00 PM',
     label: 'SABADO, 6:00 PM',
     presetHint: 'Sabado 6:00 PM Group',
@@ -20,6 +28,7 @@ export const WEEKEND_SCHEDULES: WorshipSchedule[] = [
   {
     id: 'linggo-6am',
     scheduleDay: 'LINGGO',
+    weekday: 0,
     scheduleTime: '6:00 AM',
     label: 'LINGGO, 6:00 AM',
     presetHint: 'Linggo 6:00 AM Group',
@@ -27,6 +36,7 @@ export const WEEKEND_SCHEDULES: WorshipSchedule[] = [
   {
     id: 'linggo-10am',
     scheduleDay: 'LINGGO',
+    weekday: 0,
     scheduleTime: '10:00 AM',
     label: 'LINGGO, 10:00 AM',
     presetHint: 'Linggo 10:00 AM Group',
@@ -37,6 +47,7 @@ export const MIDWEEK_SCHEDULES: WorshipSchedule[] = [
   {
     id: 'miyerkules-7pm',
     scheduleDay: 'MIYERKULES',
+    weekday: 3,
     scheduleTime: '7:00 PM',
     label: 'MIYERKULES, 7:00 PM',
     presetHint: 'Miyerkules 7:00 PM Group',
@@ -44,6 +55,7 @@ export const MIDWEEK_SCHEDULES: WorshipSchedule[] = [
   {
     id: 'huwebes-6am',
     scheduleDay: 'HUWEBES',
+    weekday: 4,
     scheduleTime: '6:00 AM',
     label: 'HUWEBES, 6:00 AM',
     presetHint: 'Huwebes 6:00 AM Group',
@@ -51,6 +63,7 @@ export const MIDWEEK_SCHEDULES: WorshipSchedule[] = [
   {
     id: 'huwebes-7pm',
     scheduleDay: 'HUWEBES',
+    weekday: 4,
     scheduleTime: '7:00 PM',
     label: 'HUWEBES, 7:00 PM',
     presetHint: 'Huwebes 7:00 PM Group',
@@ -72,6 +85,64 @@ const DAY_ALIASES: Record<string, string[]> = {
   miyerkules: ['miyerkules', 'wednesday', 'wed'],
   huwebes: ['huwebes', 'thursday', 'thu'],
 }
+
+/**
+ * Canonical weekday index for a worship-day label, accepting the Tagalog
+ * (`'SABADO'`) or English (`'Saturday'`, `'Sat'`) spelling.
+ *
+ * @returns `0`–`6`, or `null` for free-form/custom labels like `''`.
+ */
+export function weekdayIndexForLabel(label: string | undefined | null): number | null {
+  if (!label) return null
+  const key = label.trim().toLowerCase()
+  if (!key) return null
+
+  for (const [day, aliases] of Object.entries(DAY_ALIASES)) {
+    if (aliases.includes(key)) {
+      const schedule = ALL_WORSHIP_SCHEDULES.find(
+        (s) => s.scheduleDay.toLowerCase() === day,
+      )
+      if (schedule) return schedule.weekday
+    }
+  }
+
+  const english = Object.entries({
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  }).find(([name]) => name.startsWith(key) || key.startsWith(name))
+  return english ? english[1] : null
+}
+
+/**
+ * The set of weekdays on which this choir holds worship services, derived from
+ * the schedule configuration rather than hardcoded day numbers.
+ *
+ * Defaults to every configured schedule, which yields Wednesday, Thursday,
+ * Saturday and Sunday. Pass a narrower list to scope the calculation, e.g.
+ * `worshipWeekdays(MIDWEEK_SCHEDULES)` for a midweek-only choir.
+ */
+export function worshipWeekdays(
+  schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
+): number[] {
+  const days = new Set<number>()
+  for (const schedule of schedules) {
+    if (Number.isInteger(schedule.weekday)) days.add(schedule.weekday)
+  }
+  return [...days].sort((a, b) => a - b)
+}
+
+export function isWorshipWeekday(
+  weekday: number,
+  schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
+): boolean {
+  return worshipWeekdays(schedules).includes(weekday)
+}
+
 
 function normalizeName(name: string): string {
   return name

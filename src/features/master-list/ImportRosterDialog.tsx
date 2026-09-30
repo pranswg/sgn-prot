@@ -17,6 +17,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { extractRosterFromPdf, type RosterCandidate } from '@/lib/rosterImport'
+import { todayPHT } from '@/lib/phDate'
 
 interface ImportRosterDialogProps {
   open: boolean
@@ -154,7 +155,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     const picked = candidates.filter((c) => c.selected)
     if (picked.length === 0) return
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayPHT()
     let memberCount = 0
     let traineeCount = 0
 

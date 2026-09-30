@@ -1,0 +1,236 @@
+/**
+ * Pure Suguan date planning.
+ *
+ * Everything here is a deterministic function of `YYYY-MM-DD` calendar keys and
+ * the configured worship schedule. There is no `Date.now()`, no store access and
+ * no id generation, so the results are identical on every device and in every
+ * process timezone. `suguanUtils` wraps these to attach ids.
+ *
+ * A Pagtupad is not a single day. The choir serves on every day of its worship
+ * block — midweek is Wednesday *and* Thursday, weekend is Saturday *and* Sunday
+ * — so suggestions are planned as a `{ start, end }` range and never as one day.
+ */
+
+// Explicit `.ts` extensions keep this module loadable by plain Node (for tests)
+// as well as by the Vite bundler.
+import { addDays, firstDateKey, isDateKey, todayPHT, weekdayOf } from './phDate.ts'
+import {
+  ALL_WORSHIP_SCHEDULES,
+  MIDWEEK_SCHEDULES,
+  WEEKEND_SCHEDULES,
+  worshipWeekdays,
+  type WorshipSchedule,
+} from '../core/constants/worshipSchedules.ts'
+import type { SuguanCoverage, SuguanEventType } from '../core/types/suguan.ts'
+
+export type PlannedEvent = { type: SuguanEventType; date: string; endDate?: string }
+
+/** A consecutive run of worship days, e.g. Wednesday through Thursday. */
+export type WorshipBlock = {
+  /** First day of the block, inclusive. */
+  start: string
+  /** Last day of the block, inclusive. Equal to `start` for a single-day block. */
+  end: string
+  /** Weekday indexes covered, in order. */
+  days: number[]
+}
+
+/** Longest run of consecutive configured worship days to look ahead. */
+const LOOKAHEAD_DAYS = 21
+
+/** Shifts a calendar key, passing invalid input straight through. */
+function shiftKey(date: string, days: number): string {
+  return isDateKey(date) ? addDays(date, days) : date
+}
+
+/**
+ * The next worship *block* on or after `fromKey`.
+ *
+ * Scans forward for the first configured worship day, then extends the match
+ * across every consecutive configured day after it. For a midweek choir that
+ * turns a Saturday rehearsal into Wednesday–Thursday, and for a weekend choir
+ * it turns a Saturday rehearsal into Saturday–Sunday of that same weekend.
+ *
+ * The block may begin on `fromKey` itself, because a choir can rehearse in the
+ * morning and serve the same day.
+ *
+ * @returns `null` only when `fromKey` is invalid or no worship days are configured.
+ */
+export function nextWorshipBlock(
+  fromKey: string,
+  weekdays: readonly number[],
+): WorshipBlock | null {
+  if (!isDateKey(fromKey) || weekdays.length === 0) return null
+  const allowed = new Set(weekdays)
+
+  for (let offset = 0; offset <= LOOKAHEAD_DAYS; offset += 1) {
+    const candidate = shiftKey(fromKey, offset)
+    if (!allowed.has(weekdayOf(candidate))) continue
+
+    // Grow the block while the following day is also a worship day.
+    const days: number[] = [weekdayOf(candidate)]
+    let end = candidate
+    for (let step = 1; step <= LOOKAHEAD_DAYS; step += 1) {
+      const next = shiftKey(candidate, step)
+      if (!allowed.has(weekdayOf(next))) break
+      days.push(weekdayOf(next))
+      end = next
+    }
+    return { start: candidate, end, days }
+  }
+
+  return null
+}
+
+/**
+ * The nearest single worship-service date strictly AFTER `fromKey`.
+ *
+ * Prefer `nextWorshipBlock`; this exists for call sites that genuinely need one
+ * day, such as resolving a schedule to a date for a preset.
+ */
+export function nextWorshipDateKey(
+  fromKey: string,
+  schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
+): string | null {
+  if (!isDateKey(fromKey)) return null
+  const weekdays = worshipWeekdays(schedules)
+  for (let offset = 1; offset <= LOOKAHEAD_DAYS; offset += 1) {
+    const candidate = shiftKey(fromKey, offset)
+    if (weekdays.includes(weekdayOf(candidate))) return candidate
+  }
+  return null
+}
+
+/**
+ * Suggests the Pagtupad range that follows a chosen Pagsasanay date.
+ *
+ * Both the start and the end are suggestions: the user can override either one
+ * for an unusual service week.
+ */
+export function suggestPagtupadBlock(
+  pagsasanayDate: string,
+  schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
+): WorshipBlock | null {
+  const base = isDateKey(pagsasanayDate) ? pagsasanayDate : todayPHT()
+  return nextWorshipBlock(base, worshipWeekdays(schedules))
+}
+
+/** Start date of the suggested Pagtupad range. */
+export function suggestPagtupadDate(
+  pagsasanayDate: string,
+  schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
+): string {
+  const base = isDateKey(pagsasanayDate) ? pagsasanayDate : todayPHT()
+  return suggestPagtupadBlock(base, schedules)?.start ?? base
+}
+
+/** The worship schedules that apply to a coverage template. */
+export function schedulesForTemplate(
+  template: SuguanCoverage['template'],
+): readonly WorshipSchedule[] {
+  if (template === 'midweek-2w') return MIDWEEK_SCHEDULES
+  if (template === 'weekend-2w') return WEEKEND_SCHEDULES
+  return ALL_WORSHIP_SCHEDULES
+}
+
+/** The last date covered by a template, used for the "until ..." label. */
+export function coverageLastDate(coverage: SuguanCoverage): string {
+  return coverage.oneWeekDate ?? shiftKey(coverage.startDate, 8)
+}
+
+/**
+ * Resolves one Pagtupad range from an optional override pair and a suggestion.
+ *
+ * An explicit start always outranks the suggestion even when it is earlier or
+ * later. The end falls back to the matching suggestion end, then to the start.
+ */
+function resolveService(
+  startOverride: string | undefined,
+  endOverride: string | undefined,
+  suggestion: WorshipBlock | null,
+  fallback: string,
+): { start: string; end: string } {
+  if (isDateKey(startOverride)) {
+    return {
+      start: startOverride,
+      end: isDateKey(endOverride) ? endOverride : startOverride,
+    }
+  }
+  if (suggestion) {
+    return {
+      start: suggestion.start,
+      end: isDateKey(endOverride) ? endOverride : suggestion.end,
+    }
+  }
+  return { start: fallback, end: isDateKey(endOverride) ? endOverride : fallback }
+}
+
+/**
+ * Builds the Pagsasanay / Pagtupad entries for a coverage selection.
+ *
+ * The Pagsasanay (rehearsal) date is always preserved exactly as entered. Each
+ * Pagtupad is a *suggested* range covering every worship day in the block that
+ * follows, and the `pagtupadStartOverride` / `pagtupadEndOverride` fields let the
+ * user pin an unusual service week instead.
+ */
+export function planEventsFromCoverage(
+  coverage: SuguanCoverage,
+): PlannedEvent[] {
+  const weekdays = worshipWeekdays(schedulesForTemplate(coverage.template))
+  const start = isDateKey(coverage.startDate) ? coverage.startDate : todayPHT()
+
+  if (coverage.template === 'midweek-2w' || coverage.template === 'weekend-2w') {
+    // Two rehearsal/Pagtupad pairs, one week apart. The Pagsasanay date is kept
+    // exactly as the user entered it; each Pagtupad covers the whole worship
+    // block unless the user overrode it.
+    const week1Rehearsal = start
+    const week2Rehearsal = shiftKey(start, 7)
+
+    const overridden = isDateKey(coverage.pagtupadStartOverride)
+    const week1Service = resolveService(
+      coverage.pagtupadStartOverride,
+      coverage.pagtupadEndOverride,
+      nextWorshipBlock(week1Rehearsal, weekdays),
+      week1Rehearsal,
+    )
+    // With a pinned first week, the second week follows it seven days later.
+    const week2Service = overridden
+      ? {
+          start: shiftKey(week1Service.start, 7),
+          end: shiftKey(week1Service.end, 7),
+        }
+      : resolveService(
+          undefined,
+          undefined,
+          nextWorshipBlock(week2Rehearsal, weekdays),
+          week2Rehearsal,
+        )
+
+    return [
+      { type: 'pagsasanay', date: week1Rehearsal },
+      { type: 'pagtupad', date: week1Service.start, endDate: week1Service.end },
+      { type: 'pagsasanay', date: week2Rehearsal },
+      { type: 'pagtupad', date: week2Service.start, endDate: week2Service.end },
+    ]
+  }
+
+  // One-week template: whatever the user entered for the rehearsal is kept
+  // exactly, and the Pagtupad falls back to the suggested block only when the
+  // user has not set one.
+  const pagsasanay = firstDateKey(
+    coverage.oneWeekPagsasanayDate,
+    coverage.oneWeekDate,
+    start,
+  )
+  const service = resolveService(
+    coverage.oneWeekPagtupadDate,
+    coverage.oneWeekPagtupadEndDate,
+    nextWorshipBlock(pagsasanay, weekdays),
+    pagsasanay,
+  )
+
+  return [
+    { type: 'pagsasanay', date: pagsasanay },
+    { type: 'pagtupad', date: service.start, endDate: service.end },
+  ]
+}

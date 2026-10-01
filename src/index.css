@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * Restrict scanning to real source. Without this Tailwind walks the whole project,
+ * including `AGENTS.md`, and any utility class named in the docs (e.g. in prose
+ * describing the sidebar) gets emitted into the stylesheet even though no
+ * component uses it. Add new roots here if you add a top-level source folder.
+ */
+@source "../src";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /**
@@ -73,14 +81,43 @@
   --brand-teal-bright: oklch(0.706 0.104 183);
   --brand-teal-soft: oklch(0.952 0.028 183);
 
-  --sidebar: oklch(0.222 0.048 255);
-  --sidebar-foreground: oklch(0.935 0.012 250);
-  --sidebar-primary: oklch(0.706 0.104 183);
-  --sidebar-primary-foreground: oklch(0.222 0.048 255);
-  --sidebar-accent: oklch(0.305 0.058 254);
-  --sidebar-accent-foreground: oklch(0.985 0.005 250);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.706 0.104 183);
+  /* Page backdrop behind the floating sidebar card. Kept separate from
+     --background so main-content surfaces stay as they are and only the
+     backdrop changes. */
+  --app-background: #eef2ff;
+
+  /* The sidebar is a floating white card, so its scale starts at near-black
+     text rather than the old navy-on-white inverse. */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111827;
+  --sidebar-secondary: #64748b;
+  --sidebar-muted: #94a3b8;
+  --sidebar-border: #e5e7eb;
+  --sidebar-hover: #f8fafc;
+  --sidebar-active: #4f46e5;
+  --sidebar-active-foreground: #ffffff;
+  --sidebar-search: #f5f3ff;
+  --sidebar-search-foreground: #64748b;
+  --sidebar-org: #f8fafc;
+  --sidebar-org-border: #e2e8f0;
+
+  /* Legacy shadcn names, remapped onto the new palette so any surviving usage
+     stays legible instead of pointing at a colour that no longer exists. */
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f8fafc;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-ring: #0f766e;
+
+  /* INC identity. Gold is reserved for the logo mark; never for nav. */
+  --brand-emerald: #0f766e;
+  --brand-music: #2dd4bf;
+  --brand-gold: #d4af37;
+  --logo-bg: #ecfdf5;
+  --logo-icon: #0f766e;
+
+  --shadow-sidebar-card: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-nav-active: 0 5px 15px rgba(79, 70, 229, 0.25);
 }
 
 .dark {
@@ -113,14 +150,32 @@
   --brand-teal: oklch(0.72 0.11 183);
   --brand-teal-bright: oklch(0.82 0.11 183);
   --brand-teal-soft: oklch(0.29 0.04 195);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --app-background: #0f172a;
+
+  --sidebar: #18181b;
+  --sidebar-foreground: #ffffff;
+  --sidebar-secondary: #a1a1aa;
+  --sidebar-muted: #71717a;
+  --sidebar-border: #27272a;
+  --sidebar-hover: #27272a;
+  --sidebar-active: #4f46e5;
+  --sidebar-active-foreground: #ffffff;
+  --sidebar-search: #27272a;
+  --sidebar-search-foreground: #a1a1aa;
+  --sidebar-org: #27272a;
+  --sidebar-org-border: #3f3f46;
+
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #27272a;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-ring: #2dd4bf;
+
+  --logo-bg: rgba(45, 212, 191, 0.15);
+  --logo-icon: #2dd4bf;
+
+  --shadow-sidebar-card: 0 15px 40px rgba(0, 0, 0, 0.35);
+  --shadow-nav-active: 0 5px 15px rgba(79, 70, 229, 0.35);
 }
 
 @theme inline {
@@ -159,6 +214,21 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-secondary: var(--sidebar-secondary);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-sidebar-search: var(--sidebar-search);
+  --color-sidebar-search-foreground: var(--sidebar-search-foreground);
+  --color-sidebar-org: var(--sidebar-org);
+  --color-sidebar-org-border: var(--sidebar-org-border);
+  --color-app-background: var(--app-background);
+  --color-brand-emerald: var(--brand-emerald);
+  --color-brand-music: var(--brand-music);
+  --color-brand-gold: var(--brand-gold);
+  --color-logo-bg: var(--logo-bg);
+  --color-logo-icon: var(--logo-icon);
   --color-brand-navy: var(--brand-navy);
   --color-brand-navy-deep: var(--brand-navy-deep);
   --color-brand-navy-soft: var(--brand-navy-soft);
@@ -186,4 +256,19 @@
     oklch(0.706 0.104 183 / 0.14) 5px,
     oklch(0.706 0.104 183 / 0.14) 6px
   );
+}
+
+/*
+  Hides a scrollbar's gutter while leaving the element scrollable.
+
+  This was declared on the sidebar nav list before it existed here, so it was a
+  no-op and the nav showed a native scrollbar. The sidebar still scrolls on short
+  viewports; it just no longer draws a track next to the icons.
+*/
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }

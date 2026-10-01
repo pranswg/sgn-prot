@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Music4, Settings2 } from 'lucide-react'
 import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from '@/components/ui/sidebar'
+  ChevronRight,
+  LogOut,
+  Menu,
+  Music4,
+  PanelLeft,
+  PanelLeftClose,
+  Settings2,
+} from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,9 +15,19 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { AppSidebar } from '@/components/AppSidebar'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
 import { useNavStore, type Page } from '@/store/navStore'
+import { useAuthStore } from '@/store/authStore'
+import { useSidebarStore } from '@/store/sidebarStore'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { MasterListPage } from '@/features/master-list/MasterListPage'
 import { TraineePage } from '@/features/trainees/TraineePage'
@@ -23,6 +36,7 @@ import { SuguanHistoryPage } from '@/features/suguan-history/SuguanHistoryPage'
 import { SuguanDetailPage } from '@/features/suguan-history/SuguanDetailPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { formatPHTDateTime } from '@/lib/phDate'
+import { initialsFor } from '@/lib/credentials'
 
 function CurrentPage() {
   const page = useNavStore((s) => s.page)
@@ -158,14 +172,43 @@ export function Layout() {
   const navigate = useNavStore((s) => s.navigate)
   const page = useNavStore((s) => s.page)
   const meta = PAGE_META[page]
+  const signOut = useAuthStore((s) => s.signOut)
+  // Read the id so this only re-renders when the signed-in account changes,
+  // not on every unrelated store write.
+  const currentAccountId = useAuthStore((s) => s.currentAccountId)
+  const account = useAuthStore((s) =>
+    s.accounts.find((a) => a.id === currentAccountId),
+  )
+  const isNavigationOpen = useSidebarStore((s) => s.isNavigationOpen)
+  const toggleNavigation = useSidebarStore((s) => s.toggleNavigation)
+  const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
 
   return (
-    <SidebarProvider>
+    // Plain flex row with no gutter. The sidebar is full-bleed and the content
+    // sits flush beside it, so the app reads as one continuous surface rather
+    // than a small panel floating in space. The sidebar is in normal flow, so
+    // its width animation pushes the content instead of covering it. No
+    // overlay on desktop.
+    <div className="flex min-h-svh w-full">
       <AppSidebar />
-      <SidebarInset className="bg-muted/40">
+      {/*
+        The content area is a full page: no rounding, no border, no shadow, and
+        no margin. `min-h-0` rather than `min-h-svh` because the wrapper is
+        already `min-h-svh`; a second one here would be taller than the space it
+        sits in and force a spurious scrollbar on short pages.
+      */}
+      <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         {/* Mobile app bar: hamburger, current page, quick actions */}
         <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-brand-navy px-3 py-2.5 text-white md:hidden">
-          <SidebarTrigger className="text-white hover:bg-white/10 hover:text-white" />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Open navigation"
+            className="text-white hover:bg-white/10 hover:text-white"
+            onClick={() => setMobileDrawerOpen(true)}
+          >
+            <Menu className="size-4" />
+          </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <Music4 className="size-4 shrink-0 text-brand-teal-bright" />
             <div className="min-w-0 leading-tight">
@@ -189,7 +232,18 @@ export function Layout() {
         </div>
 
         <header className="sticky top-0 z-20 hidden h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-sm md:flex md:px-6">
-          <SidebarTrigger />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={isNavigationOpen ? 'Hide sidebar' : 'Show sidebar'}
+            onClick={toggleNavigation}
+          >
+            {isNavigationOpen ? (
+              <PanelLeftClose className="size-4 text-muted-foreground" />
+            ) : (
+              <PanelLeft className="size-4 text-muted-foreground" />
+            )}
+          </Button>
           <Separator
             orientation="vertical"
             className="mr-1 h-4 data-[orientation=vertical]:h-4"
@@ -211,19 +265,32 @@ export function Layout() {
               </TooltipTrigger>
               <TooltipContent>Settings</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Choir officer profile"
-                  className="flex size-8 cursor-default select-none items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Signed in as ${account?.fullName ?? 'unknown'}`}
+                  className="flex size-8 items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 >
-                  CO
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Choir Officer</TooltipContent>
-            </Tooltip>
+                  {account ? initialsFor(account.fullName) : '?'}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="grid gap-0.5">
+                  <span className="truncate text-sm font-medium">
+                    {account?.fullName}
+                  </span>
+                  <span className="truncate text-xs font-normal text-muted-foreground">
+                    @{account?.username}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => signOut()}>
+                  <LogOut className="size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-5 p-4 pt-5 pb-24 md:p-6 md:pt-6 md:pb-6">
@@ -231,7 +298,7 @@ export function Layout() {
         </div>
 
         <MobileBottomNav />
-      </SidebarInset>
-    </SidebarProvider>
+      </main>
+    </div>
   )
 }

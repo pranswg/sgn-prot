@@ -17,6 +17,16 @@ import {
   SIG_RULE_PAD,
   type SheetMembers,
 } from './suguanExport.ts'
+import {
+  clampCustomBodyFontSize,
+  CUSTOM_BODY_FONT_MAX,
+  CUSTOM_BODY_FONT_MIN,
+  DEFAULT_DOC_FORMAT,
+  FONT_SIZE_PRESETS,
+  normalizeDocFormat,
+  resolveFontSizePreset,
+  scaleFontSizePreset,
+} from './suguanUtils.ts'
 import type { Suguan, SuguanDocFormat } from '../core/types/suguan.ts'
 
 const PRESETS: SuguanDocFormat[] = (['small', 'normal', 'large'] as const).map(
@@ -223,4 +233,75 @@ test('an empty roster still lays out a full page without a phantom gap', () => {
   assert.equal(layout.pages.length, 1)
   const tail = layout.pages[0].slice(-3).map((b) => b.kind)
   assert.deepEqual(tail, ['sig-gap', 'sig-name', 'sig-title'])
+})
+
+test('the default document format is normal and reads one step larger than small', () => {
+  // Pinned because "increase the default font size" is a deliberate change; if a
+  // future edit drops this back, the sheet silently gets hard to read again.
+  assert.equal(DEFAULT_DOC_FORMAT.fontSize, 'normal')
+  assert.equal(FONT_SIZE_PRESETS.normal.bodyFontSize, 10)
+  assert.ok(FONT_SIZE_PRESETS.normal.bodyFontSize > FONT_SIZE_PRESETS.small.bodyFontSize)
+  assert.ok(FONT_SIZE_PRESETS.large.bodyFontSize > FONT_SIZE_PRESETS.normal.bodyFontSize)
+  // Every preset must stay in ascending order or the picker stops meaning anything.
+  assert.ok(FONT_SIZE_PRESETS.small.bodyFontSize < FONT_SIZE_PRESETS.normal.bodyFontSize)
+})
+
+test('a custom body size is clamped and rounded to a half point', () => {
+  assert.equal(clampCustomBodyFontSize(undefined), FONT_SIZE_PRESETS.normal.bodyFontSize)
+  assert.equal(clampCustomBodyFontSize(NaN), FONT_SIZE_PRESETS.normal.bodyFontSize)
+  assert.equal(clampCustomBodyFontSize('not a number'), FONT_SIZE_PRESETS.normal.bodyFontSize)
+  assert.equal(clampCustomBodyFontSize(2), CUSTOM_BODY_FONT_MIN)
+  assert.equal(clampCustomBodyFontSize(400), CUSTOM_BODY_FONT_MAX)
+  assert.equal(clampCustomBodyFontSize(11.3), 11.5)
+  assert.equal(clampCustomBodyFontSize(12), 12)
+})
+
+test('resolveFontSizePreset derives custom from the body size, never undefined', () => {
+  const custom = resolveFontSizePreset(
+    normalizeDocFormat({ ...DEFAULT_DOC_FORMAT, fontSize: 'custom', customBodyFontSize: 14 }),
+  )
+  assert.equal(custom.bodyFontSize, 14)
+  assert.ok(custom.titleFontSize > custom.bodyFontSize, 'the title stays larger than the body')
+  assert.ok(custom.sigFontSize > custom.bodyFontSize)
+  // A cleared custom input must fall back rather than produce a zero-size sheet.
+  const cleared = resolveFontSizePreset(
+    normalizeDocFormat({ ...DEFAULT_DOC_FORMAT, fontSize: 'custom' }),
+  )
+  assert.equal(cleared.bodyFontSize, FONT_SIZE_PRESETS.normal.bodyFontSize)
+})
+
+test('scaling a preset keeps row heights ahead of the text they contain', () => {
+  // The failure this guards: a bigger font in an unchanged row, so names clip.
+  for (const body of [6, 8, 10, 14, 18, CUSTOM_BODY_FONT_MAX]) {
+    const fs = scaleFontSizePreset(FONT_SIZE_PRESETS.normal, body)
+    assert.equal(fs.bodyFontSize, body)
+    assert.ok(fs.rowHeight >= fs.bodyFontSize * 1.2, `row too short at ${body}pt`)
+    assert.ok(fs.headerRowHeight >= fs.headerFontSize * 1.2, `header row too short at ${body}pt`)
+    assert.ok(fs.sigRowHeight >= fs.sigFontSize * 1.2, `sig row too short at ${body}pt`)
+    assert.ok(fs.titleRowHeight >= fs.titleFontSize * 1.5, `title row too short at ${body}pt`)
+    // A larger body never yields a smaller row, or scaling would not be monotonic.
+    if (body > FONT_SIZE_PRESETS.normal.bodyFontSize) {
+      assert.ok(fs.rowHeight > FONT_SIZE_PRESETS.normal.rowHeight)
+    }
+  }
+})
+
+test('a custom font size reaches both renderers through the shared layout', () => {
+  const custom: SuguanDocFormat = {
+    paperSize: 'letter',
+    orientation: 'landscape',
+    margins: 'normal',
+    scaling: 'fit-width',
+    fontSize: 'custom',
+    customBodyFontSize: 16,
+  }
+  const layout = computeSuguanLayout(makeSuguan(12, custom), makeMembers(12), custom)
+  assert.equal(layout.fs.bodyFontSize, 16)
+  assert.ok(layout.bodyRowH > 0)
+  assert.ok(layout.rowsPerPage > 0)
+  assert.ok(layout.usableTableH > 0)
+  assert.ok(layout.sig.nameFontSizePt > 0)
+  // Bigger type must mean fewer rows on the page, not the same count.
+  const normal = computeSuguanLayout(makeSuguan(12, PRESETS[1]), makeMembers(12), PRESETS[1])
+  assert.ok(layout.rowsPerPage < normal.rowsPerPage, '16pt should fit fewer rows than normal')
 })

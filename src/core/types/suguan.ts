@@ -76,7 +76,7 @@ export type DocPaperSize = 'letter' | 'a4' | 'legal' | 'custom'
 export type DocOrientation = 'portrait' | 'landscape'
 export type DocMargins = 'normal' | 'narrow' | 'custom'
 export type DocScaling = 'fit-width' | 'fit-page' | 'auto'
-export type DocFontSize = 'small' | 'normal' | 'large'
+export type DocFontSize = 'small' | 'normal' | 'large' | 'custom'
 
 export interface SuguanDocFormat {
   paperSize: DocPaperSize
@@ -90,6 +90,13 @@ export interface SuguanDocFormat {
   customMarginRightMm?: number
   scaling: DocScaling
   fontSize: DocFontSize
+  /**
+   * Body font size in pt, used only when `fontSize` is `custom`. Every other
+   * size (title, header, signature) is derived from the `normal` preset's
+   * ratios so one number controls the whole sheet. Clamped by
+   * `normalizeDocFormat` to CUSTOM_BODY_FONT_MIN..MAX.
+   */
+  customBodyFontSize?: number
 }
 
 export type SuguanCoverageTemplate = 'midweek-2w' | 'weekend-2w' | 'one-week'

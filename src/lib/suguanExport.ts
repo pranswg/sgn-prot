@@ -10,10 +10,10 @@ import {
   docMarginsMm,
   docPaperDimensionsMm,
   eventTypeLabel,
-  FONT_SIZE_PRESETS,
   formatEventDate,
   groupLabel,
   normalizeDocFormat,
+  resolveFontSizePreset,
   resolveSignatureNames,
   suguanFileName,
   suguanSheetTitle,
@@ -373,7 +373,7 @@ export function computeSuguanLayout(
   const fmt = normalizeDocFormat(docFormat)
   const dims = docPaperDimensionsMm(fmt)
   const margins = docMarginsMm(fmt)
-  const fs = FONT_SIZE_PRESETS[fmt.fontSize]
+  const fs = resolveFontSizePreset(fmt)
   const events = suguan.events ?? []
   const totalCols = 2 + events.length
 
@@ -489,7 +489,7 @@ export async function exportSuguanExcel(
 
   const fmt = normalizeDocFormat(docFormat)
   const marginsMm = docMarginsMm(fmt)
-  const fs = FONT_SIZE_PRESETS[fmt.fontSize]
+  const fs = resolveFontSizePreset(fmt)
 
   const layout = computeSuguanLayout(suguan, members, docFormat)
   const events = suguan.events

@@ -1,5 +1,5 @@
 import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
-import { FONT_SIZE_PRESETS, normalizeDocFormat } from '@/lib/suguanUtils'
+import { normalizeDocFormat, resolveFontSizePreset } from '@/lib/suguanUtils'
 import type { SheetMembers } from '@/lib/suguanExport'
 import { cn } from '@/lib/utils'
 import {
@@ -25,7 +25,7 @@ export function SuguanSheetPreview({
   const fmt = normalizeDocFormat(docFormat)
   const readout = useSuguanSheetReadout(suguan, members, docFormat)
   const { layout } = readout
-  const fs = FONT_SIZE_PRESETS[fmt.fontSize]
+  const fs = resolveFontSizePreset(fmt)
 
   const mmToPx = previewWidth / layout.paperWidthMm
 

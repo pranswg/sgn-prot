@@ -1,12 +1,15 @@
-import { useMemo } from 'react'
+﻿import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
+CUSTOM_BODY_FONT_MAX,
+  CUSTOM_BODY_FONT_MIN,
   docMarginsMm,
   docPaperDimensionsMm,
-  FONT_SIZE_PRESETS,
+  normalizeDocFormat,
   PAPER_SIZE_LABELS,
+  resolveFontSizePreset,
 } from '@/lib/suguanUtils'
 import type {
   DocFontSize,
@@ -21,27 +24,40 @@ interface DocumentSetupStepProps {
   onChange: (format: SuguanDocFormat) => void
 }
 
-function MmInput({
+/**
+ * Numeric input for the "custom" fields. Shared by margins and font size so the
+ * two custom panels cannot drift in styling or in how they handle a cleared box.
+ */
+function UnitInput({
   label,
   value,
   onChange,
+  unit = 'mm',
+  min = 0,
+  max,
+  step = 0.5,
 }: {
   label: string
   value: number | undefined
   onChange: (v: number | undefined) => void
+  unit?: string
+  min?: number
+  max?: number
+  step?: number
 }) {
   return (
     <div className="grid gap-1">
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
       <Input
         type="number"
-        min={0}
-        step={0.5}
+        min={min}
+        max={max}
+        step={step}
         value={value ?? ''}
         onChange={(e) =>
           onChange(e.target.value === '' ? undefined : Number(e.target.value))
         }
-        placeholder="mm"
+        placeholder={unit}
       />
     </div>
   )
@@ -108,6 +124,11 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
   const margins = useMemo(() => docMarginsMm(value), [value])
   const set = (p: Partial<SuguanDocFormat>) => onChange({ ...value, ...p })
 
+  // Read the live preset so the derived sizes shown next to the custom input are
+  // the ones the renderers will actually use, including after a clamp.
+  const normalized = normalizeDocFormat(value)
+  const fs = resolveFontSizePreset(normalized)
+
   return (
     <div className="flex flex-col gap-6">
       <CardRow<DocPaperSize>
@@ -116,21 +137,21 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
         value={value.paperSize}
         onChange={(v) => set({ paperSize: v })}
         options={[
-          { id: 'letter', label: PAPER_SIZE_LABELS.letter.short, description: '8.5 × 11 in' },
-          { id: 'a4', label: PAPER_SIZE_LABELS.a4.short, description: '210 × 297 mm' },
-          { id: 'legal', label: PAPER_SIZE_LABELS.legal.short, description: '8.5 × 14 in' },
+          { id: 'letter', label: PAPER_SIZE_LABELS.letter.short, description: '8.5 Ã— 11 in' },
+          { id: 'a4', label: PAPER_SIZE_LABELS.a4.short, description: '210 Ã— 297 mm' },
+          { id: 'legal', label: PAPER_SIZE_LABELS.legal.short, description: '8.5 Ã— 14 in' },
           { id: 'custom', label: 'Custom', description: 'Enter your own' },
         ]}
       />
 
       {value.paperSize === 'custom' && (
         <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
-          <MmInput
+          <UnitInput
             label="Width (mm)"
             value={value.customWidthMm}
             onChange={(v) => set({ customWidthMm: v })}
           />
-          <MmInput
+          <UnitInput
             label="Height (mm)"
             value={value.customHeightMm}
             onChange={(v) => set({ customHeightMm: v })}
@@ -143,7 +164,7 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
         value={value.orientation}
         onChange={(v) => set({ orientation: v })}
         options={[
-          { id: 'portrait', label: 'Portrait', description: 'Default — narrower date columns' },
+          { id: 'portrait', label: 'Portrait', description: 'Default â€” narrower date columns' },
           { id: 'landscape', label: 'Landscape', description: 'Wider, best for many columns' },
         ]}
       />
@@ -161,22 +182,22 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
 
       {value.margins === 'custom' && (
         <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
-          <MmInput
+          <UnitInput
             label="Top margin (mm)"
             value={value.customMarginTopMm}
             onChange={(v) => set({ customMarginTopMm: v })}
           />
-          <MmInput
+          <UnitInput
             label="Bottom margin (mm)"
             value={value.customMarginBottomMm}
             onChange={(v) => set({ customMarginBottomMm: v })}
           />
-          <MmInput
+          <UnitInput
             label="Left margin (mm)"
             value={value.customMarginLeftMm}
             onChange={(v) => set({ customMarginLeftMm: v })}
           />
-          <MmInput
+          <UnitInput
             label="Right margin (mm)"
             value={value.customMarginRightMm}
             onChange={(v) => set({ customMarginRightMm: v })}
@@ -196,7 +217,7 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
         ]}
       />
 
-      <CardRow<DocFontSize>
+<CardRow<DocFontSize>
         label="Font size"
         hint="Applies to the PDF, Excel, and on-screen preview."
         value={value.fontSize}
@@ -205,14 +226,39 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
           { id: 'small', label: 'Small', description: 'Most members' },
           { id: 'normal', label: 'Normal', description: 'Balanced' },
           { id: 'large', label: 'Large', description: 'Easiest to read' },
+          { id: 'custom', label: 'Custom', description: 'Enter your own' },
         ]}
       />
 
+      {value.fontSize === 'custom' && (
+        <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+          <UnitInput
+            label="Body font size (pt)"
+            value={value.customBodyFontSize}
+            onChange={(v) => set({ customBodyFontSize: v })}
+            unit="pt"
+            min={CUSTOM_BODY_FONT_MIN}
+            max={CUSTOM_BODY_FONT_MAX}
+            step={0.5}
+          />
+          <div className="grid gap-1 self-end">
+            <p className="text-xs text-muted-foreground">
+              Title, header, and signature text scale to match automatically.
+            </p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {fs.titleFontSize} pt title · {fs.headerFontSize} pt header ·{' '}
+              {fs.sigFontSize} pt signature
+            </p>
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
-        {FONT_SIZE_PRESETS[value.fontSize]?.label} ·{' '}
+        {resolveFontSizePreset(normalized).label} ·{' '}
         {dims.width.toFixed(0)} × {dims.height.toFixed(0)} mm · margins{' '}
         {margins.top}/{margins.bottom}/{margins.left}/{margins.right} mm
       </p>
     </div>
   )
 }
+

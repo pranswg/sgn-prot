@@ -119,7 +119,15 @@ export interface FontSizePreset {
   eventColWidth: number
 }
 
-export const FONT_SIZE_PRESETS: Record<DocFontSize, FontSizePreset> = {
+/**
+ * The presets that exist as static entries. `custom` is deliberately absent:
+ * it is derived at runtime by `resolveFontSizePreset`, so keeping it out of
+ * this record is what stops a `FONT_SIZE_PRESETS[fmt.fontSize]` index from
+ * silently yielding `undefined` for a custom format.
+ */
+export type DocFontSizePreset = Exclude<DocFontSize, 'custom'>
+
+export const FONT_SIZE_PRESETS: Record<DocFontSizePreset, FontSizePreset> = {
   small: {
     label: 'Small — compact layout for many members',
     titleFontSize: 12,
@@ -138,15 +146,15 @@ export const FONT_SIZE_PRESETS: Record<DocFontSize, FontSizePreset> = {
   },
   normal: {
     label: 'Normal — compact spreadsheet-style layout',
-    titleFontSize: 13,
-    headerFontSize: 9,
-    bodyFontSize: 9,
-    smallFontSize: 8,
-    rowHeight: 16,
-    headerRowHeight: 18,
-    titleRowHeight: 36,
-    sigRowHeight: 16,
-    sigFontSize: 12,
+    titleFontSize: 14,
+    headerFontSize: 10,
+    bodyFontSize: 10,
+    smallFontSize: 9,
+    rowHeight: 18,
+    headerRowHeight: 20,
+    titleRowHeight: 40,
+    sigRowHeight: 18,
+    sigFontSize: 13,
     cellPadding: 1,
     noColWidth: 5,
     nameColWidth: 30,
@@ -174,7 +182,70 @@ const PAPER_SIZES = new Set<string>(['letter', 'a4', 'legal', 'custom'])
 const ORIENTATIONS = new Set<string>(['portrait', 'landscape'])
 const MARGIN_PRESETS = new Set<string>(['normal', 'narrow', 'custom'])
 const SCALING_OPTIONS = new Set<string>(['fit-width', 'fit-page', 'auto'])
-const FONT_SIZE_OPTIONS = new Set<string>(['small', 'normal', 'large'])
+const FONT_SIZE_OPTIONS = new Set<string>(['small', 'normal', 'large', 'custom'])
+
+/**
+ * Bounds for the custom body font size, in pt. The floor is the same 6pt that
+ * `fitFontSizePt` clamps to, so a custom size can never produce a row whose text
+ * is smaller than the fit-page fallback. The ceiling keeps a single cell's text
+ * inside its column; past roughly 20pt the name column starts truncating.
+ */
+export const CUSTOM_BODY_FONT_MIN = 6
+export const CUSTOM_BODY_FONT_MAX = 20
+
+/** Clamps a user-entered custom body size into the supported range. */
+export function clampCustomBodyFontSize(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return FONT_SIZE_PRESETS.normal.bodyFontSize
+  return Math.min(CUSTOM_BODY_FONT_MAX, Math.max(CUSTOM_BODY_FONT_MIN, Math.round(n * 2) / 2))
+}
+
+/**
+ * Builds a full preset for a custom body size by scaling the `normal` preset.
+ *
+ * Scaling rather than exposing eight separate inputs is deliberate: the preset
+ * mixes font sizes, row heights, and column-width weights that only look right
+ * in proportion to each other. Scaling the whole preset by one factor keeps the
+ * signature block, row heights, and column ratios in step, so a custom size can
+ * never produce a row too short for its own text.
+ *
+ * `round1` keeps sub-point row heights exact so repeated roundings cannot drift;
+ * font sizes stay on whole points because that is what the UI shows.
+ */
+export function scaleFontSizePreset(base: FontSizePreset, bodyFontSize: number): FontSizePreset {
+  const factor = bodyFontSize / base.bodyFontSize
+  const round1 = (n: number) => Math.round(n * factor * 10) / 10
+  const fontPt = (n: number) => Math.max(1, Math.round(n * factor))
+  return {
+    ...base,
+    label: `Custom — ${bodyFontSize} pt body text`,
+    titleFontSize: fontPt(base.titleFontSize),
+    headerFontSize: fontPt(base.headerFontSize),
+    bodyFontSize,
+    smallFontSize: fontPt(base.smallFontSize),
+    sigFontSize: fontPt(base.sigFontSize),
+    rowHeight: round1(base.rowHeight),
+    headerRowHeight: round1(base.headerRowHeight),
+    titleRowHeight: round1(base.titleRowHeight),
+    sigRowHeight: round1(base.sigRowHeight),
+    cellPadding: round1(base.cellPadding),
+    noColWidth: round1(base.noColWidth),
+    nameColWidth: round1(base.nameColWidth),
+    eventColWidth: round1(base.eventColWidth),
+  }
+}
+
+/**
+ * The preset to lay out with. Every consumer must go through this rather than
+ * indexing `FONT_SIZE_PRESETS[fmt.fontSize]`, because `custom` has no static
+ * entry — it is derived from `customBodyFontSize`.
+ */
+export function resolveFontSizePreset(fmt: SuguanDocFormat): FontSizePreset {
+  if (fmt.fontSize === 'custom') {
+    return scaleFontSizePreset(FONT_SIZE_PRESETS.normal, clampCustomBodyFontSize(fmt.customBodyFontSize))
+  }
+  return FONT_SIZE_PRESETS[fmt.fontSize]
+}
 
 export function normalizeDocFormat(
   f?: Partial<SuguanDocFormat> | null,
@@ -208,6 +279,10 @@ export function normalizeDocFormat(
     customMarginBottomMm: f?.customMarginBottomMm,
     customMarginLeftMm: f?.customMarginLeftMm,
     customMarginRightMm: f?.customMarginRightMm,
+    // Clamped rather than passed through: this reaches row heights and signature
+    // geometry in every renderer, so a NaN or a negative value typed into the
+    // input must not reach the layout maths.
+    customBodyFontSize: clampCustomBodyFontSize(f?.customBodyFontSize),
   }
 }
 
@@ -270,10 +345,13 @@ export function defaultEventsFor(mainDate: string): SuguanEvent[] {
 
 export {
   coverageLastDate,
+  isWeekendOnlySchedule,
+  nextWeekendWorshipBlock,
   nextWorshipBlock,
   nextWorshipDateKey,
   planEventsFromCoverage,
   schedulesForTemplate,
+  suggestBlockForSchedules,
   suggestPagtupadBlock,
   suggestPagtupadDate,
 } from './suguanDates'

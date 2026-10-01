@@ -38,21 +38,60 @@ export type WorshipBlock = {
 /** Longest run of consecutive configured worship days to look ahead. */
 const LOOKAHEAD_DAYS = 21
 
+/** `weekdayOf` indexes, named to keep the routing rule readable. */
+const SUNDAY = 0
+const MONDAY = 1
+const TUESDAY = 2
+const WEDNESDAY = 3
+const THURSDAY = 4
+const FRIDAY = 5
+const SATURDAY = 6
+
 /** Shifts a calendar key, passing invalid input straight through. */
 function shiftKey(date: string, days: number): string {
   return isDateKey(date) ? addDays(date, days) : date
 }
 
 /**
- * The next worship *block* on or after `fromKey`.
+ * The worship block that begins at `candidate`, growing across every
+ * consecutive configured worship day after it. Saturday and Sunday are both
+ * worship days for a weekend choir, so this returns the Saturday–Sunday pair.
+ *
+ * @returns `null` when `candidate` itself is not a worship day.
+ */
+function blockFrom(candidate: string, allowed: Set<number>): WorshipBlock | null {
+  if (!allowed.has(weekdayOf(candidate))) return null
+
+  const days: number[] = [weekdayOf(candidate)]
+  let end = candidate
+  for (let step = 1; step <= LOOKAHEAD_DAYS; step += 1) {
+    const next = shiftKey(candidate, step)
+    if (!allowed.has(weekdayOf(next))) break
+    days.push(weekdayOf(next))
+    end = next
+  }
+  return { start: candidate, end, days }
+}
+
+/**
+ * Is `candidate` the FIRST day of a worship run?
+ *
+ * A run start is a worship day whose predecessor is not a worship day. Saturday
+ * is a run start; the Sunday after it is not, because Saturday precedes it.
+ */
+function isRunStart(candidate: string, allowed: Set<number>): boolean {
+  if (!allowed.has(weekdayOf(candidate))) return false
+  return !allowed.has(weekdayOf(shiftKey(candidate, -1)))
+}
+
+/**
+ * The next worship *block* on or after `fromKey`. This is the **midweek** rule.
  *
  * Scans forward for the first configured worship day, then extends the match
- * across every consecutive configured day after it. For a midweek choir that
- * turns a Saturday rehearsal into Wednesday–Thursday, and for a weekend choir
- * it turns a Saturday rehearsal into Saturday–Sunday of that same weekend.
+ * across every consecutive configured day after it.
  *
- * The block may begin on `fromKey` itself, because a choir can rehearse in the
- * morning and serve the same day.
+ * The block may begin on `fromKey` itself, because a midweek choir can rehearse
+ * on Wednesday morning and serve that same Wednesday–Thursday.
  *
  * @returns `null` only when `fromKey` is invalid or no worship days are configured.
  */
@@ -64,22 +103,76 @@ export function nextWorshipBlock(
   const allowed = new Set(weekdays)
 
   for (let offset = 0; offset <= LOOKAHEAD_DAYS; offset += 1) {
-    const candidate = shiftKey(fromKey, offset)
-    if (!allowed.has(weekdayOf(candidate))) continue
-
-    // Grow the block while the following day is also a worship day.
-    const days: number[] = [weekdayOf(candidate)]
-    let end = candidate
-    for (let step = 1; step <= LOOKAHEAD_DAYS; step += 1) {
-      const next = shiftKey(candidate, step)
-      if (!allowed.has(weekdayOf(next))) break
-      days.push(weekdayOf(next))
-      end = next
-    }
-    return { start: candidate, end, days }
+    const block = blockFrom(shiftKey(fromKey, offset), allowed)
+    if (block) return block
   }
 
   return null
+}
+
+/**
+ * The Pagtupad block for a **weekend** choir. Deliberately a different rule
+ * from `nextWorshipBlock`, because Pagsasanay is preparation that must land
+ * *before* the service, and a weekend block is Sat+Sun of one weekend:
+ *
+ *   Saturday rehearsal  →  the FOLLOWING weekend's Saturday–Sunday
+ *
+ * Scanning from `fromKey` inclusive would put a Saturday rehearsal on its own
+ * Saturday, i.e. the Pagtupad on the same weekend the choir just rehearsed for.
+ * That is the bug this function exists to prevent.
+ *
+ * So this skips forward to the first day that both is a worship day and *starts*
+ * a worship run, strictly after the rehearsal. For Saturday 2026-10-03 that is
+ * Saturday 2026-10-10, which grows into 2026-10-11. Midweek deliberately does
+ * not use this: there, a Wednesday rehearsal may legitimately serve the same
+ * Wednesday–Thursday, which is why `nextWorshipBlock` keeps offset 0.
+ */
+export function nextWeekendWorshipBlock(
+  fromKey: string,
+  weekdays: readonly number[],
+): WorshipBlock | null {
+  if (!isDateKey(fromKey) || weekdays.length === 0) return null
+  const allowed = new Set(weekdays)
+
+  // Offset starts at 1: the rehearsal day itself is never its own Pagtupad.
+  for (let offset = 1; offset <= LOOKAHEAD_DAYS; offset += 1) {
+    const candidate = shiftKey(fromKey, offset)
+    if (!isRunStart(candidate, allowed)) continue
+    const block = blockFrom(candidate, allowed)
+    if (block) return block
+  }
+
+  return null
+}
+
+/**
+ * Whether a schedule set is a *weekend-only* choir, i.e. it serves on Saturday
+ * or Sunday and never midweek. Used to route between the two Pagtupad rules.
+ *
+ * "Weekend-only" is deliberate rather than "contains a weekend day". The
+ * one-week template combines every schedule, so it contains Saturday *and*
+ * Wednesday; it must keep the inclusive scan and must not be pulled onto the
+ * weekend rule by this check.
+ */
+export function isWeekendOnlySchedule(weekdays: readonly number[]): boolean {
+  const days = new Set(weekdays)
+  const hasWeekendDay = days.has(SATURDAY) || days.has(SUNDAY)
+  const hasMidweekDay = days.has(MONDAY) || days.has(TUESDAY) || days.has(WEDNESDAY) || days.has(THURSDAY) || days.has(FRIDAY)
+  return hasWeekendDay && !hasMidweekDay
+}
+
+/**
+ * The Pagtupad block that follows a rehearsal, routed to the correct rule for
+ * the choir's schedule. Prefer this over calling `nextWorshipBlock` directly, so
+ * the two rules cannot drift apart at different call sites.
+ */
+export function suggestBlockForSchedules(
+  pagsasanayDate: string,
+  weekdays: readonly number[],
+): WorshipBlock | null {
+  return isWeekendOnlySchedule(weekdays)
+    ? nextWeekendWorshipBlock(pagsasanayDate, weekdays)
+    : nextWorshipBlock(pagsasanayDate, weekdays)
 }
 
 /**
@@ -112,7 +205,7 @@ export function suggestPagtupadBlock(
   schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
 ): WorshipBlock | null {
   const base = isDateKey(pagsasanayDate) ? pagsasanayDate : todayPHT()
-  return nextWorshipBlock(base, worshipWeekdays(schedules))
+  return suggestBlockForSchedules(base, worshipWeekdays(schedules))
 }
 
 /** Start date of the suggested Pagtupad range. */
@@ -196,7 +289,7 @@ export function planEventsFromCoverage(
     const week1Service = resolveService(
       coverage.pagtupadStartOverride,
       coverage.pagtupadEndOverride,
-      nextWorshipBlock(week1Rehearsal, weekdays),
+      suggestBlockForSchedules(week1Rehearsal, weekdays),
       week1Rehearsal,
     )
     // With a pinned first week, the second week follows it seven days later.
@@ -208,7 +301,7 @@ export function planEventsFromCoverage(
       : resolveService(
           undefined,
           undefined,
-          nextWorshipBlock(week2Rehearsal, weekdays),
+          suggestBlockForSchedules(week2Rehearsal, weekdays),
           week2Rehearsal,
         )
 
@@ -233,7 +326,7 @@ export function planEventsFromCoverage(
   const service = resolveService(
     coverage.oneWeekPagtupadDate,
     coverage.oneWeekPagtupadEndDate,
-    nextWorshipBlock(pagsasanay, weekdays),
+    suggestBlockForSchedules(pagsasanay, weekdays),
     pagsasanay,
   )
 

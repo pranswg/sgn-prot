@@ -260,7 +260,8 @@ test('an unconfigured choir yields no block', () => {
 test('suggestPagtupadBlock is the next block after the rehearsal', () => {
   assert.equal(suggestPagtupadBlock('2026-09-26', MIDWEEK_SCHEDULES)?.start, '2026-09-30')
   assert.equal(suggestPagtupadBlock('2026-09-26', MIDWEEK_SCHEDULES)?.end, '2026-10-01')
-  assert.equal(suggestPagtupadBlock('2026-10-03', WEEKEND_SCHEDULES)?.end, '2026-10-04')
+  assert.equal(suggestPagtupadBlock('2026-10-03', WEEKEND_SCHEDULES)?.start, '2026-10-10')
+  assert.equal(suggestPagtupadBlock('2026-10-03', WEEKEND_SCHEDULES)?.end, '2026-10-11')
   assert.equal(suggestPagtupadBlock('2026-09-26', []), null)
 })
 
@@ -305,7 +306,10 @@ test('midweek Pagtupad covers Wednesday AND Thursday', () => {
   )
 })
 
-test('weekend Pagtupad covers Saturday AND Sunday', () => {
+test('weekend Pagtupad covers Saturday AND Sunday of the FOLLOWING weekend', () => {
+  // A Saturday rehearsal must not serve the same weekend it rehearsed for, so
+  // the service is the next Sat+Sun. The second week's rehearsal then sits on a
+  // Saturday too and pushes its own service out by another week.
   const events = planEventsFromCoverage({
     template: 'weekend-2w',
     startDate: '2026-10-03', // Saturday rehearsal
@@ -314,11 +318,43 @@ test('weekend Pagtupad covers Saturday AND Sunday', () => {
     events.map((e) => [e.type, e.date, e.endDate]),
     [
       ['pagsasanay', '2026-10-03', undefined],
-      ['pagtupad', '2026-10-03', '2026-10-04'],
-      ['pagsasanay', '2026-10-10', undefined],
       ['pagtupad', '2026-10-10', '2026-10-11'],
+      ['pagsasanay', '2026-10-10', undefined],
+      ['pagtupad', '2026-10-17', '2026-10-18'],
     ],
   )
+})
+
+test('a weekend rehearsal never lands on its own weekend', () => {
+  // The rule is stated for each of the three Saturday examples so a regression
+  // in the scan offset cannot reintroduce the same-weekend service.
+  const cases: Array<[string, string]> = [
+    ['2026-10-03', '2026-10-10'],
+    ['2026-10-10', '2026-10-17'],
+    ['2026-10-17', '2026-10-24'],
+  ]
+  for (const [rehearsal, expected] of cases) {
+    const block = suggestPagtupadBlock(rehearsal, WEEKEND_SCHEDULES)
+    assert.equal(block?.start, expected, `Pagtupad after ${rehearsal}`)
+    assert.ok(block!.start > rehearsal, 'Pagtupad must follow the rehearsal')
+  }
+})
+
+test('a weekend Pagtupad always ends on the Sunday of its own block', () => {
+  for (const rehearsal of ['2026-10-03', '2026-10-17', '2026-10-31', '2026-12-26']) {
+    const block = suggestPagtupadBlock(rehearsal, WEEKEND_SCHEDULES)
+    assert.ok(block, `expected a block for ${rehearsal}`)
+    assert.equal(weekdayOf(block!.start), SATURDAY, `${rehearsal} must start on Saturday`)
+    assert.equal(weekdayOf(block!.end), SUNDAY, `${rehearsal} must end on Sunday`)
+  }
+})
+
+test('weekend boundaries survive month and year rollovers', () => {
+  // Oct 31 (Sat) -> Nov 7-8, and Dec 26 (Sat) -> Jan 2-3 of the next year.
+  assert.equal(suggestPagtupadBlock('2026-10-31', WEEKEND_SCHEDULES)?.end, '2026-11-08')
+  assert.equal(suggestPagtupadBlock('2026-12-26', WEEKEND_SCHEDULES)?.start, '2027-01-02')
+  // Feb 2028 has no 29th; the arithmetic must not depend on it existing.
+  assert.equal(suggestPagtupadBlock('2028-02-26', WEEKEND_SCHEDULES)?.end, '2028-03-05')
 })
 
 test('a 2-week Pagtupad override shifts the whole block for both weeks', () => {
@@ -356,8 +392,8 @@ test('empty overrides fall back to the suggested block', () => {
     pagtupadStartOverride: '',
     pagtupadEndOverride: '',
   })
-  assert.equal(events[1].date, '2026-10-03')
-  assert.equal(events[1].endDate, '2026-10-04')
+  assert.equal(events[1].date, '2026-10-10')
+  assert.equal(events[1].endDate, '2026-10-11')
 })
 
 test('one-week templates suggest the full block and allow overriding it', () => {

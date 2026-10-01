@@ -177,12 +177,18 @@ export function planEventsFromCoverage(
   coverage: SuguanCoverage,
 ): PlannedEvent[] {
   const weekdays = worshipWeekdays(schedulesForTemplate(coverage.template))
-  const start = isDateKey(coverage.startDate) ? coverage.startDate : todayPHT()
 
   if (coverage.template === 'midweek-2w' || coverage.template === 'weekend-2w') {
-    // Two rehearsal/Pagtupad pairs, one week apart. The Pagsasanay date is kept
-    // exactly as the user entered it; each Pagtupad covers the whole worship
-    // block unless the user overrode it.
+    // Nothing is planned until the user picks a Pagsasanay date. This
+    // deliberately does NOT fall back to `todayPHT()`: a new Suguan starts
+    // blank, and inferring a date from the clock would print one the user never
+    // chose. Callers treat an empty result as "still needs a date".
+    if (!isDateKey(coverage.startDate)) return []
+    const start = coverage.startDate
+
+    // Two rehearsal/Pagtupad pairs, one week apart. `start` is the Pagsasanay
+    // date, kept exactly as the user entered it; each Pagtupad covers the whole
+    // worship block unless the user overrode it.
     const week1Rehearsal = start
     const week2Rehearsal = shiftKey(start, 7)
 
@@ -216,12 +222,14 @@ export function planEventsFromCoverage(
 
   // One-week template: whatever the user entered for the rehearsal is kept
   // exactly, and the Pagtupad falls back to the suggested block only when the
-  // user has not set one.
+  // user has not set one. This template has its own date fields, so it does not
+  // depend on `startDate` the way the two-week templates do.
   const pagsasanay = firstDateKey(
     coverage.oneWeekPagsasanayDate,
     coverage.oneWeekDate,
-    start,
+    isDateKey(coverage.startDate) ? coverage.startDate : '',
   )
+  if (!isDateKey(pagsasanay)) return []
   const service = resolveService(
     coverage.oneWeekPagtupadDate,
     coverage.oneWeekPagtupadEndDate,

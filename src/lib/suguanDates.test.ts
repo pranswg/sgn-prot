@@ -385,6 +385,47 @@ test('one-week templates suggest the full block and allow overriding it', () => 
   assert.equal(overridden[1].endDate, '2026-10-04')
 })
 
+test('a blank Pagsasanay date plans nothing, and never falls back to today', () => {
+  // A new Suguan starts with no date. The planner used to substitute
+  // `todayPHT()` here, which silently printed a date the user never chose.
+  for (const template of ['midweek-2w', 'weekend-2w', 'one-week'] as const) {
+    assert.deepEqual(planEventsFromCoverage({ template, startDate: '' }), [])
+    assert.deepEqual(planEventsFromCoverage({ template, startDate: 'garbage' }), [])
+    assert.deepEqual(planEventsFromCoverage({ template, startDate: '2026-13-45' }), [])
+  }
+})
+
+test('a blank date plans nothing even when overrides are present', () => {
+  // An override cannot stand in for the Pagsasanay date it is derived from.
+  assert.deepEqual(
+    planEventsFromCoverage({
+      template: 'weekend-2w',
+      startDate: '',
+      pagtupadStartOverride: '2026-10-03',
+      pagtupadEndOverride: '2026-10-04',
+    }),
+    [],
+  )
+})
+
+test('one-week still plans from its own date fields when startDate is blank', () => {
+  // The one-week template drives off `oneWeekDate`, not `startDate`, so a user
+  // who fills in only "Worship date" still gets events.
+  const events = planEventsFromCoverage({
+    template: 'one-week',
+    startDate: '',
+    oneWeekDate: '2026-09-30',
+    oneWeekPagsasanayDate: '2026-09-30',
+  })
+  assert.deepEqual(
+    events.map((e) => [e.type, e.date, e.endDate]),
+    [
+      ['pagsasanay', '2026-09-30', undefined],
+      ['pagtupad', '2026-09-30', '2026-10-01'],
+    ],
+  )
+})
+
 test('every planned Pagtupad is a maximal run of real worship days', () => {
   for (const template of ['midweek-2w', 'weekend-2w', 'one-week'] as const) {
     const allowed = new Set(worshipWeekdays(schedulesForTemplate(template)))

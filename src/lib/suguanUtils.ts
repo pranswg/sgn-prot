@@ -363,7 +363,11 @@ export function normalizeCoverage(
     : 'one-week'
   return {
     template,
-    startDate: coverage.startDate || todayISO(),
+    // Preserved as-is when empty. A blank Pagsasanay date is a real state (a
+    // Suguan saved before its date was chosen), and back-filling today's date
+    // here would silently invent one. `planEventsFromCoverage` returns nothing
+    // for a blank date, which the save guard already rejects.
+    startDate: coverage.startDate ?? '',
     oneWeekDate: coverage.oneWeekDate,
     oneWeekPagsasanayDate: coverage.oneWeekPagsasanayDate,
     oneWeekPagtupadDate: coverage.oneWeekPagtupadDate,

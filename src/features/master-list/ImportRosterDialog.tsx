@@ -16,7 +16,12 @@ import { Input } from '@/components/ui/input'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
+import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
 import { extractRosterFromPdf, type RosterCandidate } from '@/lib/rosterImport'
+import {
+  extractRosterFromSpreadsheet,
+  isSpreadsheetFile,
+} from '@/lib/spreadsheetImport'
 import { todayPHT } from '@/lib/phDate'
 
 interface ImportRosterDialogProps {
@@ -59,6 +64,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
   const [candidates, setCandidates] = useState<RosterCandidate[] | null>(null)
   const [parsing, setParsing] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [fileKind, setFileKind] = useState<'pdf' | 'spreadsheet' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -66,6 +72,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       setCandidates(null)
       setParsing(false)
       setFileName(null)
+      setFileKind(null)
       setError(null)
     }
   }, [open])
@@ -82,36 +89,52 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
   }, [candidates])
 
   const stats = useMemo(() => {
-    if (!candidates) return { total: 0, newCount: 0, traineeCount: 0, selected: 0 }
+    if (!candidates) {
+      return { total: 0, newCount: 0, traineeCount: 0, memberCount: 0, selected: 0 }
+    }
     const newCount = candidates.filter((c) => !c.duplicate).length
     const traineeCount = candidates.filter((c) => c.isTrainee).length
+    const memberCount = candidates.length - traineeCount
     const selected = candidates.filter((c) => c.selected).length
-    return { total: candidates.length, newCount, traineeCount, selected }
+    return { total: candidates.length, newCount, traineeCount, memberCount, selected }
   }, [candidates])
 
   const reset = () => {
     setCandidates(null)
     setParsing(false)
     setFileName(null)
+    setFileKind(null)
     setError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return
+    const spreadsheet = isSpreadsheetFile(file)
     setFileName(file.name)
+    setFileKind(spreadsheet ? 'spreadsheet' : 'pdf')
     setParsing(true)
     setError(null)
     try {
-      const result = await extractRosterFromPdf(file, allVoices(), members, trainees)
+      const result = spreadsheet
+        ? await extractRosterFromSpreadsheet(file, allVoices(), members, trainees)
+        : await extractRosterFromPdf(file, allVoices(), members, trainees)
       setCandidates(result.candidates)
       if (result.candidates.length === 0) {
-        setError('No names were found in this PDF. It may not be the choir roster sheet.')
         setCandidates(null)
+        setError(
+          spreadsheet
+            ? 'No names were found in this file. Make sure it is a Master List export with first and last name columns.'
+            : 'No names were found in this PDF. It may not be the choir roster sheet.',
+        )
       }
     } catch {
       setCandidates(null)
-      setError('Could not read this PDF. Make sure it is the roster PDF, then try again.')
+      setError(
+        spreadsheet
+          ? 'Could not read this file. Make sure it is a CSV or Excel export from the Master List, then try again.'
+          : 'Could not read this PDF. Make sure it is the roster PDF, then try again.',
+      )
     } finally {
       setParsing(false)
     }
@@ -169,6 +192,10 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
         voicePositionsForGender(candidate.gender, voices)[0]?.id ||
         ''
 
+      // A spreadsheet export carries the original date added; the roster PDF
+      // does not, so it falls back to today.
+      const dateAdded = candidate.dateAdded ?? today
+
       if (candidate.isTrainee) {
         addTrainee({
           firstName,
@@ -176,7 +203,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           gender: candidate.gender,
           voicePosition,
           status: candidate.isActive ? 'active' : 'inactive',
-          dateAdded: today,
+          dateAdded,
           notes: candidate.notes.trim() || undefined,
         })
         traineeCount += 1
@@ -186,9 +213,10 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           lastName,
           gender: candidate.gender,
           voicePosition,
-          membershipType: 'regular',
+          membershipType: candidate.membershipType ?? 'regular',
           isActive: candidate.isActive,
-          dateAdded: today,
+          dateAdded,
+          positions: candidate.positions,
           notes: candidate.notes.trim() || undefined,
         })
         memberCount += 1
@@ -218,10 +246,10 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Import Roster</DialogTitle>
-          <DialogDescription>
-            Upload the choir roster PDF. Review the detected names before importing
-            them into the Master List.
-          </DialogDescription>
+        <DialogDescription>
+          Upload the choir roster PDF, or a CSV or Excel file exported from the
+          Master List. Review the detected names before importing them.
+        </DialogDescription>
         </DialogHeader>
 
         {!candidates && !parsing && (
@@ -230,10 +258,11 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
               <Users className="size-6 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-sm font-medium">Choose the roster PDF</p>
+              <p className="text-sm font-medium">Choose the roster file</p>
               <p className="text-xs text-muted-foreground">
-                The names will be read per section and shown for your review before
-                anything is saved.
+                Accepts the roster PDF, or a CSV or Excel file exported from the
+                Master List. The names are shown for your review before anything
+                is saved.
               </p>
             </div>
             <Button onClick={() => fileInputRef.current?.click()}>
@@ -243,7 +272,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
             <input
               ref={fileInputRef}
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,.csv,.xlsx,.xlsm,.xls"
               className="hidden"
               onChange={(event) => handleFile(event.target.files?.[0])}
             />
@@ -253,7 +282,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
         {parsing && (
           <div className="flex items-center justify-center gap-3 py-12 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Reading roster PDF…
+            {fileKind === 'spreadsheet' ? 'Reading spreadsheet…' : 'Reading roster PDF…'}
           </div>
         )}
 
@@ -270,7 +299,11 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
               <Badge variant="secondary">{stats.total} names</Badge>
               <Badge variant="outline">{stats.newCount} new</Badge>
               <Badge variant="outline">{stats.total - stats.newCount} already in list</Badge>
-              <Badge variant="secondary">{stats.traineeCount} trainees</Badge>
+              {fileKind === 'spreadsheet' && (
+                <Badge variant="outline">
+                  {stats.memberCount} members · {stats.traineeCount} trainees
+                </Badge>
+              )}
             </div>
 
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
@@ -360,6 +393,19 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
                           {!candidate.isActive && (
                             <Badge variant="outline">Inactive</Badge>
                           )}
+                          {candidate.membershipType === 'provisional' && (
+                            <Badge variant="outline">Provisional</Badge>
+                          )}
+                          {candidate.positions && candidate.positions.length > 0 && (
+                            <Badge variant="secondary">
+                              {candidate.positions
+                                .map(
+                                  (p) =>
+                                    CHOIR_POSITIONS.find((c) => c.id === p)?.label ?? p,
+                                )
+                                .join(', ')}
+                            </Badge>
+                          )}
                           {candidate.notes && (
                             <span
                               title={candidate.notes}
@@ -386,6 +432,8 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
                   setCandidates(null)
                   setError(null)
                   setFileName(null)
+                  setFileKind(null)
+                  if (fileInputRef.current) fileInputRef.current.value = ''
                 }}
               >
                 Choose another file

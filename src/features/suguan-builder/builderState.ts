@@ -12,6 +12,7 @@ import type {
   VoicePosition,
 } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
+import { isDateKey } from '@/lib/phDate'
 import {
   DEFAULT_DOC_FORMAT,
   generateEventsFromCoverage,
@@ -90,8 +91,16 @@ export function stepIndex(id: BuilderStepId): number {
   return BUILDER_STEPS.findIndex((s) => s.id === id)
 }
 
+/**
+ * A brand-new Suguan starts with no date selected.
+ *
+ * `startDate` is the Pagsasanay date and is intentionally blank: every date on
+ * the sheet should be something the user chose, never a value inferred from the
+ * clock. The planner treats an empty `startDate` as "nothing to plan yet" and
+ * emits no events until a date is entered.
+ */
 export function defaultCoverage(): SuguanCoverage {
-  return { template: 'midweek-2w', startDate: todayPHT() }
+  return { template: 'midweek-2w', startDate: '' }
 }
 
 export function groupGendersFor(group: SuguanGroup): ('female' | 'male')[] {
@@ -164,20 +173,30 @@ export function createDraftFromSuguan(
  */
 export function createCopyDraft(source: Suguan, voices: VoicePosition[]): SuguanDraft {
   const base = createDraftFromSuguan(source, voices)
-  const nextDate = todayPHT()
+  // The calendar is cleared rather than reset to today, so the copy starts from
+  // the same blank state as a brand-new Suguan and the user chooses its dates.
   const coverage =
     base.coverage != null
-      ? { ...base.coverage, startDate: nextDate }
+      ? {
+          ...base.coverage,
+          startDate: '',
+          pagtupadStartOverride: undefined,
+          pagtupadEndOverride: undefined,
+          oneWeekDate: undefined,
+          oneWeekPagsasanayDate: undefined,
+          oneWeekPagtupadDate: undefined,
+          oneWeekPagtupadEndDate: undefined,
+        }
       : null
   const events =
     base.type === 'regular' && coverage
       ? generateEventsFromCoverage(coverage)
-      : base.events
+      : []
   return {
     ...base,
     coverage,
     events,
-    date: nextDate,
+    date: '',
     pagsasanayDate: '',
     pagtupadDate: '',
   }
@@ -241,7 +260,13 @@ export function isStepComplete(draft: SuguanDraft, index: number): boolean {
       if (draft.type === 'special') {
         return Boolean(draft.date) && draft.eventTitle.trim().length > 0
       }
-      return draft.coverage != null && Boolean(draft.serviceTypeId)
+      return (
+      draft.coverage != null &&
+      Boolean(draft.serviceTypeId) &&
+      // A blank Pagsasanay date plans no events, so the step is not finished
+      // until the user has chosen one.
+      draft.events.length > 0
+    )
     case 1:
       return Boolean(draft.docFormat.paperSize && draft.docFormat.orientation)
     case 2:
@@ -263,6 +288,8 @@ export function saveBlockers(draft: SuguanDraft): string[] {
   const blockers: string[] = []
   if (draft.type === 'regular') {
     if (!draft.coverage) blockers.push('Choose a Suguan coverage.')
+    if (draft.coverage && !isDateKey(draft.coverage.startDate))
+      blockers.push('Choose a Pagsasanay date.')
     if (draft.events.length === 0)
       blockers.push('No schedule events were generated for this coverage.')
     if (!draft.serviceTypeId) blockers.push('Choose a service type.')

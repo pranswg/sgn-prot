@@ -1,5 +1,10 @@
 import { nanoid } from 'nanoid'
-import type { Member, Trainee } from '@/core/types/member'
+import type {
+  ChoirPosition,
+  Member,
+  MembershipType,
+  Trainee,
+} from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 
 export interface ExtractedTextItem {
@@ -20,6 +25,13 @@ export interface RosterCandidate {
   notes: string
   duplicate: boolean
   selected: boolean
+  /**
+   * Fields below are only populated when the file was a spreadsheet export
+   * from Master List, which carries more detail than the roster PDF.
+   */
+  membershipType?: MembershipType
+  positions?: ChoirPosition[]
+  dateAdded?: string
 }
 
 export interface RosterParseResult {
@@ -85,7 +97,7 @@ function collapseSpaces(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
 }
 
-function normalizeNameKey(lastName: string, firstName: string): string {
+export function normalizeNameKey(lastName: string, firstName: string): string {
   return `${lastName}|${firstName}`
     .toLowerCase()
     .normalize('NFD')

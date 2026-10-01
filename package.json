@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --import ./scripts/test-aliases.mjs --test src/**/*.test.ts"
+    "typecheck": "tsc -b --pretty false",
+    "test": "node --import ./scripts/test-aliases.mjs --test src/**/*.test.ts",
+    "verify": "npm run typecheck && npm run test && npm run lint"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

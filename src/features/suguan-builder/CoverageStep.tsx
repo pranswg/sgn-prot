@@ -504,7 +504,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
               title="3. Service"
               hint="The service is used for the sheet title and file naming."
             />
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
+            <div className="grid gap-3 rounded-lg border p-4">
               <div className="grid gap-1.5">
                 <Label htmlFor="serviceType">Service type</Label>
                 <Select
@@ -522,15 +522,6 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="serviceTime">Service time</Label>
-                <Input
-                  id="serviceTime"
-                  type="time"
-                  value={draft.time}
-                  onChange={(e) => patch({ time: e.target.value })}
-                />
               </div>
             </div>
           </section>

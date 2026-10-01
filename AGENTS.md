@@ -30,8 +30,9 @@ extensionless relative imports. Two consequences:
 
 Test files that exist, all pure-logic: `suguanDates.test.ts`,
 `suguanExport.test.ts`, `spreadsheetImport.test.ts`, `rosterImport.test.ts`,
-`memberDirectory.test.ts`, `format.test.ts`. When you add a pure function worth
-protecting, add cases next to it rather than leaving behaviour implicit.
+`memberDirectory.test.ts`, `format.test.ts`, `credentials.test.ts`,
+`sidebarNav.test.ts`. When you add a pure function worth protecting, add cases
+next to it rather than leaving behaviour implicit.
 
 `tsconfig.app.json` enables `noUnusedLocals` and `noUnusedParameters`, so a
 typecheck failure about an unused import is usually a real leftover from an edit
@@ -58,6 +59,22 @@ This rule exists because a real bug shipped: the PDF renderer was missing a
 `sig-gap` branch that the preview had, so signatures rode up over the table
 while the preview looked correct. Signature gap is `SIG_GAP_ROWS = 2.5` and
 signatures are never scaled under fit-page mode.
+
+**Never index `FONT_SIZE_PRESETS[fmt.fontSize]`.** `DocFontSize` includes
+`custom`, which has no static preset, so that index is a lie the type system
+only catches because the record is keyed `Exclude<DocFontSize, 'custom'>`.
+Call `resolveFontSizePreset(fmt)` instead — it returns the static preset or
+derives one from `customBodyFontSize`. `SuguanSheetPage` reads `layout.fs`,
+so preview, PDF, and Excel all share whichever preset that returns; adding a
+fourth renderer must do the same rather than re-reading the preset itself.
+
+`scaleFontSizePreset` scales the whole `normal` preset by one factor instead of
+exposing eight independent inputs, because the preset's font sizes, row heights,
+and column weights only look right in proportion to each other. A custom size
+must keep that coupling or names start clipping their rows. The custom body size
+is clamped to `CUSTOM_BODY_FONT_MIN..MAX` and rounded to a half point in
+`normalizeDocFormat`, so a cleared or garbage input falls back to `normal`
+rather than reaching the layout maths as `NaN`.
 
 ### 2. Fonts are self-hosted as `SuguanSheet`, not `Inter`
 
@@ -113,6 +130,8 @@ migration function. **UI-only changes must not change a persisted shape.**
 | `settingsStore.ts` | `choir-settings` | 3 |
 | `formationStore.ts` | `choir-formations` | 1 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
+| `authStore.ts` | `choir-auth` | 1 |
+| `sidebarStore.ts` | `sidebarExpanded` | 1 |
 | `navStore.ts` | not persisted | — |
 
 `settingsStore` holds the three editable reference lists: service types, duty
@@ -122,11 +141,165 @@ add a field, bump the store `version` and extend its `migrate`.
 
 `navStore` is UI state only and is safe to change freely.
 
+Most persisted stores implement `importData()` so Settings' backup/restore can
+round-trip them. **`authStore` deliberately does not** — accounts are excluded
+from the backup file, because restoring a JSON file should never install someone
+else's password hashes on this machine. Do not add `importData` to it later
+without asking.
+
+## The sidebar is a floating card, split across `components/sidebar/`
+
+`src/components/ui/sidebar.tsx` was deleted. Its state model (`collapsible =
+"offcanvas" | "icon" | "none"`, a `document.cookie` flag, a hover rail, an
+`inset` variant) does not match how this app collapses, and leaving a second
+competing sidebar primitive in `ui/` invites reintroducing it. Do not re-add it.
+
+The sidebar is composed from `src/components/sidebar/`, not one file:
+`SidebarShell` (the card), `SidebarBody` (the shared scroll region), and
+`SidebarHeader`, `SidebarSection`, `SidebarItem`, `ThemeToggle`,
+`SidebarFooter`, `OrganizationCard`.
+`src/components/AppSidebar.tsx` is only the desktop-or-drawer switch.
+
+There is deliberately **no sidebar search**. `SidebarSearch` and the
+`filterNavItems` / `filteredNavGroups` helpers were removed: the member
+directory already owns search and filters in `MasterListPage`, and a second
+global search in the nav was a shortcut to the same pages rather than a
+distinct feature. Do not reintroduce one without asking.
+
+**`SidebarBody` is the reason the two layouts agree.** Desktop and mobile render
+the same body with a different `collapsed` value, so a change to nav or the
+search box lands in both. Do not fork the two.
+
+Two independent states, deliberately:
+
+| State | Width | Persisted |
+| --- | --- | --- |
+| `isNavigationOpen` | 0 when false, else below | no — defaults to `window.innerWidth >= 768` |
+| `isSidebarExpanded` | 72px collapsed, 260px expanded | yes, `localStorage.sidebarExpanded` |
+
+Geometry lives in `SIDEBAR_WIDTH` / `SIDEBAR_METRICS` in
+`src/lib/sidebarNav.ts`, and `sidebarNav.test.ts` pins it.
+
+Rules that are easy to break:
+
+- **The width animation is CSS only.** `transition-all duration-300 ease-in-out`
+  on the card. Do not add a JS tween.
+- **The 16px outer inset lives on the `Layout` wrapper (`flex gap-4 p-4`), not on
+  the sidebar.** The card and the content therefore share one gutter, and
+  `<main>` stays a full-bleed page with no rounding, border, or shadow. Do not
+  add a margin to `main` as well; two insets is what made this look cramped.
+  The panel is full-height and full-bleed with a right divider, still in normal
+  flow so it pushes content — there is no desktop overlay. Mobile is the only
+  overlay, a Radix `Sheet`. It has **no margin, no gutter, no rounded corners, and
+  no drop shadow**. Insetting it and rounding the corners turns the sidebar into
+  a small detached panel floating inside the app, which is the one look to avoid;
+  `Layout` uses a plain `flex` row with no `gap` or `padding` for the same reason.
+  Do not reintroduce a floating card here.
+- **`dvh`, not `vh`, on the card height.** A `100vh` card overflows once a mobile
+  URL bar or desktop zoom shrinks the visible viewport.
+- **Internal insets are per element, never nested.** `SidebarBody` has no
+  horizontal padding; the header uses `px-5`, `SidebarSection` uses `px-1` on
+  its rows, and the footer and org card use `px-1`. Adding padding to the body
+  as well stacks insets and undoes the breathing room.
+- **The active pill stops 4px short of the card edge** because
+  `SidebarSection` insets its rows by `px-1`, not because the button is narrower.
+- **The nav row is a fixed 44px in both states** (`grid h-11 place-items-center`
+  wrapping a 38px expanded pill or a 44px collapsed tile). If the row itself
+  resizes, every item below shifts by 6px during the collapse and the list
+  visibly shuffles. `SIDEBAR_METRICS` is tested for exactly this.
+- **Labels fade with `max-w-0` + `opacity-0`, not unmounting**, and every one
+  needs `overflow-hidden` or it still reserves width while invisible. Section
+  headings animate `grid-template-rows` `1fr`→`0fr` so rows below slide rather
+  than snap.
+- **A click on the collapsed rail expands first, then navigates** (`SidebarItem`).
+  Navigating without the label on screen leaves the user unable to tell where
+  they landed. The collapsed search button expands for the same reason.
+- **Tooltips are collapsed-only with a 600ms `delayDuration`.** Shorter and they
+  flash while the pointer crosses the list.
+- The hidden card is `inert`, not just `w-0`. A zero-width clipped aside is still
+  in the tab order and the accessibility tree.
+- Timings are load-bearing: 300ms for width and labels, 150ms for item hover,
+  600ms for tooltip delay. `motion-reduce:transition-none` is on every animated
+  element.
+
+`sidebarNav.test.ts` asserts that every `Page` has exactly one nav entry, so
+adding a page without a nav item fails the build rather than silently dropping
+the row.
+
+`src/components/ui/sheet.tsx` grew an `overlayClassName` prop so a caller can
+match the overlay fade to the panel slide. The nav drawer uses it for 300ms.
+
+## Theming is `next-themes`, and it toggles the whole app
+
+`next-themes` was already a dependency and `ui/sonner.tsx` already called
+`useTheme()`, but **no provider was ever mounted**, so that call was reading a
+default-constructed context. `src/components/sidebar/ThemeProvider.tsx` is now
+mounted in `App.tsx` and wraps everything, including `AuthPage`.
+
+Three decisions are fixed there, so do not repeat them at call sites:
+
+- `attribute="class"` toggles `.dark` on `<html>`, which is what
+  `@custom-variant dark (&:where(.dark, .dark *))` in `index.css` matches.
+- `defaultTheme="system"` plus `enableSystem` is what makes the first load follow
+  the OS. An explicit choice is stored and wins afterwards. **Do not hand-roll a
+  second theme store or read `localStorage.theme` directly.**
+- `storageKey="choir-theme"` matches the `choir-` prefix. next-themes would
+  otherwise claim the bare `theme` key.
+
+`ThemeToggle` reads `resolvedTheme`, not `theme`. `theme` returns the literal
+string `"system"` on a machine where the user never chose, and there is no sun
+glyph for that; `resolvedTheme` is the one that is actually applied.
+
+**The toggle is app-wide, not sidebar-only.** Every `.dark` block in
+`index.css` already existed, so this mainly means previously unreachable dark
+tokens are now reachable. If you restyle the sidebar, check it in both themes —
+a token defined only under `:root` silently becomes light-on-light in dark mode.
+
+The sidebar has its own neutral scale rather than reusing `--background`:
+`--sidebar`, `--sidebar-foreground`, `--sidebar-secondary`, `--sidebar-muted`,
+`--sidebar-border`, `--sidebar-hover`, `--sidebar-active`,
+`--sidebar-search`, `--sidebar-org`, `--sidebar-org-border`, plus
+`--app-background` for the backdrop behind the card. Shadows are
+`--shadow-sidebar-card` and `--shadow-nav-active`, consumed as
+`shadow-[var(--shadow-…)]` so one token switches value per theme.
+
+`--brand-gold` is a brand highlight only, currently the rule under the wordmark.
+It must never colour a nav row, a button, or a state.
+
+## Sign-in is local, and that is a deliberate limitation
+
+`App.tsx` renders `features/auth/AuthPage.tsx` instead of `Layout` until
+`authStore.currentAccountId` is set. Login and registration live on one screen
+because there is no router in this app; the mode is local state.
+
+**There is no server.** Accounts live in `localStorage` under `choir-auth`, and a
+password is stored only as a PBKDF2-SHA256 digest (210k iterations) plus a
+per-account salt. That keeps plaintext out of the backup file. It is not
+security: anyone with devtools can read the store, or overwrite it to sign in as
+anyone. Do not describe this to the user as protecting their data, and do not
+build features that assume it does — there is no real authorisation anywhere.
+
+Rules if you touch it:
+
+- Keep rules in `src/lib/credentials.ts`, not in the component. The page renders
+  `FieldProblem[]` returned by `validateRegistration`; it must not re-check a
+  rule locally or the two will drift.
+- Never log, toast, or render a password or hash. `AuthPage` deliberately has no
+  password in any error message.
+- `signIn` returns the same message for an unknown username and a wrong
+  password, and hashes anyway in the unknown-username case so the two take
+  similar time. Do not "helpfully" split those cases.
+- `roleForNewAccount` grants `admin` to the first registration only because a
+  fresh install needs someone to see that an admin exists. It is not an
+  authorisation check.
+
 ## Feature map
 
-Six features under `src/features/`. Only the imports below cross feature
+Seven features under `src/features/`. Only the imports below cross feature
 boundaries, so a change in one feature rarely reaches another.
 
+- **auth** — `AuthPage.tsx`, the pre-shell sign-in and registration screen.
+  Bypasses `Layout` entirely; see the sign-in section above.
 - **dashboard** — `DashboardPage.tsx`, read-only summaries.
 - **master-list** — members and trainees. The largest feature. Directory table
   and grid, mobile sheets, roster import, and CSV/Excel export.

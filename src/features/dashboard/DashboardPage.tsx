@@ -50,10 +50,8 @@ export function DashboardPage() {
   }, [suguan])
 
   const recordLabel = (s: (typeof suguan)[number]) =>
-    s.type === 'special'
-      ? s.eventTitle || 'Special Occasion'
-      : allServiceTypes().find((t) => t.id === s.serviceTypeId)?.name ??
-        s.serviceTypeId
+    allServiceTypes().find((t) => t.id === s.serviceTypeId)?.name ??
+    s.serviceTypeId
 
   const stats = [
     { label: 'Total Members', value: members.length, icon: Users, color: 'text-sky-600 dark:text-sky-400' },

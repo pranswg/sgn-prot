@@ -2,10 +2,12 @@ import { useMemo, useState, type DragEvent, type HTMLAttributes, type ReactNode 
 import {
   AlertTriangle,
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
+  CalendarClock,
+  ChevronDown,
   Eraser,
   GripVertical,
+  MoreVertical,
   Pencil,
   Plus,
   Save,
@@ -36,6 +38,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { VoiceBadge } from '@/components/StatusBadges'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { REGULAR_WORSHIP_DUTY_ROLES } from '@/core/constants/dutyRoles'
@@ -48,7 +63,6 @@ import type { Member } from '@/core/types/member'
 import type { SuguanAssignment, SuguanScheduleSection } from '@/core/types/suguan'
 import { MemberSelector } from './MemberSelector'
 import { DutyRolesPanel } from './DutyRolesPanel'
-import { KoroMakerStep } from './KoroMakerStep'
 import { groupGendersFor, type SuguanDraft } from './builderState'
 
 interface AssignmentWorkspaceProps {
@@ -107,7 +121,7 @@ function PanelShell({
   dropProps?: HTMLAttributes<HTMLDivElement>
 }) {
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
       <header className="flex items-center gap-2.5 border-b border-border/70 px-4 py-3">
         <span className="text-brand-navy/60">{icon}</span>
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -181,22 +195,7 @@ export function AssignmentWorkspace({
   const deletePreset = useAssignmentPresetStore((s) => s.deletePreset)
   const allSuguan = useSuguanStore((s) => s.suguan)
 
-  const isSpecial = draft.type === 'special'
-
-  const sections: SuguanScheduleSection[] = useMemo(() => {
-    if (isSpecial) {
-      return [
-        {
-          id: '__special__',
-          scheduleLabel: draft.eventTitle.trim() || 'SPECIAL OCCASION',
-          scheduleDay: '',
-          scheduleTime: '',
-          assignments: draft.assignments,
-        },
-      ]
-    }
-    return draft.schedules
-  }, [draft.schedules, draft.assignments, draft.eventTitle, isSpecial])
+  const sections: SuguanScheduleSection[] = draft.schedules
 
   const [activeId, setActiveId] = useState<string>('')
   const section = sections.find((s) => s.id === activeId) ?? sections[0] ?? null
@@ -207,17 +206,14 @@ export function AssignmentWorkspace({
   const [saveOpen, setSaveOpen] = useState(false)
   const [presetName, setPresetName] = useState('')
   const [replaceTarget, setReplaceTarget] = useState<SuguanAssignment | null>(null)
-  const [koroMode, setKoroMode] = useState(false)
   const [drag, setDrag] = useState<DragPayload | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [openVoices, setOpenVoices] = useState<Record<string, boolean>>({})
   // Default alphabetical, per the previous request. Manual mode hands ordering
   // back to the officer via drag and the move up/down controls.
   const [orderMode, setOrderMode] = useState<'alpha' | 'manual'>('alpha')
 
   const setAssignments = (next: SuguanAssignment[]) => {
-    if (isSpecial) {
-      patch({ assignments: next })
-      return
-    }
     const schedules = draft.schedules.map((s) =>
       s.id === section?.id ? { ...s, assignments: next } : s,
     )
@@ -443,30 +439,385 @@ export function AssignmentWorkspace({
   }, [replaceTarget, members, groupGenders, voices, assignments])
 
   const isManual = orderMode === 'manual'
-  const activeScheduleLabel = section?.scheduleLabel ?? 'No schedule selected'
 
-  if (isSpecial && koroMode) {
-    return (
-      <div className="flex flex-col gap-4">
+  const isVoiceOpen = (key: string, index: number) =>
+    openVoices[key] ?? index === 0
+  const toggleVoice = (key: string, index: number) =>
+    setOpenVoices((prev) => ({ ...prev, [key]: !(prev[key] ?? index === 0) }))
+
+  const presetCard = (
+    <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] xl:rounded-lg">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            Load preset
+          </span>
+          <div className="flex items-center gap-2">
+            <Select
+              value={presetId}
+              onValueChange={loadPreset}
+              disabled={presets.length === 0}
+            >
+              <SelectTrigger size="sm" className="h-9 flex-1 bg-background">
+                <SelectValue
+                  placeholder={
+                    presets.length === 0
+                      ? 'No presets saved yet'
+                      : 'Choose a preset group'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {presets.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.assignments.length} members)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {presetId && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0"
+                title="Delete preset"
+                onClick={() => {
+                  deletePreset(presetId)
+                  setPresetId('')
+                }}
+              >
+                <X className="size-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {draft.schedules.length > 1 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Copy from schedule
+            </span>
+            <Select onValueChange={copyFromSection} value="">
+              <SelectTrigger size="sm" className="h-9 w-full bg-background">
+                <SelectValue placeholder="Choose schedule…" />
+              </SelectTrigger>
+              <SelectContent>
+                {draft.schedules
+                  .filter((s) => s.id !== section?.id)
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.scheduleLabel} ({s.assignments.length})
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 border-t border-border/60 pt-2.5">
         <Button
           variant="outline"
           size="sm"
-          className="w-fit"
-          onClick={() => setKoroMode(false)}
+          className="flex-1 sm:flex-none"
+          onClick={() => setSaveOpen(true)}
         >
-          <ArrowLeft className="size-4" />
-          Back to roster
+          <Save className="size-4" />
+          Save as preset
         </Button>
-        <KoroMakerStep draft={draft} patch={patch} members={members} />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="flex-1 text-muted-foreground hover:text-destructive sm:flex-none"
+          onClick={() => {
+            setAssignments([])
+            setPresetId('')
+            toast.info('Roster cleared for this schedule.')
+          }}
+          disabled={assignments.length === 0}
+        >
+          <Eraser className="size-4" />
+          Clear
+        </Button>
+      </div>
+    </div>
+  )
+
+  const visibleVoiceGroups = assignedByVoice.groups.filter(
+    (g) => g.items.length > 0,
+  )
+
+  const renderMobileGroup = (
+    key: string,
+    label: string,
+    items: SuguanAssignment[],
+    index: number,
+  ) => {
+    const open = isVoiceOpen(key, index)
+    return (
+      <div
+        key={key}
+        className="overflow-hidden rounded-xl border border-border/60 bg-background"
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => toggleVoice(key, index)}
+          className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+        >
+          <ChevronDown
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
+              open && 'rotate-180',
+            )}
+          />
+          <span className="truncate text-sm font-semibold text-foreground">
+            {label}
+          </span>
+          <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+            {items.length}
+          </span>
+        </button>
+        {open && (
+          <div className="flex flex-col gap-2 px-2.5 pb-2.5">
+            {items.map((a) => {
+              const member = memberById.get(a.memberId)
+              const idx = indexOfAssignment(a)
+              return (
+                <div
+                  key={`${a.memberId}-${a.voicePosition}`}
+                  className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3 py-2.5"
+                >
+                  <MemberAvatar
+                    member={member}
+                    name={a.memberName}
+                    className="size-9"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {a.memberName}
+                    </p>
+                    <p className="truncate font-mono text-[0.625rem] tracking-tight text-muted-foreground">
+                      {memberRefs.get(a.memberId) ?? '—'}
+                    </p>
+                  </div>
+                  {doubleBooked.has(a.memberId) && (
+                    <AlertTriangle
+                      className="size-3.5 shrink-0 text-amber-500"
+                      aria-label="Already assigned to another Suguan on this date"
+                    />
+                  )}
+                  <VoiceBadge name={getVoiceName(a.voicePosition, voices)} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-8 shrink-0 text-muted-foreground"
+                        aria-label={`Actions for ${a.memberName}`}
+                      >
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={!isManual || idx === 0}
+                        onSelect={() => moveMember(a, -1)}
+                      >
+                        <ArrowUp className="size-4" />
+                        Move up
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={
+                          !isManual || idx === lastIndexInVoice(a.voicePosition)
+                        }
+                        onSelect={() => moveMember(a, 1)}
+                      >
+                        <ArrowDown className="size-4" />
+                        Move down
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setReplaceTarget(a)}>
+                        <Pencil className="size-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => removeMember(a)}
+                      >
+                        <Trash2 className="size-4" />
+                        Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Active schedule header */}
-      <header className="flex flex-col gap-3 rounded-lg bg-brand-navy px-4 py-3.5 text-white sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+    <>
+      {/* Mobile app layout */}
+      <div className="flex flex-col gap-3 xl:hidden">
+        {/* Header / schedule context */}
+        <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight text-foreground">
+                Assignments
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Assign members and duty roles
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-brand-navy-soft px-2.5 py-1 text-xs font-semibold tabular-nums text-brand-navy">
+              {assignments.length} assigned
+            </span>
+          </div>
+
+          {sections.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground">
+              No schedules yet — add one above.
+            </p>
+          ) : sections.length === 1 ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-brand-navy px-3.5 py-3 text-sm font-semibold uppercase tracking-wide text-white">
+              <CalendarClock className="size-4 shrink-0 text-white/70" />
+              <span className="truncate">{sections[0].scheduleLabel}</span>
+            </div>
+          ) : (
+            <Select value={section?.id ?? ''} onValueChange={setActiveId}>
+              <SelectTrigger className="mt-3 h-12 w-full gap-2 border-0 bg-brand-navy px-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-none hover:bg-brand-navy/90 focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&_svg]:text-white/70">
+                <SelectValue placeholder="Choose schedule" />
+              </SelectTrigger>
+              <SelectContent>
+                {sections.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.scheduleLabel} ({s.assignments.length})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Voice balance chips */}
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+          {choirVoices.map((v) => {
+            const count = assignments.filter(
+              (a) => a.voicePosition === v.id,
+            ).length
+            return (
+              <div
+                key={v.id}
+                className="flex shrink-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-[0_1px_2px_rgba(16,42,67,0.04)]"
+              >
+                <span className="text-xs font-medium text-muted-foreground">
+                  {v.name}
+                </span>
+                <span
+                  className={cn(
+                    'text-sm font-bold tabular-nums',
+                    count > 0 ? 'text-brand-navy' : 'text-muted-foreground/50',
+                  )}
+                >
+                  {count}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Assigned members — main area */}
+        <div className="rounded-2xl border border-border/70 bg-card shadow-[0_1px_2px_rgba(16,42,67,0.04)]">
+          <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-foreground">
+                Assigned Members
+              </h3>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-muted-foreground">
+                {assignments.length}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5">
+              <button
+                type="button"
+                onClick={() => setOrderMode('alpha')}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-[0.6875rem] font-medium transition-colors',
+                  !isManual
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                A–Z
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderMode('manual')}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-[0.6875rem] font-medium transition-colors',
+                  isManual
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Manual
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2.5 p-3">
+            {assignments.length === 0 && (
+              <EmptyState>
+                No members assigned yet. Tap Add Members to start.
+              </EmptyState>
+            )}
+
+            {visibleVoiceGroups.map((g, gi) =>
+              renderMobileGroup(g.voice.id, g.voice.name, g.items, gi),
+            )}
+            {assignedByVoice.orphans.length > 0 &&
+              renderMobileGroup(
+                'orphans',
+                'Other',
+                assignedByVoice.orphans,
+                visibleVoiceGroups.length,
+              )}
+
+            <Button
+              className="sticky bottom-24 mt-1 h-12 w-full rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.3)]"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="size-4.5" />
+              Add Members
+            </Button>
+          </div>
+        </div>
+
+        {/* Special duties */}
+        <DutyRolesPanel
+          title="Special Duties"
+          scrollClassName="h-auto"
+          dutyRoles={draft.dutyRoles}
+          onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+          destinadoName={draft.destinadoName}
+          onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+          members={members}
+          roleIds={REGULAR_WORSHIP_DUTY_ROLES}
+        />
+
+        {presetCard}
+      </div>
+
+      {/* Desktop layout */}
+      <div className="hidden flex-col gap-4 xl:flex">
+        {/* Schedule selector: navy header with schedule pills */}
+      <header className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 sm:border-0 sm:bg-brand-navy sm:px-4 sm:py-3.5 sm:text-white xl:rounded-lg">
+        <div className="hidden min-w-0 items-center gap-3 sm:flex">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-inset ring-white/15">
             <UserRoundCheck className="size-4.5 text-brand-teal-bright" />
           </span>
@@ -480,36 +831,22 @@ export function AssignmentWorkspace({
           </div>
         </div>
 
-        {isSpecial ? (
-          <div className="flex items-center gap-2">
-            <span className="truncate rounded-md bg-white/10 px-2.5 py-1.5 text-xs font-medium ring-1 ring-inset ring-white/15">
-              {activeScheduleLabel} · {assignments.length}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
-              onClick={() => setKoroMode(true)}
-            >
-              Koro Maker
-            </Button>
-          </div>
-        ) : sections.length === 0 ? (
-          <p className="rounded-md bg-white/10 px-2.5 py-1.5 text-xs text-white/70 ring-1 ring-inset ring-white/15">
+        {sections.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground sm:border-0 sm:bg-white/10 sm:text-white/70 sm:ring-1 sm:ring-inset sm:ring-white/15">
             No schedules yet — add one in the Schedules step.
           </p>
         ) : (
           <Tabs
             value={section?.id ?? ''}
             onValueChange={setActiveId}
-            className="min-w-0 sm:max-w-[60%]"
+            className="w-full min-w-0 sm:max-w-[60%]"
           >
-            <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-lg bg-white/5 p-1">
+            <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-full border border-border/60 bg-background p-1 sm:rounded-lg sm:border-0 sm:bg-white/5">
               {sections.map((s) => (
                 <TabsTrigger
                   key={s.id}
                   value={s.id}
-                  className="gap-2 whitespace-nowrap text-white/70 ring-1 ring-inset ring-transparent hover:text-white data-[state=active]:bg-white data-[state=active]:font-semibold data-[state=active]:text-brand-navy data-[state=active]:ring-white/20"
+                  className="gap-2 whitespace-nowrap rounded-full border border-border/60 bg-card px-3 text-[0.8125rem] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground data-[state=active]:border-transparent data-[state=active]:bg-[#102A43] data-[state=active]:text-white sm:rounded-lg sm:border-transparent sm:bg-transparent sm:text-[0.875rem] sm:font-medium sm:normal-case sm:text-white/70 sm:hover:text-white sm:data-[state=active]:bg-white sm:data-[state=active]:text-brand-navy"
                 >
                   {s.scheduleLabel}
                   <span className="rounded-full bg-current/15 px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums">
@@ -522,90 +859,12 @@ export function AssignmentWorkspace({
         )}
       </header>
 
-      {/* Preset toolbar */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-lg border border-border/70 bg-card px-3 py-2.5">
-        <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Load preset
-        </span>
-        <Select
-          value={presetId}
-          onValueChange={loadPreset}
-          disabled={presets.length === 0}
-        >
-          <SelectTrigger size="sm" className="w-56 bg-background">
-            <SelectValue
-              placeholder={
-                presets.length === 0
-                  ? 'No presets saved yet'
-                  : 'Choose a preset group'
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {presets.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name} ({p.assignments.length} members)
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {presetId && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Delete preset"
-            onClick={() => {
-              deletePreset(presetId)
-              setPresetId('')
-            }}
-          >
-            <X className="size-4" />
-          </Button>
-        )}
-
-        {!isSpecial && draft.schedules.length > 1 && (
-          <Select onValueChange={copyFromSection} value="">
-            <SelectTrigger size="sm" className="w-52 bg-background">
-              <SelectValue placeholder="Copy from schedule…" />
-            </SelectTrigger>
-            <SelectContent>
-              {draft.schedules
-                .filter((s) => s.id !== section?.id)
-                .map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.scheduleLabel} ({s.assignments.length})
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setSaveOpen(true)}>
-            <Save className="size-4" />
-            Save as preset
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => {
-              setAssignments([])
-              setPresetId('')
-              toast.info('Roster cleared for this schedule.')
-            }}
-            disabled={assignments.length === 0}
-          >
-            <Eraser className="size-4" />
-            Clear
-          </Button>
-        </div>
-      </div>
+      {presetCard}
 
       {/* Three-column workspace */}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,30fr)_minmax(0,38fr)_minmax(0,32fr)]">
-        <PanelShell
+        <div className="min-w-0 xl:order-1">
+          <PanelShell
           icon={<Users className="size-4" />}
           title="Available Members"
           count={available.length}
@@ -653,10 +912,10 @@ export function AssignmentWorkspace({
                   }}
                   onDragEnd={() => setDrag(null)}
                   onDoubleClick={() => addMember(m)}
-                  className="group flex cursor-grab items-center gap-2.5 rounded-lg border border-border/60 bg-background px-2.5 py-2 transition-colors hover:border-brand-teal/40 hover:bg-brand-teal-soft/40 active:cursor-grabbing"
+                  className="group flex cursor-grab items-center gap-2.5 rounded-2xl border border-border/60 bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:border-brand-teal/40 hover:bg-brand-teal-soft/40 active:cursor-grabbing xl:gap-2.5 xl:rounded-lg xl:bg-background xl:px-2.5 xl:py-2 xl:shadow-none"
                 >
-                  <GripVertical className="size-3.5 shrink-0 text-muted-foreground/40" />
-                  <MemberAvatar member={m} />
+                  <GripVertical className="hidden size-3.5 shrink-0 text-muted-foreground/40 xl:block" />
+                  <MemberAvatar member={m} className="size-9 xl:size-7" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">
                       {m.firstName} {m.lastName}
@@ -664,8 +923,17 @@ export function AssignmentWorkspace({
                     <span className="block truncate font-mono text-[0.625rem] tracking-tight text-muted-foreground">
                       {memberRefs.get(m.id) ?? '—'}
                     </span>
+                    <span className="mt-1.5 flex items-center gap-1.5 xl:hidden">
+                      {doubleBooked.has(m.id) && (
+                        <AlertTriangle
+                          className="size-3.5 text-amber-500"
+                          aria-label="Already assigned to another Suguan on this date"
+                        />
+                      )}
+                      <VoiceBadge name={getVoiceName(m.voicePosition, voices)} />
+                    </span>
                   </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="hidden shrink-0 items-center gap-1.5 xl:flex">
                     {doubleBooked.has(m.id) && (
                       <AlertTriangle
                         className="size-3.5 text-amber-500"
@@ -673,24 +941,26 @@ export function AssignmentWorkspace({
                       />
                     )}
                     <VoiceBadge name={getVoiceName(m.voicePosition, voices)} />
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="size-7 text-brand-navy/60 hover:bg-brand-teal-soft hover:text-brand-teal"
-                      onClick={() => addMember(m)}
-                      title="Add to roster"
-                    >
-                      <Plus className="size-4" />
-                    </Button>
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-8 shrink-0 rounded-full border border-border/60 text-brand-navy/70 hover:border-brand-teal hover:bg-brand-teal-soft hover:text-brand-teal xl:size-7 xl:border-0"
+                    onClick={() => addMember(m)}
+                    title="Add to roster"
+                  >
+                    <Plus className="size-4" />
+                  </Button>
                 </div>
               ))}
             </>
           }
         />
+        </div>
 
-        <PanelShell
-          icon={<UsersRound className="size-4" />}
+        <div className="min-w-0 xl:order-2">
+          <PanelShell
+            icon={<UsersRound className="size-4" />}
           title="Assigned"
           count={assignments.length}
           meta={isManual ? 'Drag to reorder' : 'Sorted A–Z'}
@@ -814,15 +1084,19 @@ export function AssignmentWorkspace({
             </>
           }
         />
+        </div>
 
-        <DutyRolesPanel
-          dutyRoles={draft.dutyRoles}
-          onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
-          destinadoName={draft.destinadoName}
-          onDestinadoChange={(destinadoName) => patch({ destinadoName })}
-          members={members}
-          roleIds={REGULAR_WORSHIP_DUTY_ROLES}
-        />
+        <div className="min-w-0 xl:order-3">
+          <DutyRolesPanel
+            dutyRoles={draft.dutyRoles}
+            onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+            destinadoName={draft.destinadoName}
+            onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+            members={members}
+            roleIds={REGULAR_WORSHIP_DUTY_ROLES}
+          />
+        </div>
+      </div>
       </div>
 
       <Dialog
@@ -899,7 +1173,92 @@ export function AssignmentWorkspace({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Add members — mobile bottom sheet */}
+      <Sheet open={addOpen} onOpenChange={setAddOpen}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="max-h-[85vh] gap-0 rounded-t-3xl border-border/70 bg-background p-0"
+        >
+          <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-border" />
+          <SheetHeader className="gap-1 border-b border-border/70 px-4 pb-3 pt-2">
+            <SheetTitle className="text-base font-semibold text-foreground">
+              Add members
+            </SheetTitle>
+            <SheetDescription className="text-xs">
+              Search the roster, then tap + to add a member.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex shrink-0 flex-col gap-2 px-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search members…"
+                className="h-10 bg-card pl-9"
+              />
+            </div>
+            <Select value={voiceFilter} onValueChange={setVoiceFilter}>
+              <SelectTrigger size="sm" className="h-10 w-full bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All voices</SelectItem>
+                {choirVoices.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+            <div className="flex flex-col gap-2">
+              {available.length === 0 && (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  No members match.
+                </p>
+              )}
+              {available.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5"
+                >
+                  <MemberAvatar member={m} className="size-9" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {m.firstName} {m.lastName}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {getVoiceName(m.voicePosition, voices)}
+                    </p>
+                  </div>
+                  {doubleBooked.has(m.id) && (
+                    <AlertTriangle
+                      className="size-4 shrink-0 text-amber-500"
+                      aria-label="Already assigned to another Suguan on this date"
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    className="size-9 shrink-0 rounded-full border-brand-navy/30 text-brand-navy hover:border-brand-teal hover:bg-brand-teal-soft hover:text-brand-teal"
+                    onClick={() => addMember(m)}
+                    aria-label={`Add ${m.firstName} ${m.lastName}`}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   )
 }
 
@@ -986,19 +1345,23 @@ function AssignmentRow({
       }}
       onDrop={onDrop}
       className={cn(
-        'group flex items-center gap-2 rounded-lg border border-border/60 bg-background px-2 py-1.5 transition-colors hover:border-brand-teal/40 hover:bg-brand-teal-soft/30',
+        'group flex items-center gap-2.5 rounded-2xl border border-border/60 bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:border-brand-teal/40 hover:bg-brand-teal-soft/30 xl:gap-2 xl:rounded-lg xl:bg-background xl:px-2 xl:py-1.5 xl:shadow-none',
         reorderable && 'cursor-grab active:cursor-grabbing',
       )}
     >
       <GripVertical
         className={cn(
-          'size-3.5 shrink-0 transition-colors',
+          'hidden size-3.5 shrink-0 transition-colors xl:block',
           reorderable
             ? 'text-muted-foreground/40 group-hover:text-muted-foreground'
             : 'text-muted-foreground/20',
         )}
       />
-      <MemberAvatar member={member} name={assignment.memberName} />
+      <MemberAvatar
+        member={member}
+        name={assignment.memberName}
+        className="size-9 xl:size-7"
+      />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">
           {assignment.memberName}
@@ -1008,56 +1371,63 @@ function AssignmentRow({
             {reference}
           </span>
         )}
+        <span className="mt-1.5 flex items-center gap-1.5 xl:hidden">
+          {conflicting && (
+            <AlertTriangle
+              className="size-3.5 shrink-0 text-amber-500"
+              aria-label="Already assigned to another Suguan on this date"
+            />
+          )}
+          <VoiceBadge name={getVoiceName(assignment.voicePosition, voices)} />
+        </span>
       </span>
-      {conflicting && (
-        <AlertTriangle
-          className="size-3.5 shrink-0 text-amber-500"
-          aria-label="Already assigned to another Suguan on this date"
-        />
-      )}
-      <VoiceBadge name={getVoiceName(assignment.voicePosition, voices)} />
-      <span className="flex shrink-0 items-center opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        {reorderable && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="size-6"
-              title="Move up"
-              disabled={first}
-              onClick={() => onMove(assignment, -1)}
-            >
-              <ArrowUp className="size-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="size-6"
-              title="Move down"
-              disabled={last}
-              onClick={() => onMove(assignment, 1)}
-            >
-              <ArrowDown className="size-3" />
-            </Button>
-          </>
+      <span className="hidden shrink-0 items-center gap-1.5 xl:flex">
+        {conflicting && (
+          <AlertTriangle
+            className="size-3.5 shrink-0 text-amber-500"
+            aria-label="Already assigned to another Suguan on this date"
+          />
         )}
+        <VoiceBadge name={getVoiceName(assignment.voicePosition, voices)} />
+      </span>
+      <span className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity focus-within:opacity-100 xl:opacity-0 xl:group-hover:opacity-100">
         <Button
           variant="ghost"
           size="icon-sm"
-          className="size-6"
-          title="Edit"
-          onClick={() => onReplace(assignment)}
+          className="size-7 xl:size-6"
+          title="Move up"
+          disabled={!reorderable || first}
+          onClick={() => onMove(assignment, -1)}
         >
-          <Pencil className="size-3" />
+          <ArrowUp className="size-3.5 xl:size-3" />
         </Button>
         <Button
           variant="ghost"
           size="icon-sm"
-          className="size-6 hover:text-destructive"
+          className="size-7 xl:size-6"
+          title="Move down"
+          disabled={!reorderable || last}
+          onClick={() => onMove(assignment, 1)}
+        >
+          <ArrowDown className="size-3.5 xl:size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="size-7 xl:size-6"
+          title="Edit"
+          onClick={() => onReplace(assignment)}
+        >
+          <Pencil className="size-3.5 xl:size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="size-7 xl:size-6 hover:text-destructive"
           title="Remove"
           onClick={() => onRemove(assignment)}
         >
-          <Trash2 className="size-3" />
+          <Trash2 className="size-3.5 xl:size-3" />
         </Button>
       </span>
     </div>

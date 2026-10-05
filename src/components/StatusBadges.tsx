@@ -14,15 +14,15 @@ export function MemberStatusBadge({ active }: { active: boolean }) {
         badgeBase,
         'gap-1.5',
         active
-          ? 'border-emerald-600/15 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-          : 'border-border bg-muted text-muted-foreground',
+          ? 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300'
+          : 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
       )}
     >
       <span
         aria-hidden
         className={cn(
           'size-1.5 rounded-full',
-          active ? 'bg-emerald-500' : 'bg-muted-foreground/50',
+          active ? 'bg-green-600' : 'bg-red-600',
         )}
       />
       {active ? 'Active' : 'Inactive'}
@@ -31,9 +31,10 @@ export function MemberStatusBadge({ active }: { active: boolean }) {
 }
 
 const TRAINEE_STATUS_STYLES: Record<string, string> = {
-  active: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-  inactive: 'bg-red-500/15 text-red-700 dark:text-red-300',
-  promoted: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+  active: 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
+  inactive: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  promoted:
+    'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
 }
 
 export function TraineeStatusBadge({ status }: { status: string }) {
@@ -54,8 +55,8 @@ export function GenderBadge({ gender }: { gender: 'male' | 'female' }) {
       className={cn(
         badgeBase,
         gender === 'female'
-          ? 'border-pink-500/20 bg-pink-500/10 text-pink-700 dark:text-pink-300'
-          : 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+          ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300'
+          : 'bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300',
       )}
     >
       {gender === 'female' ? 'Female' : 'Male'}
@@ -64,11 +65,12 @@ export function GenderBadge({ gender }: { gender: 'male' | 'female' }) {
 }
 
 const VOICE_BADGE_STYLES: Record<string, string> = {
-  'soprano-1': 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  'soprano-2': 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
-  alto: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
-  tenor: 'border-blue-600/20 bg-blue-600/10 text-blue-700 dark:text-blue-300',
-  bass: 'border-slate-500/25 bg-slate-500/12 text-slate-700 dark:text-slate-300',
+  'soprano-1': 'bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300',
+  'soprano-2':
+    'bg-cyan-100 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300',
+  alto: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
+  tenor: 'bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
+  bass: 'bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300',
 }
 
 export function VoiceBadge({ name }: { name: string }) {
@@ -88,9 +90,10 @@ export function VoiceBadge({ name }: { name: string }) {
 }
 
 const MEMBERSHIP_BADGE_STYLES: Record<MembershipType, string> = {
-  regular: 'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  regular:
+    'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
   provisional:
-    'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
 }
 
 export function MembershipBadge({ type }: { type: MembershipType }) {
@@ -107,13 +110,12 @@ export function MembershipBadge({ type }: { type: MembershipType }) {
 const POSITION_BADGE_STYLES: Record<ChoirPosition, string> = {
   oic: 'border-brand-teal/30 bg-brand-teal-soft text-brand-teal',
   'kalihim-ng-mang-aawit':
-    'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+    'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
   'pangulong-mang-aawit':
-    'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  organista:
-    'border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  organista: 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300',
   'assistant-tagapagturo':
-    'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
 }
 
 export function PositionBadge({ position }: { position: ChoirPosition }) {

@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { ChevronLeft, Music4 } from 'lucide-react'
+import { ChevronLeft, Music4, PanelLeft } from 'lucide-react'
 import { useSidebarStore } from '@/store/sidebarStore'
 
 interface SidebarHeaderProps {
@@ -34,7 +34,7 @@ export function SidebarHeader({
         tabIndex={collapsed ? 0 : -1}
         title={collapsed ? 'Expand sidebar' : undefined}
         className={cn(
-          'relative flex size-9 shrink-0 items-center justify-center rounded-[10px]',
+          'group relative flex size-9 shrink-0 items-center justify-center rounded-[10px]',
           'bg-logo-bg text-logo-icon',
           'transition-colors duration-150 ease-in-out motion-reduce:transition-none',
           collapsed
@@ -42,18 +42,26 @@ export function SidebarHeader({
             : 'cursor-default',
         )}
       >
-        {/* Crossfade rather than a swap, so the mark does not pop mid-collapse. */}
-        <Music4
-          className={cn(
-            'absolute size-[18px] transition-opacity duration-300 motion-reduce:transition-none',
-            collapsed ? 'opacity-0' : 'opacity-100',
-          )}
-          aria-hidden="true"
-        />
+        {/* Crossfade rather than a swap, so the mark does not pop mid-collapse.
+            Collapsed, hovering (or keyboard-focusing) the tile crossfades the
+            `IC` initials into the expand-sidebar icon. */}
+        {collapsed ? (
+          <PanelLeft
+            className="absolute size-[18px] opacity-0 transition-opacity duration-300 motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100"
+            aria-hidden="true"
+          />
+        ) : (
+          <Music4
+            className="absolute size-[18px] opacity-100 transition-opacity duration-300 motion-reduce:transition-none"
+            aria-hidden="true"
+          />
+        )}
         <span
           className={cn(
             'relative text-[11px] font-bold tracking-tight transition-opacity duration-300 motion-reduce:transition-none',
-            collapsed ? 'opacity-100' : 'opacity-0',
+            collapsed
+              ? 'opacity-100 group-hover:opacity-0 group-focus-visible:opacity-0'
+              : 'opacity-0',
           )}
           aria-hidden="true"
         >

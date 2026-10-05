@@ -11,6 +11,16 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Radix primitives report visibility through `data-state="open" | "closed"`,
+ * while the shadcn components name the animation hooks `data-open` /
+ * `data-closed`. Without these variants those classes compile to a bare
+ * `[data-open]` presence selector that never matches, so the mobile sidebar
+ * drawer (and every sheet, dialog, and menu) popped in with no animation.
+ */
+@custom-variant data-open (&:where([data-state="open"]));
+@custom-variant data-closed (&:where([data-state="closed"]));
+
 /**
  * Font for the printable Suguan sheet only.
  *
@@ -49,65 +59,66 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.278 0.058 255);
-  --primary-foreground: oklch(0.985 0.005 250);
-  --secondary: oklch(0.968 0.004 250);
-  --secondary-foreground: oklch(0.278 0.058 255);
-  --muted: oklch(0.968 0.004 250);
-  --muted-foreground: oklch(0.548 0.016 254);
-  --accent: oklch(0.955 0.008 250);
-  --accent-foreground: oklch(0.278 0.058 255);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.916 0.006 254);
-  --input: oklch(0.916 0.006 254);
-  --ring: oklch(0.52 0.075 200);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* DocuFy PSMS — primary blue, slate neutrals */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #475569;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #dbeafe;
+  --accent-foreground: #1e3a8a;
+  --destructive: #dc2626;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2563eb;
+  --chart-1: #2563eb;
+  --chart-2: #7c3aed;
+  --chart-3: #16a34a;
+  --chart-4: #f59e0b;
+  --chart-5: #dc2626;
 
-  /* Brand identity: deep navy primary, muted teal secondary accent */
-  --brand-navy: oklch(0.278 0.058 255);
-  --brand-navy-deep: oklch(0.222 0.048 255);
-  --brand-navy-soft: oklch(0.953 0.012 250);
-  --brand-teal: oklch(0.552 0.088 185);
-  --brand-teal-bright: oklch(0.706 0.104 183);
-  --brand-teal-soft: oklch(0.952 0.028 183);
+  /* Brand: DocuFy Blue primary with pale-blue accents */
+  --brand-navy: #2563eb;
+  --brand-navy-deep: #1e3a8a;
+  --brand-navy-soft: #dbeafe;
+  --brand-teal: #1d4ed8;
+  --brand-teal-bright: #60a5fa;
+  --brand-teal-soft: #dbeafe;
 
   /* Page backdrop behind the floating sidebar card. Kept separate from
      --background so main-content surfaces stay as they are and only the
      backdrop changes. */
-  --app-background: #eef2ff;
+  --app-background: #f1f5f9;
 
   /* The sidebar is a floating white card, so its scale starts at near-black
      text rather than the old navy-on-white inverse. */
   --sidebar: #ffffff;
-  --sidebar-foreground: #111827;
+  --sidebar-foreground: #0f172a;
   --sidebar-secondary: #64748b;
   --sidebar-muted: #94a3b8;
-  --sidebar-border: #e5e7eb;
+  --sidebar-border: #e2e8f0;
   --sidebar-hover: #f8fafc;
-  --sidebar-active: #4f46e5;
+  --sidebar-active: #2563eb;
   --sidebar-active-foreground: #ffffff;
-  --sidebar-search: #f5f3ff;
+  --sidebar-search: #dbeafe;
   --sidebar-search-foreground: #64748b;
   --sidebar-org: #f8fafc;
   --sidebar-org-border: #e2e8f0;
 
   /* Legacy shadcn names, remapped onto the new palette so any surviving usage
      stays legible instead of pointing at a colour that no longer exists. */
-  --sidebar-primary: #4f46e5;
+  --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f8fafc;
-  --sidebar-accent-foreground: #111827;
-  --sidebar-ring: #0f766e;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-ring: #2563eb;
 
   /* INC identity. Gold is reserved for the logo mark; never for nav. */
   --brand-emerald: #0f766e;
@@ -117,65 +128,66 @@
   --logo-icon: #0f766e;
 
   --shadow-sidebar-card: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --shadow-nav-active: 0 5px 15px rgba(79, 70, 229, 0.25);
+  --shadow-nav-active: 0 5px 15px rgba(37, 99, 235, 0.25);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --brand-navy: oklch(0.812 0.048 250);
-  --brand-navy-deep: oklch(0.93 0.018 250);
-  --brand-navy-soft: oklch(0.28 0.03 255);
-  --brand-teal: oklch(0.72 0.11 183);
-  --brand-teal-bright: oklch(0.82 0.11 183);
-  --brand-teal-soft: oklch(0.29 0.04 195);
-  --app-background: #0f172a;
+  /* DocuFy PSMS — slate dark mode, blue primary */
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --card-foreground: #f8fafc;
+  --popover: #1e293b;
+  --popover-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #cbd5e1;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e3a8a;
+  --accent-foreground: #dbeafe;
+  --destructive: #f87171;
+  --border: #334155;
+  --input: #334155;
+  --ring: #3b82f6;
+  --chart-1: #60a5fa;
+  --chart-2: #a78bfa;
+  --chart-3: #4ade80;
+  --chart-4: #fbbf24;
+  --chart-5: #f87171;
+  --brand-navy: #3b82f6;
+  --brand-navy-deep: #1d4ed8;
+  --brand-navy-soft: #1e3a8a;
+  --brand-teal: #60a5fa;
+  --brand-teal-bright: #93c5fd;
+  --brand-teal-soft: #1e3a8a;
+  --app-background: #0b1220;
 
-  --sidebar: #18181b;
-  --sidebar-foreground: #ffffff;
-  --sidebar-secondary: #a1a1aa;
-  --sidebar-muted: #71717a;
-  --sidebar-border: #27272a;
-  --sidebar-hover: #27272a;
-  --sidebar-active: #4f46e5;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-secondary: #94a3b8;
+  --sidebar-muted: #64748b;
+  --sidebar-border: #1e293b;
+  --sidebar-hover: #1e293b;
+  --sidebar-active: #2563eb;
   --sidebar-active-foreground: #ffffff;
-  --sidebar-search: #27272a;
-  --sidebar-search-foreground: #a1a1aa;
-  --sidebar-org: #27272a;
-  --sidebar-org-border: #3f3f46;
+  --sidebar-search: #1e293b;
+  --sidebar-search-foreground: #94a3b8;
+  --sidebar-org: #1e293b;
+  --sidebar-org-border: #334155;
 
-  --sidebar-primary: #4f46e5;
+  --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #27272a;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-ring: #2dd4bf;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-ring: #3b82f6;
 
   --logo-bg: rgba(45, 212, 191, 0.15);
   --logo-icon: #2dd4bf;
 
   --shadow-sidebar-card: 0 15px 40px rgba(0, 0, 0, 0.35);
-  --shadow-nav-active: 0 5px 15px rgba(79, 70, 229, 0.35);
+  --shadow-nav-active: 0 5px 15px rgba(37, 99, 235, 0.35);
 }
 
 @theme inline {

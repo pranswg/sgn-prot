@@ -33,26 +33,11 @@ export type SuguanGroup = 'babae' | 'lalaki' | 'mixed'
 
 export type SuguanEventType = 'pagsasanay' | 'pagtupad'
 
-export type SuguanType = 'regular' | 'special'
-
 export interface SuguanEvent {
   id: string
   type: SuguanEventType
   date: string
   endDate?: string
-}
-
-export interface SuguanFormationCell {
-  memberId: string
-  memberName: string
-  voicePosition: string
-  voiceName: string
-}
-
-export interface SuguanFormation {
-  rows: number
-  cols: number
-  cells: (SuguanFormationCell | null)[]
 }
 
 export type WorshipScheduleKey =
@@ -129,8 +114,6 @@ export interface Suguan {
   date: string
   time: string
   serviceTypeId: string
-  type: SuguanType
-  eventTitle?: string
   group: SuguanGroup
   docFormat?: SuguanDocFormat | null
   coverage?: SuguanCoverage | null
@@ -138,7 +121,6 @@ export interface Suguan {
   pagsasanayDate?: string
   pagtupadDate?: string
   schedules: SuguanScheduleSection[]
-  formation?: SuguanFormation | null
   voiceCapacities: Record<string, number>
   assignments: SuguanAssignment[]
   dutyRoles: SuguanDutyRole[]

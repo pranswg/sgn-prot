@@ -4,8 +4,6 @@ import {
   LogOut,
   Menu,
   Music4,
-  PanelLeft,
-  PanelLeftClose,
   Settings2,
 } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
@@ -128,9 +126,13 @@ function Breadcrumb() {
           {meta.title}
         </li>
       </ol>
-      <p className="hidden truncate text-[0.6875rem] text-muted-foreground md:block">
-        {meta.subtitle}
-      </p>
+      {/* Settings prints this exact sentence as its page-header subtitle, so
+          the breadcrumb copy is dropped there rather than showing it twice. */}
+      {page !== 'settings' && (
+        <p className="hidden truncate text-[0.6875rem] text-muted-foreground md:block">
+          {meta.subtitle}
+        </p>
+      )}
     </nav>
   )
 }
@@ -179,8 +181,6 @@ export function Layout() {
   const account = useAuthStore((s) =>
     s.accounts.find((a) => a.id === currentAccountId),
   )
-  const isNavigationOpen = useSidebarStore((s) => s.isNavigationOpen)
-  const toggleNavigation = useSidebarStore((s) => s.toggleNavigation)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
 
   return (
@@ -198,56 +198,46 @@ export function Layout() {
         sits in and force a spurious scrollbar on short pages.
       */}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        {/* Mobile app bar: hamburger, current page, quick actions */}
-        <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-brand-navy px-3 py-2.5 text-white md:hidden">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Open navigation"
-            className="text-white hover:bg-white/10 hover:text-white"
-            onClick={() => setMobileDrawerOpen(true)}
-          >
-            <Menu className="size-4" />
-          </Button>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Music4 className="size-4 shrink-0 text-brand-teal-bright" />
-            <div className="min-w-0 leading-tight">
-              <p className="truncate text-[0.8125rem] font-semibold tracking-tight">
-                {meta.title}
-              </p>
-              <p className="truncate text-[0.625rem] text-white/60">
-                {meta.group} · INC Choir
-              </p>
+        {/*
+          The Master List, Settings, and Suguan Detail render their own screen
+          header and stick to the top on their own, so the global bar is hidden
+          there rather than stacking two titles on one screen. The global bar
+          matches the Master List header's light theming (`bg-background`,
+          foreground text) so every mobile header is uniform.
+        */}
+        {page !== 'master-list' && page !== 'settings' && page !== 'suguan-detail' && (
+          <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background px-3 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Open navigation"
+              onClick={() => setMobileDrawerOpen(true)}
+            >
+              <Menu className="size-4" />
+            </Button>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Music4 className="size-4 shrink-0 text-brand-navy" />
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+                  {meta.title}
+                </p>
+                <p className="truncate text-[0.625rem] text-muted-foreground">
+                  {meta.group} · INC Choir
+                </p>
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Open settings"
+              onClick={() => navigate('settings')}
+            >
+              <Settings2 className="size-4" />
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Open settings"
-            className="text-white hover:bg-white/10 hover:text-white"
-            onClick={() => navigate('settings')}
-          >
-            <Settings2 className="size-4" />
-          </Button>
-        </div>
+        )}
 
         <header className="sticky top-0 z-20 hidden h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-sm md:flex md:px-6">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={isNavigationOpen ? 'Hide sidebar' : 'Show sidebar'}
-            onClick={toggleNavigation}
-          >
-            {isNavigationOpen ? (
-              <PanelLeftClose className="size-4 text-muted-foreground" />
-            ) : (
-              <PanelLeft className="size-4 text-muted-foreground" />
-            )}
-          </Button>
-          <Separator
-            orientation="vertical"
-            className="mr-1 h-4 data-[orientation=vertical]:h-4"
-          />
           <Breadcrumb />
           <div className="ml-auto flex items-center gap-3">
             <CurrentDateTime />

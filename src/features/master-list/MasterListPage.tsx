@@ -3,12 +3,11 @@ import { toast } from 'sonner'
 import {
   Download,
   FileUp,
-  LayoutGrid,
-  List,
   Plus,
   Search,
   SlidersHorizontal,
   ArrowDownAZ,
+  ChevronDown,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -24,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -42,8 +42,9 @@ import {
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useNavStore } from '@/store/navStore'
+import { useSidebarStore } from '@/store/sidebarStore'
 import type { ChoirPosition, Member } from '@/core/types/member'
-import { POSITION_LABELS } from '@/core/constants/choirPositions'
+import { CHOIR_POSITIONS, POSITION_LABELS } from '@/core/constants/choirPositions'
 import { exportCSV, exportExcel, membersToRows } from '@/lib/export'
 import {
   EMPTY_DIRECTORY_FILTERS,
@@ -52,11 +53,14 @@ import {
   computeDirectoryStats,
   countActiveDirectoryFilters,
   countMembersByPosition,
+  DEFAULT_MEMBER_PAGE_SIZE,
   filterMembers,
   formatMemberName,
   hasActiveDirectoryFilters,
+  paginate,
   toggleInList,
   type MemberDirectoryFilters,
+  type MemberPageSize,
   type MemberSort,
 } from '@/lib/memberDirectory'
 import { cn } from '@/lib/utils'
@@ -65,33 +69,75 @@ import { MemberFormDialog } from './MemberFormDialog'
 import { MemberDetailDialog } from './MemberDetailDialog'
 import { ImportRosterDialog } from './ImportRosterDialog'
 import { DirectorySummaryCards } from './DirectorySummaryCards'
-import { DirectoryFilterPanel } from './DirectoryFilterPanel'
 import {
   MemberDirectoryTable,
   MemberDirectoryEmptyState,
 } from './MemberDirectoryTable'
-import { MemberDirectoryGrid } from './MemberDirectoryGrid'
+import { PageSizeControl, SectionPaginator } from './SectionPaginator'
 import { MobileStatCards } from './MobileStatCards'
+import { MobileDirectoryHeader } from './MobileDirectoryHeader'
 import { MobileMemberCard } from './MobileMemberCard'
 import { MemberActionSheet } from './MemberActionSheet'
 import { MobileFilterSheet } from './MobileFilterSheet'
+import {
+  MOBILE_FILTER_LABEL,
+  MOBILE_FILTER_SECTIONS,
+  type MobileFilterSection,
+} from './mobileFilters'
 import { MemberProfileSheet } from './MemberProfileSheet'
 import { MobileMemberFormSheet } from './MobileMemberFormSheet'
-
-type ViewMode = 'list' | 'grid'
 
 const GENDER_LABEL: Record<string, string> = {
   female: "Women's Choir",
   male: "Men's Choir",
 }
 
+/** Mobile grouping control above the card list. */
+const GENDER_SEGMENTS: {
+  value: 'all' | 'male' | 'female'
+  label: string
+}[] = [
+  { value: 'all', label: 'All' },
+  { value: 'female', label: 'Women' },
+  { value: 'male', label: 'Men' },
+]
+
+/**
+ * What a filter chip shows once its selection is narrower than "all": the
+ * chosen label for the single-choice filters, a count for the multi-selects,
+ * and undefined when the filter is wide open. The undefined case is also what
+ * decides the chip's neutral versus active styling.
+ */
+function filterChipValue(
+  section: MobileFilterSection,
+  filters: MemberDirectoryFilters,
+): string | undefined {
+  switch (section) {
+    case 'status':
+      if (filters.status === 'all') return undefined
+      return filters.status === 'active' ? 'Active' : 'Inactive'
+    case 'voices':
+      return filters.voices.length > 0
+        ? `${filters.voices.length} selected`
+        : undefined
+    case 'roles': {
+      const count =
+        filters.positions.length + (filters.quick === 'regular' ? 1 : 0)
+      return count > 0 ? `${count} selected` : undefined
+    }
+  }
+}
+
 export function MasterListPage() {
   const members = useMemberStore((s) => s.members)
   const trainees = useMemberStore((s) => s.trainees)
   const removeMember = useMemberStore((s) => s.removeMember)
+  const deactivateMember = useMemberStore((s) => s.deactivateMember)
+  const reactivateMember = useMemberStore((s) => s.reactivateMember)
   const voices = useSettingsStore((s) => s.voices)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
+  const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
   const isMobile = useIsMobile()
 
   const voiceMap = useMemo(() => allVoices(), [allVoices])
@@ -99,8 +145,12 @@ export function MasterListPage() {
   const [filters, setFilters] = useState<MemberDirectoryFilters>(
     EMPTY_DIRECTORY_FILTERS,
   )
-  const [view, setView] = useState<ViewMode>('list')
   const [sort, setSort] = useState<MemberSort>('last-name')
+  const [pageSize, setPageSize] =
+    useState<MemberPageSize>(DEFAULT_MEMBER_PAGE_SIZE)
+  // The mobile card list is a single flat list rather than two choir sections,
+  // so it keeps one page number of its own instead of borrowing the desktop's.
+  const [mobilePage, setMobilePage] = useState(1)
 
   const [formOpen, setFormOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -111,7 +161,9 @@ export function MasterListPage() {
   )
   const [actionTarget, setActionTarget] = useState<Member | null>(null)
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null)
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  // null closes the sheet; otherwise it names the one filter being edited.
+  const [filterSheetSection, setFilterSheetSection] =
+    useState<MobileFilterSection | null>(null)
 
   const references = useMemo(() => buildMemberReferences(members), [members])
   const stats = useMemo(
@@ -122,15 +174,37 @@ export function MasterListPage() {
     () => countMembersByPosition(members),
     [members],
   )
+  const voiceCounts = useMemo(
+    () => new Map(stats.voiceCounts.map((v) => [v.id, v.count] as const)),
+    [stats],
+  )
 
   const filteredMembers = useMemo(
     () => filterMembers(members, filters, voices, references, sort),
     [members, filters, voices, references, sort],
   )
 
+  // The profile sheet stays open across a deactivate, so it reads the member
+  // back out of the store instead of holding the snapshot it was opened with.
+  const profileMember = profileTarget
+    ? (members.find((m) => m.id === profileTarget.id) ?? null)
+    : null
+
+  // Match count for the filter sheet's Apply button, evaluated against the
+  // in-progress edits rather than the filters that are already applied.
+  const previewCount = (candidate: MemberDirectoryFilters) =>
+    filterMembers(members, candidate, voices, references, sort).length
+
   const filtersActive = hasActiveDirectoryFilters(filters)
   const activeFilterCount = countActiveDirectoryFilters(filters)
+  // The search field has its own clear button, so the chip row only offers a
+  // bulk clear for the selections that do not.
+  const selectableFilterCount =
+    activeFilterCount - (filters.query.trim() !== '' ? 1 : 0)
   const filteredCount = filteredMembers.length
+  // Clamped on read, so narrowing the filters mid-page cannot leave the mobile
+  // list stranded on an empty page 4.
+  const mobilePageResult = paginate(filteredMembers, mobilePage, pageSize)
   const totalCount = members.length
 
   const setFilter = <K extends keyof MemberDirectoryFilters>(
@@ -201,18 +275,14 @@ export function MasterListPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Mobile home header */}
-      <div className="flex flex-col md:hidden">
-        <p className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-brand-teal">
-          Choir Registry
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-          Master List
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your choir members, trainees, and choir positions.
-        </p>
-      </div>
+      <MobileDirectoryHeader
+        title="Master List"
+        description="Manage choir members"
+        onOpenMenu={() => setMobileDrawerOpen(true)}
+        onAddMember={openAddDialog}
+        onImportRoster={() => setImportOpen(true)}
+        onExport={handleExport}
+      />
 
       <PageHeader
         eyebrow="Choir Registry"
@@ -255,57 +325,23 @@ export function MasterListPage() {
       <MobileStatCards stats={stats} />
       <DirectorySummaryCards stats={stats} />
 
-      {/* Mobile primary actions */}
-      <div className="flex flex-col gap-2 md:hidden">
-        <Button
-          size="lg"
-          className="h-12 w-full text-[0.9375rem]"
-          onClick={openAddDialog}
-        >
-          <Plus className="size-5" />
-          Add Member
-        </Button>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            size="lg"
-            className="h-12"
-            onClick={() => setImportOpen(true)}
-          >
-            <FileUp className="size-4" />
-            Import
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="lg" className="h-12 w-full">
-                <Download className="size-4" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>
-                Export current view ({filteredCount})
-              </DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => handleExport('csv')}>
-                CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('excel')}>
-                Excel
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Search & filter toolbar */}
-      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-3">
+      {/* Search & filter toolbar. Every directory filter lives here (choir
+          segment, membership, status, voices, positions, sort). Sticky under
+          the screen header so the filters stay with you while the list
+          scrolls, taking over from the removed sticky side panel. */}
+      <div
+        className={cn(
+          'sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5',
+          'md:top-14 md:mx-0 md:gap-3 md:rounded-xl md:border md:px-3 md:py-3 md:bg-card',
+        )}
+      >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={filters.query}
               onChange={(e) => setFilter('query', e.target.value)}
-              placeholder="Search by name, ID, or position"
+              placeholder="Search member name, ID, or position..."
               aria-label="Search members"
               className="h-12 rounded-lg bg-background pl-9 pr-9 md:h-10"
             />
@@ -321,114 +357,250 @@ export function MasterListPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-12 flex-1 md:hidden"
-              onClick={() => setFilterSheetOpen(true)}
+          <div className="hidden flex-wrap items-center gap-2 md:flex">
+            {/* Same choir segment the mobile list uses, promoted to desktop. */}
+            <div
+              role="group"
+              aria-label="Filter by choir"
+              className="grid grid-cols-3 gap-0.5 rounded-lg border border-input bg-background p-0.5"
             >
-              <SlidersHorizontal className="size-4" />
-              Filters{activeFilterCount > 0 && ` (${activeFilterCount})`}
-            </Button>
+              {GENDER_SEGMENTS.map((segment) => (
+                <button
+                  key={segment.value}
+                  type="button"
+                  aria-pressed={filters.gender === segment.value}
+                  onClick={() => setFilter('gender', segment.value)}
+                  className={cn(
+                    'h-8 rounded-md px-2.5 text-xs font-medium transition-colors',
+                    filters.gender === segment.value
+                      ? 'bg-brand-navy text-white'
+                      : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {segment.label}
+                </button>
+              ))}
+            </div>
 
-            {/* Mobile sort */}
             <Select
-              value={sort}
-              onValueChange={(v) => setSort(v as MemberSort)}
+              value={filters.status}
+              onValueChange={(v) =>
+                setFilter('status', v as MemberDirectoryFilters['status'])
+              }
             >
               <SelectTrigger
+                aria-label="Filter by status"
+                className="h-9 w-[9.5rem] bg-background text-[0.8125rem]"
+              >
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'h-9 gap-1.5 px-3 text-[0.8125rem] font-normal',
+                    filters.voices.length > 0 &&
+                      'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
+                  )}
+                >
+                  {filters.voices.length === 0
+                    ? 'Voice Positions'
+                    : filters.voices.length === 1
+                      ? (voices.find((v) => v.id === filters.voices[0])
+                          ?.name ?? 'Voice Positions')
+                      : `${filters.voices.length} Voices`}
+                  <ChevronDown className="size-3.5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  Voice Positions
+                </DropdownMenuLabel>
+                {voices.map((voice) => (
+                  <DropdownMenuCheckboxItem
+                    key={voice.id}
+                    checked={filters.voices.includes(voice.id)}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={() =>
+                      setFilter('voices', toggleInList(filters.voices, voice.id))
+                    }
+                  >
+                    <span className="flex-1">{voice.name}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {voiceCounts.get(voice.id) ?? 0}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'h-9 gap-1.5 px-3 text-[0.8125rem] font-normal',
+                    (filters.positions.length > 0 ||
+                      filters.quick === 'regular') &&
+                      'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
+                  )}
+                >
+                  {filters.positions.length === 0 &&
+                  filters.quick !== 'regular'
+                    ? 'Choir Positions'
+                    : `${
+                        filters.positions.length +
+                        (filters.quick === 'regular' ? 1 : 0)
+                      } Selected`}
+                  <ChevronDown className="size-3.5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  Choir Positions
+                </DropdownMenuLabel>
+                <DropdownMenuCheckboxItem
+                  checked={filters.quick === 'regular'}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() =>
+                    setFilter(
+                      'quick',
+                      filters.quick === 'regular' ? 'all' : 'regular',
+                    )
+                  }
+                >
+                  <span className="flex-1">Regular</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {stats.regular}
+                  </span>
+                </DropdownMenuCheckboxItem>
+                {CHOIR_POSITIONS.map((position) => (
+                  <DropdownMenuCheckboxItem
+                    key={position.id}
+                    checked={filters.positions.includes(position.id)}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={() =>
+                      setFilter(
+                        'positions',
+                        toggleInList(filters.positions, position.id),
+                      )
+                    }
+                  >
+                    <span className="flex-1">
+                      {POSITION_LABELS[position.id]}
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {positionCounts.get(position.id) ?? 0}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Select value={sort} onValueChange={(v) => setSort(v as MemberSort)}>
+              <SelectTrigger
                 aria-label="Sort members"
-                className="h-12 flex-1 rounded-lg bg-background text-[0.8125rem] md:hidden"
+                className="h-9 w-[11.5rem] bg-background text-[0.8125rem]"
               >
                 <ArrowDownAZ className="size-4 text-muted-foreground" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(MEMBER_SORT_LABEL) as MemberSort[]).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {MEMBER_SORT_LABEL[key]}
-                  </SelectItem>
-                ))}
+                {(Object.keys(MEMBER_SORT_LABEL) as MemberSort[]).map(
+                  (key) => (
+                    <SelectItem key={key} value={key}>
+                      {MEMBER_SORT_LABEL[key]}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
 
-            <div className="hidden flex-wrap items-center gap-2 md:flex">
-              <Select
-                value={filters.gender}
-                onValueChange={(v) =>
-                  setFilter('gender', v as MemberDirectoryFilters['gender'])
-                }
-              >
-                <SelectTrigger
-                  aria-label="Filter by gender"
-                  className="h-9 w-[10.5rem] bg-background text-[0.8125rem]"
-                >
-                  <SelectValue placeholder="Gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Genders</SelectItem>
-                  <SelectItem value="female">{GENDER_LABEL.female}</SelectItem>
-                  <SelectItem value="male">{GENDER_LABEL.male}</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={filters.status}
-                onValueChange={(v) =>
-                  setFilter('status', v as MemberDirectoryFilters['status'])
-                }
-              >
-                <SelectTrigger
-                  aria-label="Filter by status"
-                  className="h-9 w-[9.5rem] bg-background text-[0.8125rem]"
-                >
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={sort}
-                onValueChange={(v) => setSort(v as MemberSort)}
-              >
-                <SelectTrigger
-                  aria-label="Sort members"
-                  className="h-9 w-[11.5rem] bg-background text-[0.8125rem]"
-                >
-                  <ArrowDownAZ className="size-4 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(MEMBER_SORT_LABEL) as MemberSort[]).map(
-                    (key) => (
-                      <SelectItem key={key} value={key}>
-                        {MEMBER_SORT_LABEL[key]}
-                      </SelectItem>
-                    ),
-                  )}
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="ghost"
-                disabled={!filtersActive}
-                onClick={clearFilters}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <SlidersHorizontal className="size-4" />
-                Reset Filters
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              disabled={!filtersActive}
+              onClick={clearFilters}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <SlidersHorizontal className="size-4" />
+              Reset Filters
+            </Button>
           </div>
         </div>
 
+        {/* Mobile filter chips: one focused bottom sheet each, so the toolbar
+            never needs a permanently visible column of controls. The three
+            chips share the row equally; Clear only ever takes its own edge. */}
+        <div className="flex items-center gap-2 md:hidden">
+          <div className="grid flex-1 grid-cols-3 gap-2">
+            {MOBILE_FILTER_SECTIONS.map((section) => {
+              const value = filterChipValue(section, filters)
+              return (
+                <button
+                  key={section}
+                  type="button"
+                  onClick={() => setFilterSheetSection(section)}
+                  className={cn(
+                    'inline-flex h-9 w-full min-w-0 items-center justify-center gap-1.5 truncate rounded-lg border px-2 text-xs font-medium transition-colors',
+                    value
+                      ? 'border-brand-teal/40 bg-brand-teal-soft text-brand-teal'
+                      : 'border-border/70 bg-card text-muted-foreground active:bg-muted',
+                  )}
+                >
+                  <span className="truncate">
+                    {value ?? MOBILE_FILTER_LABEL[section]}
+                  </span>
+                  <ChevronDown className="size-3.5 shrink-0" />
+                </button>
+              )
+            })}
+          </div>
+          {selectableFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-red-600/25 bg-red-500/10 px-3 text-xs font-medium text-red-700 dark:text-red-300"
+            >
+              <X className="size-3.5" />
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Choir segment under the other mobile filters, inside the toolbar. */}
+        <div
+          role="group"
+          aria-label="Filter by choir"
+          className="grid grid-cols-3 gap-0.5 rounded-lg border border-border bg-card p-0.5 md:hidden"
+        >
+          {GENDER_SEGMENTS.map((segment) => (
+            <button
+              key={segment.value}
+              type="button"
+              aria-pressed={filters.gender === segment.value}
+              onClick={() => setFilter('gender', segment.value)}
+              className={cn(
+                'h-8 rounded-md text-xs font-medium transition-colors',
+                filters.gender === segment.value
+                  ? 'bg-brand-navy text-white'
+                  : 'text-muted-foreground active:bg-muted',
+              )}
+            >
+              {segment.label}
+            </button>
+          ))}
+        </div>
+
         {filtersActive && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          <div className="hidden flex-wrap items-center gap-2 border-t border-border/60 pt-3 md:flex">
             <span className="text-[0.6875rem] font-medium text-muted-foreground">
               {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''}{' '}
               active
@@ -453,7 +625,7 @@ export function MasterListPage() {
             ))}
             {filters.quick !== 'all' && (
               <FilterChip
-                label={filters.quick}
+                label="Regular"
                 onClear={() => setFilter('quick', 'all')}
               />
             )}
@@ -488,66 +660,34 @@ export function MasterListPage() {
               of {totalCount} members
             </p>
           </div>
-
-          <div
-            role="group"
-            aria-label="Directory view"
-            className="flex items-center gap-0.5 self-start rounded-lg border border-border bg-card p-0.5"
-          >
-            {(
-              [
-                { value: 'list' as const, label: 'List View', icon: List },
-                {
-                  value: 'grid' as const,
-                  label: 'Grid View',
-                  icon: LayoutGrid,
-                },
-              ] satisfies {
-                value: ViewMode
-                label: string
-                icon: typeof List
-              }[]
-            ).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={view === option.value}
-                aria-label={option.label}
-                title={option.label}
-                onClick={() => setView(option.value)}
-                className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
-                  view === option.value
-                    ? 'bg-brand-navy-soft text-brand-navy'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                <option.icon className="size-3.5" />
-                {option.label}
-              </button>
-            ))}
-          </div>
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[14.5rem_minmax(0,1fr)]">
-          <DirectoryFilterPanel
-            quick={filters.quick}
-            onQuickChange={(value) => setFilter('quick', value)}
-            voices={voices}
-            selectedVoices={filters.voices}
-            onVoiceToggle={(id) =>
-              setFilter('voices', toggleInList(filters.voices, id))
-            }
-            selectedPositions={filters.positions}
-            onPositionToggle={(id) =>
-              setFilter('positions', toggleInList(filters.positions, id))
-            }
-            stats={stats}
-            positionCounts={positionCounts}
-            className="hidden lg:flex"
-          />
+        {/* Mobile sort, stacked under the heading. The choir segment lives in
+            the toolbar's scrolling chip row instead. */}
+        <div className="flex flex-col gap-2 md:hidden">
+          <Select
+            value={sort}
+            onValueChange={(v) => setSort(v as MemberSort)}
+          >
+            <SelectTrigger
+              aria-label="Sort members"
+              className="h-10 w-full bg-background text-[0.8125rem]"
+            >
+              <ArrowDownAZ className="size-4 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(MEMBER_SORT_LABEL) as MemberSort[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {MEMBER_SORT_LABEL[key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* Mobile card list / grid */}
+        <div className="flex flex-col">
+          {/* Mobile card list */}
           <div className="md:hidden">
             {filteredMembers.length === 0 ? (
               <MemberDirectoryEmptyState
@@ -555,56 +695,67 @@ export function MasterListPage() {
                 onImport={() => setImportOpen(true)}
                 onClearFilters={clearFilters}
               />
-            ) : view === 'list' ? (
-              <ul className="flex flex-col gap-2">
-                {filteredMembers.map((member, index) => (
-                  <MobileMemberCard
-                    key={member.id}
-                    member={member}
-                    reference={references.get(member.id)}
-                    number={index + 1}
-                    voices={voiceMap}
-                    sort={sort}
-                    onOpenMenu={setActionTarget}
-                  />
-                ))}
-              </ul>
             ) : (
-              <ul className="grid grid-cols-2 gap-2">
-                {filteredMembers.map((member, index) => (
-                  <MobileMemberCard
-                    key={member.id}
-                    member={member}
-                    reference={references.get(member.id)}
-                    number={index + 1}
-                    voices={voiceMap}
-                    sort={sort}
-                    onOpenMenu={setActionTarget}
-                  />
-                ))}
-              </ul>
+              <div className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2">
+                  {mobilePageResult.items.map((member) => (
+                    <MobileMemberCard
+                      key={member.id}
+                      member={member}
+                      reference={references.get(member.id)}
+                      voices={voiceMap}
+                      sort={sort}
+                      onOpen={setProfileTarget}
+                      onOpenMenu={setActionTarget}
+                    />
+                  ))}
+                </ul>
+                {mobilePageResult.pageCount > 1 ? (
+                  <>
+                    <div className="flex items-center justify-end">
+                      <PageSizeControl
+                        value={pageSize}
+                        onChange={(size) => {
+                          setMobilePage(1)
+                          setPageSize(size)
+                        }}
+                      />
+                    </div>
+                    <div className="rounded-lg border border-border/70 bg-card">
+                      <SectionPaginator
+                        label="members"
+                        page={mobilePageResult}
+                        onPageChange={setMobilePage}
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </div>
             )}
           </div>
 
           <div className="hidden min-w-0 overflow-hidden rounded-xl border border-border/70 bg-card md:block">
-            {view === 'list' ? (
-              <MemberDirectoryTable {...directoryProps} />
-            ) : (
-              <MemberDirectoryGrid {...directoryProps} />
-            )}
+            <MemberDirectoryTable
+              {...directoryProps}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </div>
         </div>
       </section>
 
       {/* Mobile filter sheet */}
       <MobileFilterSheet
-        open={filterSheetOpen}
-        onOpenChange={setFilterSheetOpen}
+        open={filterSheetSection !== null}
+        section={filterSheetSection ?? 'voices'}
+        onOpenChange={(open) => {
+          if (!open) setFilterSheetSection(null)
+        }}
         filters={filters}
         onApply={setFilters}
         voices={voices}
         stats={stats}
-        matchCount={filteredCount}
+        previewCount={previewCount}
       />
 
       {/* Mobile three-dot member actions */}
@@ -652,23 +803,26 @@ export function MasterListPage() {
 
       {/* Mobile profile screen */}
       <MemberProfileSheet
-        member={isMobile ? profileTarget : null}
+        member={isMobile ? profileMember : null}
         reference={
-          isMobile && profileTarget
-            ? references.get(profileTarget.id)
+          isMobile && profileMember
+            ? references.get(profileMember.id)
             : undefined
         }
         sort={sort}
         onOpenChange={(open) => {
           if (!open) setProfileTarget(null)
         }}
-        onEdit={(member) => {
-          setProfileTarget(null)
-          openEditDialog(member)
-        }}
-        onAssign={(member) => {
-          setProfileTarget(null)
-          handleAssign(member)
+        onEdit={openEditDialog}
+        onToggleStatus={(member) => {
+          const name = formatMemberName(member, sort)
+          if (member.isActive) {
+            deactivateMember(member.id)
+            toast.success(`${name} deactivated.`)
+          } else {
+            reactivateMember(member.id)
+            toast.success(`${name} reactivated.`)
+          }
         }}
       />
 

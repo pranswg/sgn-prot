@@ -129,9 +129,7 @@ export function buildSections(
   return [
     {
       sectionId: 'single',
-      label:
-        suguan.eventTitle?.trim() ||
-        (suguan.type === 'special' ? 'SPECIAL OCCASION' : groupLabel(suguan.group)),
+      label: groupLabel(suguan.group),
       rows: mapRows(suguan.assignments),
     },
   ]
@@ -481,9 +479,7 @@ export async function exportSuguanExcel(
   const ExcelJS = (await import('exceljs')).default
   const workbook = new ExcelJS.Workbook()
   const period =
-    suguan.type === 'regular' && suguan.coverage?.template === 'midweek-2w'
-      ? 'MID WEEK'
-      : 'WEEKEND'
+    suguan.coverage?.template === 'midweek-2w' ? 'MID WEEK' : 'WEEKEND'
   const sheetName = `${groupLabel(suguan.group).replace(/[()]/g, '')} - ${period}`
   const sheet = workbook.addWorksheet(sheetName ?? 'SUGUAN')
 

@@ -4,7 +4,9 @@ import {
   Music2,
   Pencil,
   ShieldCheck,
-  Users,
+  User,
+  UserCheck,
+  UserX,
 } from 'lucide-react'
 import {
   Sheet,
@@ -14,17 +16,15 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   GenderBadge,
   MemberStatusBadge,
   MembershipBadge,
+  PositionBadge,
   VoiceBadge,
 } from '@/components/StatusBadges'
 import { MemberInitialsAvatar } from './MemberInitialsAvatar'
-import { MemberPositionsCell } from './MemberPositionsCell'
 import { getVoiceName } from '@/core/constants/voicePositions'
-import { positionSummary } from '@/core/constants/choirPositions'
 import { formatDate } from '@/lib/format'
 import type { Member } from '@/core/types/member'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
@@ -37,17 +37,22 @@ interface MemberProfileSheetProps {
   sort?: MemberSort
   onOpenChange: (open: boolean) => void
   onEdit: (member: Member) => void
-  onAssign: (member: Member) => void
+  /** Deactivate an active member, or reactivate an inactive one. */
+  onToggleStatus: (member: Member) => void
 }
 
-/** Full-height mobile profile screen with Overview / Positions / History tabs. */
+/**
+ * Full-height mobile profile. The info is stacked as plain cards rather than
+ * tabs so the whole record reads as one scroll: personal details, voice
+ * assignment, privileges, then the real Suguan history.
+ */
 export function MemberProfileSheet({
   member,
   reference,
   sort = 'last-name',
   onOpenChange,
   onEdit,
-  onAssign,
+  onToggleStatus,
 }: MemberProfileSheetProps) {
   const allVoices = useSettingsStore((s) => s.allVoices)
   const suguanList = useSuguanStore((s) => s.suguan)
@@ -109,69 +114,53 @@ export function MemberProfileSheet({
             <MemberStatusBadge active={member.isActive} />
           </div>
 
-          <Tabs defaultValue="overview">
-            <TabsList className="w-full">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="positions">Positions</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="overview" className="mt-3">
-              <dl className="grid grid-cols-2 gap-2">
-                <InfoCard
-                  icon={Users}
-                  label="Gender"
-                  value={<GenderBadge gender={member.gender} />}
-                />
-                <InfoCard
-                  icon={Music2}
-                  label="Voice"
-                  value={
-                    <VoiceBadge
-                      name={getVoiceName(member.voicePosition, voiceMap)}
-                    />
-                  }
-                />
-                <InfoCard
-                  icon={ShieldCheck}
-                  label="Membership"
-                  value={<MembershipBadge type={member.membershipType} />}
-                />
-                <InfoCard
-                  icon={CalendarDays}
-                  label="Date Added"
-                  value={
-                    <span className="text-[0.8125rem] font-medium">
-                      {formatDate(member.dateAdded)}
-                    </span>
-                  }
-                />
-              </dl>
+          <div className="flex flex-col gap-3">
+            <ProfileCard title="Personal Information" icon={User}>
+              <InfoRow label="Gender">
+                <GenderBadge gender={member.gender} />
+              </InfoRow>
+              <InfoRow label="Membership">
+                <MembershipBadge type={member.membershipType} />
+              </InfoRow>
+              <InfoRow label="Date Added">
+                <span className="text-sm font-medium">
+                  {formatDate(member.dateAdded)}
+                </span>
+              </InfoRow>
               {member.notes && (
-                <p className="mt-3 rounded-lg border border-border/70 bg-muted/40 p-3 text-sm text-muted-foreground">
-                  {member.notes}
-                </p>
+                <InfoRow label="Notes">
+                  <span className="max-w-[14rem] text-right text-xs font-normal text-muted-foreground">
+                    {member.notes}
+                  </span>
+                </InfoRow>
               )}
-            </TabsContent>
+            </ProfileCard>
 
-            <TabsContent value="positions" className="mt-3">
+            <ProfileCard title="Voice Assignment" icon={Music2}>
+              <InfoRow label="Voice Position">
+                <VoiceBadge
+                  name={getVoiceName(member.voicePosition, voiceMap)}
+                />
+              </InfoRow>
+            </ProfileCard>
+
+            <ProfileCard title="Choir Privileges" icon={ShieldCheck}>
               {member.positions.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                  No choir positions assigned.
+                <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No choir privileges assigned.
                 </p>
               ) : (
-                <>
-                  <MemberPositionsCell positions={member.positions} max={99} />
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {positionSummary(member.positions)}
-                  </p>
-                </>
+                <div className="flex flex-wrap gap-1.5">
+                  {member.positions.map((position) => (
+                    <PositionBadge key={position} position={position} />
+                  ))}
+                </div>
               )}
-            </TabsContent>
+            </ProfileCard>
 
-            <TabsContent value="history" className="mt-3">
+            <ProfileCard title="Assignment History" icon={CalendarDays}>
               {history.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                   No Suguan assignments yet.
                 </p>
               ) : (
@@ -179,11 +168,11 @@ export function MemberProfileSheet({
                   {history.map((s) => (
                     <li
                       key={s.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background px-3 py-2.5"
                     >
                       <div className="min-w-0 leading-tight">
                         <p className="truncate text-[0.8125rem] font-medium text-foreground">
-                          {s.eventTitle || s.serviceTypeId || 'Suguan'}
+                          {s.serviceTypeId || 'Suguan'}
                         </p>
                         <p className="mt-0.5 text-[0.6875rem] text-muted-foreground">
                           {formatDate(s.date)}
@@ -200,8 +189,8 @@ export function MemberProfileSheet({
                   ))}
                 </ul>
               )}
-            </TabsContent>
-          </Tabs>
+            </ProfileCard>
+          </div>
         </div>
 
         <div className="flex shrink-0 gap-2 border-t border-border/70 bg-background px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
@@ -210,11 +199,20 @@ export function MemberProfileSheet({
             className="flex-1"
             onClick={() => {
               onOpenChange(false)
-              onAssign(member)
+              onToggleStatus(member)
             }}
           >
-            <CalendarDays className="size-4" />
-            Assign
+            {member.isActive ? (
+              <>
+                <UserX className="size-4" />
+                Deactivate
+              </>
+            ) : (
+              <>
+                <UserCheck className="size-4" />
+                Reactivate
+              </>
+            )}
           </Button>
           <Button
             className="flex-1"
@@ -232,22 +230,37 @@ export function MemberProfileSheet({
   )
 }
 
-function InfoCard({
+function ProfileCard({
+  title,
   icon: Icon,
-  label,
-  value,
+  children,
 }: {
-  icon: typeof Users
-  label: string
-  value: React.ReactNode
+  title: string
+  icon: typeof User
+  children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-border/70 bg-card p-3">
-      <dt className="flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-        <Icon className="size-3" />
-        {label}
-      </dt>
-      <dd>{value}</dd>
+    <section className="rounded-xl border border-border/60 bg-card p-3.5 shadow-sm">
+      <h3 className="flex items-center gap-2 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <Icon className="size-3.5" />
+        {title}
+      </h3>
+      <div className="mt-3 flex flex-col gap-2.5">{children}</div>
+    </section>
+  )
+}
+
+function InfoRow({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
+      <span className="min-w-0 text-right leading-tight">{children}</span>
     </div>
   )
 }

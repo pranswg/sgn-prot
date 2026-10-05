@@ -20,7 +20,10 @@ import {
 } from '@/components/ui/select'
 import type { Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
-import { voicePositionsForGender } from '@/core/constants/voicePositions'
+import {
+  voicePositionsForGender,
+  UNASSIGNED_VOICE_ID,
+} from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { todayPHT } from '@/lib/phDate'
 
@@ -82,7 +85,9 @@ export function TraineeFormDialog({
       ...f,
       gender,
       voicePosition:
-        voices.find((v) => v.id === f.voicePosition)?.id ?? fallback,
+        f.voicePosition === UNASSIGNED_VOICE_ID
+          ? UNASSIGNED_VOICE_ID
+          : (voices.find((v) => v.id === f.voicePosition)?.id ?? fallback),
     }))
   }
 
@@ -166,6 +171,9 @@ export function TraineeFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={UNASSIGNED_VOICE_ID}>
+                    No voice assigned yet
+                  </SelectItem>
                   {voicePositionsForGender(form.gender, allVoices()).map((v) => (
                     <SelectItem key={v.id} value={v.id}>
                       {v.name}

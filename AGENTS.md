@@ -31,8 +31,9 @@ extensionless relative imports. Two consequences:
 Test files that exist, all pure-logic: `suguanDates.test.ts`,
 `suguanExport.test.ts`, `spreadsheetImport.test.ts`, `rosterImport.test.ts`,
 `memberDirectory.test.ts`, `format.test.ts`, `credentials.test.ts`,
-`sidebarNav.test.ts`. When you add a pure function worth protecting, add cases
-next to it rather than leaving behaviour implicit.
+`sidebarNav.test.ts`, `reorderList.test.ts`, `navStore.test.ts`, and
+`features/settings/referenceList.test.ts`. When you add a pure function worth
+protecting, add cases next to it rather than leaving behaviour implicit.
 
 `tsconfig.app.json` enables `noUnusedLocals` and `noUnusedParameters`, so a
 typecheck failure about an unused import is usually a real leftover from an edit
@@ -128,7 +129,6 @@ migration function. **UI-only changes must not change a persisted shape.**
 | `memberStore.ts` | `choir-members` | 3 |
 | `suguanStore.ts` | `choir-suguan` | 6 |
 | `settingsStore.ts` | `choir-settings` | 3 |
-| `formationStore.ts` | `choir-formations` | 1 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
 | `authStore.ts` | `choir-auth` | 1 |
 | `sidebarStore.ts` | `sidebarExpanded` | 1 |
@@ -139,7 +139,27 @@ roles, and voice positions. Each stored item carries `custom: boolean`; entries
 without it came from constants and are labelled `(standard)` in the UI. If you
 add a field, bump the store `version` and extend its `migrate`.
 
-`navStore` is UI state only and is safe to change freely.
+`navStore` is UI state only and is not persisted, but it is **not** free to
+change. There is no router, so `page` is the entire navigation model, and the
+"start a new Suguan" dialog depends on it:
+
+- Entering the builder swaps `page` immediately, which mounts the builder
+  *behind* the dialog. `builderReturnPage` records the page the user was on so
+  dismissing the dialog can send them back. Without it, clicking the backdrop
+  leaves them on an empty step 0 with no way home except the close button.
+- **Every** entry point must arm that origin, not just `startNewSuguan`. The
+  sidebar, mobile bottom nav, and breadcrumb all go through `navigate`, so
+  `navigate` records it too. Adding a fourth entry point means updating both.
+- Arm it only when `page !== 'suguan-builder'` already, or "start over" from
+  inside the builder would record a self-return.
+- `dismissNewSuguan` and `onStartNew`/`onCopy` must both clear it. Left armed, it
+  fires later and yanks the user away from a builder they are working in.
+- `editSuguanInBuilder` deliberately leaves it `null`: editing a saved Suguan
+  opens no dialog, so there is nothing to dismiss.
+
+`StartModeDialog` receives the whole `suguan` list just to populate its copy
+list, and it is not keyed by page, so `SuguanBuilderPage` resets `startOpen`
+from `existing` rather than remembering that the user already chose.
 
 Most persisted stores implement `importData()` so Settings' backup/restore can
 round-trip them. **`authStore` deliberately does not** — accounts are excluded
@@ -340,7 +360,10 @@ export. When you change one side, change the other:
 - Match the surrounding file's style. The codebase uses no semicolons, single
   quotes, and two-space indent.
 - Prefer a data-driven render over a hardcoded block when a list already exists,
-  which is why `ListEditor.tsx` is generic over its field definitions.
+  which is why `SettingsList.tsx` takes a `ReferenceField[]` and renders all
+  three reference lists from one component (it replaced `ListEditor.tsx`).
+  A list also carries its own validation: `referenceProblem` in
+  `settingsList.ts` decides whether a save is legal, on both breakpoints.
 - UI primitives are shadcn-style components in `src/components/ui/`. Add to
   them rather than hand-rolling a new primitive, and reuse
   `Popover` + `Command` for anything searchable. `tw-animate-css` supplies the

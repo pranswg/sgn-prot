@@ -16,12 +16,17 @@ export function buildVoiceMap(voices: VoicePosition[]): Record<string, VoicePosi
   return Object.fromEntries(voices.map((v) => [v.id, v]))
 }
 
+/** Sentinel voice id for a trainee with no target voice yet. */
+export const UNASSIGNED_VOICE_ID = 'unassigned'
+export const UNASSIGNED_VOICE_LABEL = 'No voice assigned yet'
+
 export function getVoicePosition(id: string, voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS): VoicePosition {
   const map = buildVoiceMap(voices)
   return map[id] ?? voices[0] ?? DEFAULT_VOICE_POSITIONS[0]
 }
 
 export function getVoiceName(id: string, voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS): string {
+  if (id === UNASSIGNED_VOICE_ID) return UNASSIGNED_VOICE_LABEL
   const map = buildVoiceMap(voices)
   return map[id]?.name ?? id
 }

@@ -5,6 +5,7 @@ import type { ServiceType, VoicePosition, DutyRole } from '@/core/types/suguan'
 import { DEFAULT_SERVICE_TYPES } from '@/core/constants/serviceTypes'
 import { DEFAULT_DUTY_ROLES } from '@/core/constants/dutyRoles'
 import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
+import { reorderList } from '@/lib/reorderList'
 
 export type StoredDutyRole = DutyRole & { custom: boolean }
 export type StoredServiceType = ServiceType & { custom: boolean }
@@ -26,12 +27,20 @@ interface SettingsState {
   addServiceType: (name: string) => void
   updateServiceType: (id: string, patch: { name: string }) => void
   removeServiceType: (id: string) => void
+  moveServiceType: (id: string, toIndex: number) => void
   addDutyRole: (name: string, abbreviation: string) => void
   updateDutyRole: (id: string, patch: { name: string; abbreviation: string }) => void
   removeDutyRole: (id: string) => void
+  moveDutyRole: (id: string, toIndex: number) => void
   addVoice: (name: string, gender: 'male' | 'female') => void
   updateVoice: (id: string, patch: { name: string; gender: 'male' | 'female' }) => void
   removeVoice: (id: string) => void
+  /**
+   * Array index is the order of every list here, and the order is not cosmetic:
+   * the voice list decides how the Master List sorts members, and the service
+   * type list decides the order of the picker when a Suguan is built.
+   */
+  moveVoice: (id: string, toIndex: number) => void
   allServiceTypes: () => StoredServiceType[]
   allDutyRoles: () => StoredDutyRole[]
   allVoices: () => StoredVoice[]
@@ -73,6 +82,12 @@ export const useSettingsStore = create<SettingsState>()(
         }))
       },
 
+      moveServiceType: (id, toIndex) => {
+        set((s) => ({
+          serviceTypes: reorderList(s.serviceTypes, id, toIndex),
+        }))
+      },
+
       addDutyRole: (name, abbreviation) => {
         set((s) => ({
           dutyRoles: [
@@ -93,6 +108,12 @@ export const useSettingsStore = create<SettingsState>()(
       removeDutyRole: (id) => {
         set((s) => ({
           dutyRoles: s.dutyRoles.filter((r) => r.id !== id),
+        }))
+      },
+
+      moveDutyRole: (id, toIndex) => {
+        set((s) => ({
+          dutyRoles: reorderList(s.dutyRoles, id, toIndex),
         }))
       },
 
@@ -129,6 +150,10 @@ export const useSettingsStore = create<SettingsState>()(
         set((s) => ({
           voices: s.voices.filter((v) => v.id !== id),
         }))
+      },
+
+      moveVoice: (id, toIndex) => {
+        set((s) => ({ voices: reorderList(s.voices, id, toIndex) }))
       },
 
       allServiceTypes: () => get().serviceTypes,

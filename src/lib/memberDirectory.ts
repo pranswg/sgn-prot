@@ -9,11 +9,89 @@ import { getVoiceName } from '@/core/constants/voicePositions'
 export type DirectoryQuickFilter =
   'all' | MembershipType | 'active' | 'inactive'
 
-export type MemberSort = 'last-name' | 'first-name'
+/**
+ * Directory ordering, which also decides how a name is written out. The two
+ * name modes are orders; the other two order by a field and fall back to the
+ * surname when that field ties, so `formatMemberName` only needs to know
+ * whether given-name-first was asked for.
+ */
+export type MemberSort =
+  | 'last-name'
+  | 'first-name'
+  | 'voice-position'
+  | 'recently-added'
 
 export const MEMBER_SORT_LABEL: Record<MemberSort, string> = {
   'last-name': 'Last Name (A-Z)',
   'first-name': 'First Name (A-Z)',
+  'voice-position': 'Voice Position',
+  'recently-added': 'Recently Added',
+}
+
+/** Page sizes offered by the directory paginator. */
+export const MEMBER_PAGE_SIZES = [5, 10, 15, 20, 25] as const
+
+export type MemberPageSize = (typeof MEMBER_PAGE_SIZES)[number]
+
+export const DEFAULT_MEMBER_PAGE_SIZE: MemberPageSize = 10
+
+export interface MemberPage<T> {
+  items: T[]
+  /** 1-based. Always at least 1, even when empty. */
+  page: number
+  pageCount: number
+  pageSize: number
+  /** Total items before slicing, i.e. the whole choir section. */
+  total: number
+  /** 1-based index of the first item on this page; 0 when empty. */
+  firstItem: number
+  /** 1-based index of the last item on this page; 0 when empty. */
+  lastItem: number
+  hasPrevious: boolean
+  hasNext: boolean
+}
+
+export function isMemberPageSize(value: number): value is MemberPageSize {
+  return (MEMBER_PAGE_SIZES as readonly number[]).includes(value)
+}
+
+/** Clamp a requested page size to the offered options, defaulting to 10. */
+export function normalizeMemberPageSize(value: number): MemberPageSize {
+  return isMemberPageSize(value) ? value : DEFAULT_MEMBER_PAGE_SIZE
+}
+
+/**
+ * Slice one page out of a list.
+ *
+ * `page` is clamped rather than trusted: filters shrink the choir sections
+ * under the user's feet, so a remembered page 4 can outlive its own contents.
+ * Clamping in one place keeps every section showing rows instead of a blank
+ * table with an out-of-range pager.
+ */
+export function paginate<T>(
+  items: T[],
+  page: number,
+  pageSize: number,
+): MemberPage<T> {
+  const size = Math.max(1, Math.trunc(pageSize) || 1)
+  const total = items.length
+  // An empty list still has one (empty) page, which keeps "Page 1 of 1" honest.
+  const pageCount = Math.max(1, Math.ceil(total / size))
+  const current = Math.min(Math.max(1, Math.trunc(page) || 1), pageCount)
+  const start = (current - 1) * size
+  const visible = items.slice(start, start + size)
+
+  return {
+    items: visible,
+    page: current,
+    pageCount,
+    pageSize: size,
+    total,
+    firstItem: visible.length > 0 ? start + 1 : 0,
+    lastItem: visible.length > 0 ? start + visible.length : 0,
+    hasPrevious: current > 1,
+    hasNext: current < pageCount,
+  }
 }
 
 export interface MemberGenderGroups {
@@ -171,6 +249,16 @@ export function filterMembers(
       return true
     })
     .sort((a, b) => {
+      if (sort === 'recently-added') {
+        // `dateAdded` is a `YYYY-MM-DD` string, so a plain comparison is a
+        // calendar comparison and needs no `Date` round trip.
+        const byDate = b.dateAdded.localeCompare(a.dateAdded)
+        if (byDate !== 0) return byDate
+      } else if (sort === 'voice-position') {
+        const byVoice =
+          voiceRank(a.voicePosition, voices) - voiceRank(b.voicePosition, voices)
+        if (byVoice !== 0) return byVoice
+      }
       const primary =
         sort === 'first-name'
           ? a.firstName.localeCompare(b.firstName)
@@ -183,6 +271,17 @@ export function filterMembers(
       if (secondary !== 0) return secondary
       return a.id.localeCompare(b.id)
     })
+}
+
+/**
+ * A voice's index in the configured order, so sorting follows the settings
+ * list (Soprano 1, Soprano 2, Alto, ...) rather than alphabetical order. A
+ * voice that has since been removed sorts after every configured one instead
+ * of falling back to the name and landing mid-list.
+ */
+function voiceRank(voiceId: string, voices: VoicePosition[]): number {
+  const index = voices.findIndex((voice) => voice.id === voiceId)
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index
 }
 
 export function groupMembersByGender(members: Member[]): MemberGenderGroups {

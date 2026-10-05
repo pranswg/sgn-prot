@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import type { Suguan, SuguanEvent, SuguanGroup, SuguanType, SuguanDocFormat, SuguanCoverage, SuguanScheduleSection } from '@/core/types/suguan'
+import type { Suguan, SuguanEvent, SuguanGroup, SuguanDocFormat, SuguanCoverage, SuguanScheduleSection } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
 import { useSettingsStore } from '@/store/settingsStore'
 import { defaultEventsFor, normalizeSuguanList } from '@/lib/suguanUtils'
@@ -10,8 +10,6 @@ export interface SuguanConfigInput {
   date: string
   time: string
   serviceTypeId: string
-  type?: SuguanType
-  eventTitle?: string
   group?: SuguanGroup
   docFormat?: SuguanDocFormat
   coverage?: SuguanCoverage
@@ -49,8 +47,6 @@ export const useSuguanStore = create<SuguanState>()(
             {
               id: nanoid(),
               ...config,
-              type: config.type ?? 'regular',
-              eventTitle: config.eventTitle,
               group: config.group ?? 'babae',
               coverage: config.coverage ?? null,
               events,

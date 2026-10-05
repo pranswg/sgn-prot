@@ -60,7 +60,6 @@ function makeSuguan(
     date: '2026-09-26',
     time: '18:00',
     serviceTypeId: 'svc1',
-    type: 'regular',
     group: 'mixed',
     docFormat: fmt ?? null,
     events: [

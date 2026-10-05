@@ -2,7 +2,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { isNavItemActive, type NavItem } from '@/lib/sidebarNav'
 import { useNavStore } from '@/store/navStore'
-import { useSidebarStore } from '@/store/sidebarStore'
 
 interface SidebarItemProps {
   item: NavItem
@@ -21,15 +20,12 @@ interface SidebarItemProps {
 export function SidebarItem({ item, collapsed, onNavigate }: SidebarItemProps) {
   const page = useNavStore((s) => s.page)
   const navigate = useNavStore((s) => s.navigate)
-  const setSidebarExpanded = useSidebarStore((s) => s.setSidebarExpanded)
   const active = isNavItemActive(page, item.page)
   const Icon = item.icon
 
   const handleClick = () => {
-    // Expanding first matters: on the collapsed rail there is no label on
-    // screen, so navigating without this would move the user somewhere they
-    // cannot identify.
-    if (collapsed) setSidebarExpanded(true)
+    // Navigating keeps the rail as it is: clicking an icon must not yank the
+    // sidebar open behind the user.
     navigate(item.page)
     onNavigate?.()
   }

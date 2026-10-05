@@ -27,7 +27,6 @@ import { detectConflicts, type Conflict } from '@/lib/conflicts'
 import { formatDateLong, formatTime } from '@/lib/format'
 import { coverageLabel, groupLabel } from '@/lib/suguanUtils'
 import { exportSuguanExcel } from '@/lib/suguanExport'
-import { koroVoiceColor } from '@/lib/koro'
 import { cn } from '@/lib/utils'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -92,10 +91,8 @@ export function PreviewStep({
   }, [suguanList, preview.id])
 
   const serviceName =
-    draft.type === 'special'
-      ? draft.eventTitle.trim() || 'Special Occasion'
-      : (allServiceTypes().find((t) => t.id === draft.serviceTypeId)?.name ??
-        draft.serviceTypeId)
+    allServiceTypes().find((t) => t.id === draft.serviceTypeId)?.name ??
+    draft.serviceTypeId
 
   const handleExportExcel = async () => {
     setExporting('excel')
@@ -170,16 +167,14 @@ export function PreviewStep({
               <span className="font-medium">{formatTime(draft.time)}</span>
             </p>
             <p>
-              <span className="text-muted-foreground">
-                {draft.type === 'special' ? 'Event: ' : 'Service: '}
-              </span>
+              <span className="text-muted-foreground">Service: </span>
               <span className="font-medium">{serviceName}</span>
             </p>
             <p>
               <span className="text-muted-foreground">Choir: </span>
               <span className="font-medium">{groupLabel(draft.group)}</span>
             </p>
-            {draft.type === 'regular' && draft.coverage && (
+            {draft.coverage && (
               <p>
                 <span className="text-muted-foreground">Coverage: </span>
                 <span className="font-medium">{coverageLabel(draft.coverage)}</span>
@@ -254,41 +249,6 @@ export function PreviewStep({
           </CardContent>
         </Card>
       </div>
-
-      {draft.type === 'special' && draft.formation && draft.formation.cells.some(Boolean) && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              Koro Formation
-              <Badge variant="outline" className="ml-auto">
-                {draft.formation.rows}×{draft.formation.cols}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className="mx-auto grid max-w-xl gap-1.5"
-              style={{
-                gridTemplateColumns: `repeat(${draft.formation.cols}, minmax(0, 1fr))`,
-              }}
-            >
-              {draft.formation.cells.map((cell, i) => (
-                <div
-                  key={i}
-                  className="flex min-h-8 items-center justify-center rounded border px-1 text-center text-[10px] font-semibold"
-                  style={{
-                    borderColor: cell
-                      ? koroVoiceColor(cell.voicePosition)
-                      : 'rgba(100,116,139,0.25)',
-                  }}
-                >
-                  {cell ? cell.memberName : ''}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

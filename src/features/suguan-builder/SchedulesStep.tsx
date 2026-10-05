@@ -35,8 +35,6 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
   const [customDay, setCustomDay] = useState('')
   const [customTime, setCustomTime] = useState('')
 
-  const isSpecial = draft.type === 'special'
-
   const suggested = useMemo<WorshipSchedule[]>(() => {
     if (draft.coverage?.template === 'midweek-2w') return MIDWEEK_SCHEDULES
     if (draft.coverage?.template === 'weekend-2w') return WEEKEND_SCHEDULES
@@ -135,145 +133,136 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      {isSpecial ? (
-        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-          Special occasions use a single roster instead of weekly worship
-          schedules. You will assign members in the next step.
+      <div className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Suggested schedules</h2>
+          <p className="text-xs text-muted-foreground">
+            Based on the {draft.coverage?.template === 'midweek-2w'
+              ? 'midweek'
+              : draft.coverage?.template === 'weekend-2w'
+                ? 'weekend'
+                : 'chosen'}{' '}
+            coverage. Matching assignment presets are loaded automatically.
+          </p>
         </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">Suggested schedules</h2>
-              <p className="text-xs text-muted-foreground">
-                Based on the {draft.coverage?.template === 'midweek-2w'
-                  ? 'midweek'
-                  : draft.coverage?.template === 'weekend-2w'
-                    ? 'weekend'
-                    : 'chosen'}{' '}
-                coverage. Matching assignment presets are loaded automatically.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {suggested.map((sched) => {
-                const added = addedKeys.has(sched.id)
-                const preset = findPresetByKey(presets, sched.id)
-                return (
-                  <div
-                    key={sched.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2.5"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {sched.label}
-                      </span>
-                      {preset && (
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          preset: {preset.name}
-                        </span>
-                      )}
+        <div className="grid gap-2 sm:grid-cols-3">
+          {suggested.map((sched) => {
+            const added = addedKeys.has(sched.id)
+            const preset = findPresetByKey(presets, sched.id)
+            return (
+              <div
+                key={sched.id}
+                className="flex items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2.5"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {sched.label}
+                  </span>
+                  {preset && (
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      preset: {preset.name}
                     </span>
-                    {added ? (
-                      <Badge className="shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        <Check className="size-3" />
-                        Added
-                      </Badge>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addSchedule(sched)}
-                      >
-                        <Plus className="size-4" />
-                        Add
-                      </Button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <div>
+                  )}
+                </span>
+                {added ? (
+                  <Badge className="shrink-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    <Check className="size-3" />
+                    Added
+                  </Badge>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addSchedule(sched)}
+                  >
+                    <Plus className="size-4" />
+                    Add
+                  </Button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCustomOpen(true)}
+          >
+            <Plus className="size-4" />
+            Add custom schedule
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Included schedules ({draft.schedules.length})
+        </h3>
+        {draft.schedules.length === 0 && (
+          <p className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            Add at least one worship schedule before assigning members.
+          </p>
+        )}
+        {draft.schedules.map((section, i) => (
+          <div
+            key={section.id}
+            className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                {i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">
+                  {section.scheduleLabel}
+                </span>
+                {section.scheduleDay || section.scheduleTime ? (
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {[section.scheduleDay, section.scheduleTime]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <Badge variant="outline" className="gap-1 tabular-nums">
+                <Users className="size-3" />
+                {section.assignments.length}
+              </Badge>
               <Button
                 variant="ghost"
-                size="sm"
-                onClick={() => setCustomOpen(true)}
+                size="icon-sm"
+                title="Move up"
+                onClick={() => moveSchedule(section.id, -1)}
+                disabled={i === 0}
               >
-                <Plus className="size-4" />
-                Add custom schedule
+                <ChevronUp className="size-3.5" />
               </Button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Included schedules ({draft.schedules.length})
-            </h3>
-            {draft.schedules.length === 0 && (
-              <p className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                Add at least one worship schedule before assigning members.
-              </p>
-            )}
-            {draft.schedules.map((section, i) => (
-              <div
-                key={section.id}
-                className="flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3"
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Move down"
+                onClick={() => moveSchedule(section.id, 1)}
+                disabled={i === draft.schedules.length - 1}
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold">
-                      {section.scheduleLabel}
-                    </span>
-                    {section.scheduleDay || section.scheduleTime ? (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {[section.scheduleDay, section.scheduleTime]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  <Badge variant="outline" className="gap-1 tabular-nums">
-                    <Users className="size-3" />
-                    {section.assignments.length}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Move up"
-                    onClick={() => moveSchedule(section.id, -1)}
-                    disabled={i === 0}
-                  >
-                    <ChevronUp className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Move down"
-                    onClick={() => moveSchedule(section.id, 1)}
-                    disabled={i === draft.schedules.length - 1}
-                  >
-                    <ChevronDown className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    title="Remove schedule"
-                    onClick={() => removeSchedule(section.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </span>
-              </div>
-            ))}
+                <ChevronDown className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Remove schedule"
+                onClick={() => removeSchedule(section.id)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </span>
           </div>
-        </>
-      )}
+        ))}
+      </div>
 
-      {draft.type === 'regular' && draft.schedules.length > 0 && (
+      {draft.schedules.length > 0 && (
         <p className="text-xs text-muted-foreground">
           {totalAssigned(draft)} member assignments across{' '}
           {draft.schedules.length} schedule

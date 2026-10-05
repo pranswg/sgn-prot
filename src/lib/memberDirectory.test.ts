@@ -2,7 +2,7 @@
  * Member directory filter, sort, and stats tests.
  *
  * These cover the pure logic behind the Master List directory: the quick
- * filters, the multi-select lists, the combined text query, the two sort orders,
+ * filters, the multi-select lists, the combined text query, the sort orders,
  * and the summary counts. All are pure functions of members plus voices, so no
  * DOM or store is involved.
  */
@@ -20,8 +20,13 @@ import {
   filterMembers,
   formatMemberName,
   groupMembersByGender,
-  hasActiveDirectoryFilters,
+hasActiveDirectoryFilters,
+  isMemberPageSize,
   memberInitials,
+  DEFAULT_MEMBER_PAGE_SIZE,
+  MEMBER_PAGE_SIZES,
+  normalizeMemberPageSize,
+  paginate,
   toggleInList,
   type MemberDirectoryFilters,
 } from './memberDirectory.ts'
@@ -157,6 +162,57 @@ test('first-name sort orders by given name then surname', () => {
   assert.deepEqual(sorted, ['Ana', 'Bruno', 'Celine'])
 })
 
+test('voice-position sort follows the configured voice order, not alphabetical', () => {
+  // S1, Alto, Bass: alphabetical would read Alto, Bass, Soprano-1.
+  const sorted = filterMembers(
+    MEMBERS,
+    filters(),
+    VOICES,
+    buildMemberReferences(MEMBERS),
+    'voice-position',
+  ).map((m) => m.id)
+  assert.deepEqual(sorted, ['1', '3', '2'])
+})
+
+test('a voice missing from settings sorts after every configured voice', () => {
+  const roster: Member[] = [
+    { ...MEMBERS[1], id: 'gone', voicePosition: 'retired-voice' },
+    { ...MEMBERS[0], id: 'here' },
+  ]
+  const sorted = filterMembers(
+    roster,
+    filters(),
+    VOICES,
+    buildMemberReferences(roster),
+    'voice-position',
+  ).map((m) => m.id)
+  assert.deepEqual(sorted, ['here', 'gone'])
+})
+
+test('recently-added orders newest first and breaks date ties by surname', () => {
+  const roster: Member[] = [
+    { ...MEMBERS[0], id: 'early', lastName: 'Aldrete', dateAdded: '2026-03-01' },
+    { ...MEMBERS[1], id: 'late', lastName: 'Zuniga', dateAdded: '2026-03-01' },
+    { ...MEMBERS[2], id: 'old', lastName: 'Bard', dateAdded: '2025-12-31' },
+  ]
+  const sorted = filterMembers(
+    roster,
+    filters(),
+    VOICES,
+    buildMemberReferences(roster),
+    'recently-added',
+  ).map((m) => m.id)
+  // A surname sort would have put "Bard" second, so this pins the date order.
+  assert.deepEqual(sorted, ['early', 'late', 'old'])
+})
+
+test('field sorts still write names in surname order', () => {
+  const member = { firstName: 'Ana', lastName: 'Reyes' }
+  assert.equal(formatMemberName(member, 'voice-position'), 'Reyes, Ana')
+  assert.equal(formatMemberName(member, 'recently-added'), 'Reyes, Ana')
+  assert.equal(memberInitials(member, 'voice-position'), 'RA')
+})
+
 test('hasActiveDirectoryFilters ignores a whitespace-only query', () => {
   assert.equal(hasActiveDirectoryFilters(filters({ query: '   ' })), false)
 })
@@ -228,5 +284,105 @@ test('positionCounts includes every configured position, even at zero', () => {
   const stats = computeDirectoryStats(MEMBERS, [], VOICES)
   assert.equal(stats.positionCounts.get('pangulong-mang-aawit'), 1)
   assert.equal(stats.positionCounts.get('oic'), 1)
-  assert.equal(stats.positionCounts.get('organista'), 0)
+assert.equal(stats.positionCounts.get('organista'), 0)
+})
+
+test('paginate offers exactly 5/10/15/20/25 and defaults to 10', () => {
+  assert.deepEqual([...MEMBER_PAGE_SIZES], [5, 10, 15, 20, 25])
+  assert.equal(DEFAULT_MEMBER_PAGE_SIZE, 10)
+  // The default is one of the offered options, not a separate sentinel.
+  assert.ok(isMemberPageSize(DEFAULT_MEMBER_PAGE_SIZE))
+})
+
+test('normalizeMemberPageSize falls back to the default for junk', () => {
+  assert.equal(normalizeMemberPageSize(25), 25)
+  assert.equal(normalizeMemberPageSize(7), DEFAULT_MEMBER_PAGE_SIZE)
+  assert.equal(normalizeMemberPageSize(0), DEFAULT_MEMBER_PAGE_SIZE)
+  assert.equal(normalizeMemberPageSize(NaN), DEFAULT_MEMBER_PAGE_SIZE)
+})
+
+test('paginate slices a page and reports its position', () => {
+  const items = Array.from({ length: 25 }, (_, i) => i + 1)
+  const first = paginate(items, 1, 10)
+  assert.deepEqual(first.items, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  assert.equal(first.pageCount, 3)
+  assert.equal(first.firstItem, 1)
+  assert.equal(first.lastItem, 10)
+  assert.equal(first.hasPrevious, false)
+  assert.equal(first.hasNext, true)
+
+  const last = paginate(items, 3, 10)
+  // A partial final page must not claim five rows it does not have.
+  assert.deepEqual(last.items, [21, 22, 23, 24, 25])
+  assert.equal(last.firstItem, 21)
+  assert.equal(last.lastItem, 25)
+  assert.equal(last.hasNext, false)
+})
+
+test('paginate covers every item exactly once across pages', () => {
+  const items = Array.from({ length: 47 }, (_, i) => `m${i}`)
+  for (const size of MEMBER_PAGE_SIZES) {
+    const seen: string[] = []
+    let page = 1
+    let guard = 0
+    for (;;) {
+      const result = paginate(items, page, size)
+      seen.push(...result.items)
+      if (!result.hasNext) break
+      page = result.page + 1
+      if ((guard += 1) > 50) throw new Error('pagination did not terminate')
+    }
+    assert.deepEqual(seen, items, `size ${size} lost or repeated a member`)
+  }
+})
+
+test('paginate clamps a page beyond the end instead of blanking', () => {
+  // This is the filter-narrowing case: the user was on page 4 of a large
+  // result set, then filtered down to a single page.
+  const items = [1, 2, 3]
+  const stale = paginate(items, 4, 10)
+  assert.equal(stale.page, 1)
+  assert.deepEqual(stale.items, [1, 2, 3])
+  assert.equal(stale.hasNext, false)
+  assert.equal(stale.hasPrevious, false)
+})
+
+test('paginate treats junk pages and sizes as page 1', () => {
+  const items = [1, 2, 3]
+  for (const page of [0, -5, NaN]) {
+    assert.equal(paginate(items, page, 10).page, 1)
+    assert.deepEqual(paginate(items, page, 10).items, items)
+  }
+  // A zero or negative page size collapses to one row per page rather than
+  // slicing to nothing, which would otherwise loop forever paging.
+  for (const size of [0, -5, NaN]) {
+    const result = paginate(items, 1, size)
+    assert.equal(result.pageSize, 1)
+    assert.deepEqual(result.items, [1])
+  }
+})
+
+test('paginate keeps an empty list on a single empty page', () => {
+  const empty = paginate([], 3, 10)
+  assert.deepEqual(empty.items, [])
+  assert.equal(empty.total, 0)
+  assert.equal(empty.pageCount, 1)
+  assert.equal(empty.page, 1)
+  assert.equal(empty.firstItem, 0)
+  assert.equal(empty.lastItem, 0)
+  assert.equal(empty.hasPrevious, false)
+  assert.equal(empty.hasNext, false)
+})
+
+test('each choir section pages independently', () => {
+  // The directory splits by gender, then pages each half on its own cursor,
+  // so a large womens roster must not push the mens table onto later pages.
+  const women = Array.from({ length: 12 }, (_, i) => ({ id: `w${i}` }))
+  const men = Array.from({ length: 4 }, (_, i) => ({ id: `m${i}` }))
+  const womensPage2 = paginate(women, 2, 10)
+  const mensPage1 = paginate(men, 1, 10)
+  assert.equal(womensPage2.items.length, 2)
+  assert.deepEqual(mensPage1.items, men)
+  assert.equal(mensPage1.pageCount, 1)
+  assert.equal(mensPage1.hasNext, false)
 })

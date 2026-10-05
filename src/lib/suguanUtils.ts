@@ -4,7 +4,6 @@ import type {
   SuguanEvent,
   SuguanEventType,
   SuguanGroup,
-  SuguanType,
   SuguanDocFormat,
   SuguanCoverage,
   SuguanScheduleSection,
@@ -458,19 +457,16 @@ export function normalizeSuguan(
   voices: { id: string; gender: 'male' | 'female' }[],
 ): Suguan {
   const derived = deriveGroupFromAssignments(suguan.assignments, voices)
-  const type: SuguanType = (suguan as { type?: SuguanType }).type === 'special' ? 'special' : 'regular'
   const group: SuguanGroup =
     suguan.group === 'lalaki' || suguan.group === 'mixed'
       ? suguan.group
       : derived ?? 'babae'
   const hasEvents =
     Array.isArray(suguan.events) && suguan.events.length > 0
-  const events =
-    !hasEvents && type === 'regular' ? defaultEventsFor(suguan.date) : suguan.events ?? []
+  const events = !hasEvents ? defaultEventsFor(suguan.date) : suguan.events ?? []
   const schedules = normalizeSchedules(suguan)
   return {
     ...suguan,
-    type,
     group,
     events,
     schedules,
@@ -493,13 +489,10 @@ export function normalizeSchedules(suguan: Suguan): SuguanScheduleSection[] {
     }))
   }
   const assignments = Array.isArray(suguan.assignments) ? suguan.assignments : []
-  const label =
-    (suguan as { eventTitle?: string }).eventTitle?.trim() ||
-    groupLabel(suguan.group)
   return [
     {
       id: nanoid(),
-      scheduleLabel: label,
+      scheduleLabel: groupLabel(suguan.group),
       scheduleDay: '',
       scheduleTime: '',
       assignments,
@@ -546,7 +539,6 @@ export function weekendPhrase(serviceTypeId: string): string {
 }
 
 export function serviceTypeLabel(suguan: Suguan): string {
-  if (suguan.type === 'special') return suguan.eventTitle ?? 'Special Occasion'
   const typeName = useSettingsStore
     .getState()
     .allServiceTypes()
@@ -555,12 +547,6 @@ export function serviceTypeLabel(suguan: Suguan): string {
 }
 
 export function suguanTitle(suguan: Suguan): string {
-  if (suguan.type === 'special') {
-    const name = suguan.eventTitle?.trim()
-      ? suguan.eventTitle.trim().toUpperCase()
-      : 'SPECIAL OCCASION'
-    return `SUGUAN NG MGA MANG-AAWIT SA PAGTUPAD NG ${name} SA BUWAN NG ${monthYearLabel(suguan.date)}`
-  }
   const phrase =
     suguan.coverage?.template === 'midweek-2w'
       ? 'MID WEEK'

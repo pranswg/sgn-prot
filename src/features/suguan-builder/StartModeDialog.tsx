@@ -49,7 +49,7 @@ export function StartModeDialog({
     const q = query.trim().toLowerCase()
     if (!q) return recent
     return recent.filter((s) =>
-      `${serviceTypeLabel(s)} ${s.eventTitle ?? ''} ${groupLabel(s.group)} ${s.date}`
+      `${serviceTypeLabel(s)} ${groupLabel(s.group)} ${s.date}`
         .toLowerCase()
         .includes(q),
     )
@@ -123,11 +123,7 @@ export function StartModeDialog({
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
                         {formatDate(s.date)} ·{' '}
-                        {s.coverage
-                          ? coverageLabel(s.coverage)
-                          : s.type === 'special'
-                            ? 'Special occasion'
-                            : '—'}
+                        {s.coverage ? coverageLabel(s.coverage) : '—'}
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">

@@ -105,10 +105,7 @@ export function SuguanHistoryPage() {
   const serviceName = (id: string) =>
     allServiceTypes().find((t) => t.id === id)?.name ?? id
 
-  const recordLabel = (s: Suguan) =>
-    s.type === 'special'
-      ? s.eventTitle || 'Special Occasion'
-      : serviceName(s.serviceTypeId)
+  const recordLabel = (s: Suguan) => serviceName(s.serviceTypeId)
 
   const allTypes = allServiceTypes()
 
@@ -120,10 +117,8 @@ export function SuguanHistoryPage() {
         if (typeFilter !== 'all' && s.serviceTypeId !== typeFilter) return false
         if (q) {
           const label =
-            s.type === 'special'
-              ? s.eventTitle || 'Special Occasion'
-              : allTypes.find((t) => t.id === s.serviceTypeId)?.name ??
-                s.serviceTypeId
+            allTypes.find((t) => t.id === s.serviceTypeId)?.name ??
+            s.serviceTypeId
           const joined = `${s.date} ${label}`.toLowerCase()
           if (!joined.includes(q)) return false
         }
@@ -158,7 +153,7 @@ export function SuguanHistoryPage() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by date, service, event..."
+          placeholder="Search by date or service..."
           className="flex-1"
         />
         <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -182,7 +177,7 @@ export function SuguanHistoryPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Time</TableHead>
-              <TableHead>Service / Event</TableHead>
+              <TableHead>Service</TableHead>
               <TableHead>Gender</TableHead>
               <TableHead>Assigned</TableHead>
               <TableHead className="w-24 text-right">Actions</TableHead>

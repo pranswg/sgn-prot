@@ -1,8 +1,22 @@
-import { useState } from 'react'
-import { ArrowLeft, FileDown, FileImage, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import {
+  ArrowLeft,
+  FileDown,
+  FileSpreadsheet,
+  FileText,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +29,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
-import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
 import { formatDateLong, formatTime } from '@/lib/format'
 import {
@@ -26,8 +39,16 @@ import {
 } from '@/lib/suguanUtils'
 import { exportSuguanExcel } from '@/lib/suguanExport'
 import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
-import { exportKoroPng, exportKoroPdf, koroVoiceColor } from '@/lib/koro'
 import { SuguanSheetPreview } from '@/features/suguan-builder/SuguanSheetPreview'
+import { MobileSuguanDetailHeader } from './MobileSuguanDetailHeader'
+
+function MetaChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-lg border border-border/70 bg-secondary px-2.5 py-1 text-[0.6875rem] font-medium text-muted-foreground">
+      {children}
+    </span>
+  )
+}
 
 export function SuguanDetailPage() {
   const selectedSuguanId = useNavStore((s) => s.selectedSuguanId)
@@ -35,16 +56,12 @@ export function SuguanDetailPage() {
   const deleteSuguan = useSuguanStore((s) => s.deleteSuguan)
   const navigate = useNavStore((s) => s.navigate)
   const editSuguanInBuilder = useNavStore((s) => s.editSuguanInBuilder)
-  const allVoices = useSettingsStore((s) => s.allVoices)
-  const voices = allVoices()
   const members = useMemberStore((s) => s.members)
 
   const s = suguan.find((su) => su.id === selectedSuguanId) ?? null
 
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [exporting, setExporting] = useState<
-    'excel' | 'pdf' | 'koro-png' | 'koro-pdf' | null
-  >(null)
+  const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
 
   if (!s) {
     return (
@@ -68,59 +85,6 @@ export function SuguanDetailPage() {
   const serviceName = serviceTypeLabel(s)
 
   const events = s.events ?? []
-  const isSpecial = s.type === 'special'
-  const formation = s.formation ?? null
-
-  const voiceLabels: Record<string, string> = {}
-  for (const v of voices) voiceLabels[v.id] = v.shortName
-
-  const handleExportKoroPng = async () => {
-    if (!formation || !formation.cells.some(Boolean)) {
-      toast.error('The Koro formation is empty.')
-      return
-    }
-    setExporting('koro-png')
-    try {
-      await exportKoroPng({
-        formation,
-        title: suguanTitle(s),
-        subtitle: `${formatDateLong(s.date)} • ${formation.rows}×${formation.cols} grid`,
-        fileName: `Koro_${s.eventTitle || s.date}`,
-        voiceLabels,
-        docFormat: s.docFormat,
-      })
-      toast.success('Koro formation exported as image (.png).')
-    } catch (err) {
-      console.error(err)
-      toast.error('Could not export the Koro image.')
-    } finally {
-      setExporting(null)
-    }
-  }
-
-  const handleExportKoroPdf = async () => {
-    if (!formation || !formation.cells.some(Boolean)) {
-      toast.error('The Koro formation is empty.')
-      return
-    }
-    setExporting('koro-pdf')
-    try {
-      await exportKoroPdf({
-        formation,
-        title: suguanTitle(s),
-        subtitle: `${formatDateLong(s.date)} • ${formation.rows}×${formation.cols} grid`,
-        fileName: `Koro_${s.eventTitle || s.date}`,
-        voiceLabels,
-        docFormat: s.docFormat,
-      })
-      toast.success('Koro formation exported as PDF.')
-    } catch (err) {
-      console.error(err)
-      toast.error('Could not export the Koro PDF.')
-    } finally {
-      setExporting(null)
-    }
-  }
 
   const handleExportExcel = async () => {
     setExporting('excel')
@@ -149,71 +113,102 @@ export function SuguanDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-10 md:pb-0">
+      <MobileSuguanDetailHeader />
+
+      {/* Mobile: top information card with compact, wrap-friendly actions. */}
+      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm md:hidden">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            {suguanTitle(s)}
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {formatDateLong(s.date)}
+            {s.time ? ` • ${formatTime(s.time)}` : ''}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <MetaChip>{s.assignments.length} members</MetaChip>
+          <MetaChip>{groupLabel(s.group)}</MetaChip>
+          <MetaChip>
+            {s.coverage
+              ? coverageLabel(s.coverage)
+              : `${events.length} events`}
+          </MetaChip>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('suguan-history')}
+          >
+            <ArrowLeft className="size-3.5" />
+            Back to History
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPdf}
+            disabled={exporting !== null}
+          >
+            <FileDown className="size-3.5" />
+            Export PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={exporting !== null}
+          >
+            <FileSpreadsheet className="size-3.5" />
+            Export Excel
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon-sm" aria-label="More actions">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={() => editSuguanInBuilder(s.id)}>
+                <FileText className="size-4" />
+                Edit Suguan
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600"
+                onSelect={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
       <PageHeader
+        className="hidden md:flex"
         title={`${serviceName} — ${formatDateLong(s.date)}`}
         description={`${s.assignments.length} members • ${groupLabel(s.group)}${
-        isSpecial
-          ? formation && formation.cells.some(Boolean)
-            ? ` • ${formation.rows}×${formation.cols} formation`
-            : ''
-          : s.coverage
+          s.coverage
             ? ` • ${coverageLabel(s.coverage)}`
             : ` • ${events.length} events`
-      }`}
+        }`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => navigate('suguan-history')}>
               <ArrowLeft className="size-4" />
               History
             </Button>
-            {isSpecial ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={handleExportExcel}
-                  disabled={exporting !== null}
-                >
-                  <FileSpreadsheet className="size-4" />
-                  Export Sheet (.xlsx)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleExportPdf}
-                  disabled={exporting !== null}
-                >
-                  <FileDown className="size-4" />
-                  Export Sheet (.pdf)
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleExportKoroPng}
-                  disabled={exporting !== null}
-                >
-                  <FileImage className="size-4" />
-                  Export Koro PNG
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleExportKoroPdf}
-                  disabled={exporting !== null}
-                >
-                  <FileDown className="size-4" />
-                  Export Koro PDF
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={handleExportExcel} disabled={exporting !== null}>
-                  <FileSpreadsheet className="size-4" />
-                  Export Excel (.xlsx)
-                </Button>
-                <Button variant="outline" onClick={handleExportPdf} disabled={exporting !== null}>
-                  <FileDown className="size-4" />
-                  Export PDF (.pdf)
-                </Button>
-              </>
-            )}
+            <Button variant="outline" onClick={handleExportExcel} disabled={exporting !== null}>
+              <FileSpreadsheet className="size-4" />
+              Export Excel (.xlsx)
+            </Button>
+            <Button variant="outline" onClick={handleExportPdf} disabled={exporting !== null}>
+              <FileDown className="size-4" />
+              Export PDF (.pdf)
+            </Button>
             <Button variant="outline" onClick={() => editSuguanInBuilder(s.id)}>
               <FileText className="size-4" />
               Edit
@@ -225,84 +220,22 @@ export function SuguanDetailPage() {
         }
       />
 
-      <div className="mx-auto w-full max-w-6xl overflow-x-auto rounded-md border bg-card p-4 shadow-sm sm:p-6">
-        {isSpecial ? (
-          <div className="space-y-4">
-            <div className="mb-6 text-center">
-              <h2 className="text-base font-bold uppercase leading-snug tracking-wide sm:text-lg">
-                {suguanTitle(s)}
-              </h2>
-              <p className="mt-1 text-sm font-semibold">{groupLabel(s.group)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {formatDateLong(s.date)}
-                {s.time ? ` • ${formatTime(s.time)}` : ''}
-              </p>
-            </div>
-            {formation && formation.cells.some(Boolean) ? (
-              <div className="space-y-4">
-                <p className="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Koro Formation — {formation.rows} rows × {formation.cols} columns
-                </p>
-                <div
-                  className="mx-auto grid max-w-3xl gap-1.5"
-                  style={{
-                    gridTemplateColumns: `repeat(${formation.cols}, minmax(0, 1fr))`,
-                  }}
-                >
-                  {formation.cells.map((cell, i) => (
-                    <div
-                      key={i}
-                      className="flex min-h-10 items-center justify-center rounded-lg border-2 px-1 py-2 text-center text-xs font-semibold"
-                      style={
-                        cell
-                          ? { borderColor: koroVoiceColor(cell.voicePosition) }
-                          : { borderColor: 'rgba(100,116,139,0.25)' }
-                      }
-                    >
-                      {cell ? cell.memberName : ''}
-                    </div>
-                  ))}
-                </div>
-                {s.assignments.length === 0 && (
-                  <p className="py-4 text-center text-sm text-muted-foreground">
-                    No members are assigned to this Suguan yet.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="py-10 text-center text-sm text-muted-foreground">
-                  No Koro formation has been arranged for this event. Open the
-                  Koro Maker from the Suguan Builder to plan the layout.
-                </p>
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  {s.assignments.length === 0
-                    ? 'No members are assigned to this event yet.'
-                    : `${s.assignments.length} members assigned.`}
-                </p>
-              </div>
-            )}
-
-            <div className="pt-4">
-              <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                SUGUAN Sheet Preview
-              </p>
-              <SuguanSheetPreview
-                suguan={s}
-                members={members}
-                docFormat={s.docFormat}
-                previewWidth={900}
-              />
-            </div>
-          </div>
-        ) : (
-          <SuguanSheetPreview
-            suguan={s}
-            members={members}
-            docFormat={s.docFormat}
-            previewWidth={900}
-          />
-        )}
+      <div className="mx-auto w-full max-w-6xl rounded-xl border border-border/70 bg-card p-3 shadow-sm sm:p-6">
+        {/* Mobile preview heading: the paper below is the printed document. */}
+        <div className="mb-3 md:hidden">
+          <p className="text-sm font-semibold tracking-tight text-foreground">
+            Document Preview
+          </p>
+          <p className="text-[0.6875rem] text-muted-foreground">
+            The printed Suguan — identical to the PDF export.
+          </p>
+        </div>
+        <SuguanSheetPreview
+          suguan={s}
+          members={members}
+          docFormat={s.docFormat}
+          previewWidth={900}
+        />
 
         {s.pagsasanayDate && (
           <p className="mt-4 text-xs text-muted-foreground">
@@ -314,6 +247,35 @@ export function SuguanDetailPage() {
             Petsa ng Pagtupad: {s.pagtupadDate}
           </p>
         )}
+      </div>
+
+      {/* Mobile: fixed export bar, parked above the bottom tab bar
+          (63px + safe-area = its height). */}
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)_+_63px)] z-30 flex items-center gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur md:hidden">
+        <Button
+          className="flex-1"
+          onClick={handleExportPdf}
+          disabled={exporting !== null}
+        >
+          <FileDown className="size-4" />
+          Export PDF
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleExportExcel}
+          disabled={exporting !== null}
+        >
+          <FileSpreadsheet className="size-4" />
+          Export Excel
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Edit Suguan"
+          onClick={() => editSuguanInBuilder(s.id)}
+        >
+          <FileText className="size-4" />
+        </Button>
       </div>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

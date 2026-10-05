@@ -28,6 +28,8 @@ interface DutyRolesPanelProps {
   onDestinadoChange: (name: string) => void
   members: Member[]
   roleIds?: string[]
+  title?: string
+  scrollClassName?: string
 }
 
 const CLEAR_VALUE = '__clear__'
@@ -45,6 +47,8 @@ export function DutyRolesPanel({
   onDestinadoChange,
   members,
   roleIds,
+  title = 'Duty Roles',
+  scrollClassName = 'h-[460px]',
 }: DutyRolesPanelProps) {
   const allDutyRoles = useSettingsStore((s) => s.allDutyRoles)
   const allVoices = useSettingsStore((s) => s.allVoices)
@@ -111,19 +115,19 @@ export function DutyRolesPanel({
   }
 
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
-      <header className="flex items-start gap-2.5 border-b border-border/70 bg-brand-navy-soft/60 px-4 py-3">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
+      <header className="flex items-start gap-2.5 border-b border-border/70 px-4 py-3">
         <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand-navy/70" />
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground">Duty Roles</h3>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
             Only members tagged with the matching position appear as candidates.
           </p>
         </div>
       </header>
 
-      <ScrollArea className="h-[460px]">
-        <div className="flex flex-col gap-4 p-4">
+      <ScrollArea className={scrollClassName}>
+        <div className="flex flex-col gap-3 p-3 xl:gap-4 xl:p-4">
           {duplicateIds.size > 0 && (
             <p className="flex items-start gap-1.5 rounded-md border border-red-400/50 bg-red-50 px-3 py-2 text-xs text-red-800 dark:bg-red-950/30 dark:text-red-200">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -131,7 +135,7 @@ export function DutyRolesPanel({
             </p>
           )}
 
-          <div className="grid gap-1.5">
+          <div className="grid gap-1.5 rounded-2xl border border-border/60 bg-card p-3 shadow-[0_1px_2px_rgba(16,42,67,0.04)] xl:rounded-lg xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
             <label
               htmlFor={destinoListId}
               className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground"
@@ -167,7 +171,10 @@ export function DutyRolesPanel({
               const isDuplicate = current && duplicateIds.has(current.memberId)
 
               return (
-                <div key={role.id} className="grid gap-1.5">
+                <div
+                  key={role.id}
+                  className="grid gap-1.5 rounded-2xl border border-border/60 bg-card p-3 shadow-[0_1px_2px_rgba(16,42,67,0.04)] xl:rounded-lg xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none"
+                >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                       {role.name}

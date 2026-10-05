@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import type { ChoirPosition, Member, MemberInput } from '@/core/types/member'
@@ -280,21 +279,51 @@ export function MobileMemberFormSheet({
                   </li>
                 ))}
               </ul>
-              <div className="mt-3 flex items-center justify-between rounded-lg border border-border/70 bg-card p-3">
-                <div className="min-w-0 pr-3">
-                  <Label className="text-sm font-medium">Active member</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Inactive members cannot be scheduled.
-                  </p>
-                </div>
-                <Switch
-                  checked={form.isActive}
-                  onCheckedChange={(v) => set('isActive', v)}
-                />
-              </div>
             </FormSection>
 
-            <FormSection title="Choir Positions">
+            <FormSection title="Status">
+              <div
+                role="radiogroup"
+                aria-label="Member status"
+                className="grid grid-cols-2 gap-2"
+              >
+                {(
+                  [
+                    { value: true, label: 'Active' },
+                    { value: false, label: 'Inactive' },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={String(option.value)}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.isActive === option.value}
+                    onClick={() => set('isActive', option.value)}
+                    className={cn(
+                      'flex min-h-12 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors',
+                      form.isActive === option.value
+                        ? option.value
+                          ? 'border-emerald-600/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                          : 'border-red-600/40 bg-red-500/10 text-red-700 dark:text-red-300'
+                        : 'border-border/70 bg-background text-foreground active:bg-muted',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'size-1.5 rounded-full',
+                        option.value ? 'bg-emerald-500' : 'bg-red-500',
+                      )}
+                    />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Inactive members cannot be scheduled.
+              </p>
+            </FormSection>
+
+            <FormSection title="Privileges">
               <ul className="flex flex-col gap-2">
                 {CHOIR_POSITIONS.map((position) => {
                   const checked = form.positions.includes(position.id)

@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarClock,
   CalendarDays,
   Check,
-  Lock,
+  Eye,
+  FileText,
   Plus,
   RotateCcw,
+  UserRound,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -39,10 +42,14 @@ import {
 
 export type { SuguanDraft } from './builderState'
 
+const STEP_ICONS = [CalendarDays, FileText, CalendarClock, Eye]
+
 export function SuguanBuilderPage() {
   const navigate = useNavStore((s) => s.navigate)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
+  const dismissNewSuguan = useNavStore((s) => s.dismissNewSuguan)
+  const clearBuilderReturnPage = useNavStore((s) => s.clearBuilderReturnPage)
   const builderSuguanId = useNavStore((s) => s.builderSuguanId)
   const suguanList = useSuguanStore((s) => s.suguan)
   const createSuguan = useSuguanStore((s) => s.createSuguan)
@@ -106,20 +113,12 @@ export function SuguanBuilderPage() {
       date: draft.date,
       time: draft.time,
       serviceTypeId: draft.serviceTypeId || '',
-      eventTitle: draft.type === 'special' ? draft.eventTitle.trim() : undefined,
       group: draft.group,
       docFormat: draft.docFormat,
-      coverage: draft.type === 'regular' ? draft.coverage : undefined,
-      events: draft.type === 'regular' ? draft.events : [],
-      pagsasanayDate:
-        draft.type === 'regular' && draft.pagsasanayDate
-          ? draft.pagsasanayDate
-          : undefined,
-      pagtupadDate:
-        draft.type === 'regular' && draft.pagtupadDate
-          ? draft.pagtupadDate
-          : undefined,
-      formation: draft.type === 'special' ? draft.formation : undefined,
+      coverage: draft.coverage,
+      events: draft.events,
+      pagsasanayDate: draft.pagsasanayDate || undefined,
+      pagtupadDate: draft.pagtupadDate || undefined,
       voiceCapacities: draft.voiceCapacities,
       assignments: draft.assignments,
       schedules: draft.schedules,
@@ -138,24 +137,15 @@ export function SuguanBuilderPage() {
       date: draft.date,
       time: draft.time,
       serviceTypeId: draft.serviceTypeId || '',
-      type: draft.type,
-      eventTitle: draft.type === 'special' ? draft.eventTitle.trim() : undefined,
       group: draft.group,
       docFormat: draft.docFormat,
-      coverage: draft.type === 'regular' ? (draft.coverage ?? undefined) : undefined,
-      events: draft.type === 'regular' ? draft.events : [],
-      pagsasanayDate:
-        draft.type === 'regular' && draft.pagsasanayDate
-          ? draft.pagsasanayDate
-          : undefined,
-      pagtupadDate:
-        draft.type === 'regular' && draft.pagtupadDate
-          ? draft.pagtupadDate
-          : undefined,
+      coverage: draft.coverage ?? undefined,
+      events: draft.events,
+      pagsasanayDate: draft.pagsasanayDate || undefined,
+      pagtupadDate: draft.pagtupadDate || undefined,
       destinadoName: draft.destinadoName.trim() || undefined,
     })
     updateSuguan(created.id, {
-      formation: draft.type === 'special' ? draft.formation : undefined,
       voiceCapacities: draft.voiceCapacities,
       assignments: draft.assignments,
       schedules: draft.schedules,
@@ -165,25 +155,50 @@ export function SuguanBuilderPage() {
     openSuguanDetail(created.id)
   }
 
-  const title =
-    existing
-      ? 'Edit Suguan'
-      : draft.type === 'special'
-        ? 'Special Occasion Suguan'
-        : 'Worship Service Suguan'
+  const title = existing ? 'Edit Suguan' : 'Worship Service Suguan'
 
-  const subtitle =
-    draft.type === 'special'
-      ? draft.eventTitle.trim() || 'New special occasion'
-      : draft.date
-        ? formatDate(draft.date)
-        : 'New Suguan'
+  const subtitle = draft.date ? formatDate(draft.date) : 'New Suguan'
 
   return (
     <div className="flex flex-col gap-4 pb-24 xl:pb-0">
       {/* Page header */}
       <div className="flex flex-col gap-3.5 rounded-xl border border-border/70 bg-card p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        {/* Compact mobile header — schedules step only */}
+        {step === 2 && (
+          <div className="-mx-4 -mt-4 flex items-center gap-3 border-b border-border/70 px-4 py-3 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Back"
+              aria-label="Back"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+            >
+              <ArrowLeft className="size-4.5" />
+            </Button>
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate text-sm font-semibold text-foreground">
+                Suguan Builder
+              </p>
+              <p className="truncate text-[0.6875rem] text-muted-foreground">
+                Step {step + 1} of {BUILDER_STEPS.length} —{' '}
+                {BUILDER_STEPS[step].title}
+              </p>
+            </div>
+            <span
+              aria-hidden
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-navy-soft text-brand-navy ring-1 ring-inset ring-brand-navy/10"
+            >
+              <UserRound className="size-4" />
+            </span>
+          </div>
+        )}
+
+        <div
+          className={cn(
+            'flex flex-wrap items-start justify-between gap-3',
+            step === 2 && 'hidden md:flex',
+          )}
+        >
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-navy text-white">
               <CalendarDays className="size-5" />
@@ -212,9 +227,7 @@ export function SuguanBuilderPage() {
             <Badge variant="outline" className="tabular-nums">
               {draft.schedules.length > 0
                 ? `${draft.schedules.length} schedule${draft.schedules.length !== 1 ? 's' : ''}`
-                : draft.type === 'special'
-                  ? 'Special occasion'
-                  : 'No schedule'}
+                : 'No schedule'}
             </Badge>
             <Button variant="outline" size="sm" onClick={() => setStartOpen(true)}>
               <Plus className="size-4" />
@@ -231,78 +244,77 @@ export function SuguanBuilderPage() {
           </div>
         </div>
 
-        {/* Stepper */}
-        <ol className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
+      </div>
+
+      {/* Compact progress stepper */}
+      <div className="sticky top-14 z-10 rounded-xl border border-border/70 bg-card px-2 py-3 shadow-[0_1px_2px_rgba(16,42,67,0.04)] sm:px-5">
+        <ol className="flex items-start gap-0.5">
           {BUILDER_STEPS.map((s, i) => {
-            const complete = isStepComplete(draft, i)
-            const reachable = i <= reach
+            const passed = i < step
             const isCurrent = i === step
+            const reachable = i <= reach
+            const StepIcon = STEP_ICONS[i]
             return (
-              <li key={s.id} className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  disabled={!reachable}
-                  onClick={() => reachable && setStep(i)}
-                  title={s.description}
-                  className={cn(
-                    'group flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
-                    isCurrent
-                      ? 'border-brand-navy bg-brand-navy text-white'
-                      : 'border-border/70 bg-background hover:border-brand-teal/50 hover:bg-brand-teal-soft/40',
-                    !reachable && 'cursor-not-allowed opacity-50 hover:border-border/70 hover:bg-background',
-                  )}
-                >
+              <Fragment key={s.id}>
+                {i > 0 && (
                   <span
+                    aria-hidden
                     className={cn(
-                      'flex size-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-semibold',
-                      isCurrent
-                        ? 'bg-white/15 text-white ring-1 ring-inset ring-white/25'
-                        : complete
-                          ? 'bg-brand-teal-soft text-brand-teal ring-1 ring-inset ring-brand-teal/25'
-                          : 'bg-muted text-muted-foreground ring-1 ring-inset ring-border',
+                      'mt-[18px] h-0.5 min-w-1.5 flex-1 rounded-full',
+                      i <= step ? 'bg-brand-navy' : 'bg-border',
+                    )}
+                  />
+                )}
+                <li className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={!reachable}
+                    onClick={() => reachable && setStep(i)}
+                    title={s.description}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={cn(
+                      'flex size-[38px] shrink-0 items-center justify-center rounded-full transition-all',
+                      passed || isCurrent
+                        ? 'bg-brand-navy text-white'
+                        : 'bg-muted text-muted-foreground/70 hover:text-foreground',
+                      isCurrent && 'ring-4 ring-brand-navy/15',
+                      !reachable && 'cursor-not-allowed opacity-40',
                     )}
                   >
-                    {complete && !isCurrent ? (
-                      <Check className="size-3.5" />
-                    ) : !reachable ? (
-                      <Lock className="size-3" />
-                    ) : (
-                      i + 1
+                    <StepIcon className="size-[18px]" />
+                  </button>
+                  <span
+                    className={cn(
+                      'w-full truncate text-center text-xs font-medium leading-tight',
+                      passed || isCurrent
+                        ? 'text-brand-navy-deep dark:text-blue-300'
+                        : 'text-muted-foreground',
                     )}
+                  >
+                    {s.short}
                   </span>
-                  <span className="min-w-0">
-                    <span
-                      className={cn(
-                        'block truncate text-[0.8125rem] font-semibold leading-tight',
-                        isCurrent ? 'text-white' : 'text-foreground',
-                      )}
-                    >
-                      {s.title}
-                    </span>
-                    <span
-                      className={cn(
-                        'mt-0.5 hidden truncate text-[0.625rem] leading-tight sm:block',
-                        isCurrent ? 'text-white/65' : 'text-muted-foreground',
-                      )}
-                    >
-                      {s.description}
-                    </span>
-                  </span>
-                </button>
-              </li>
+                </li>
+              </Fragment>
             )
           })}
         </ol>
       </div>
 
       {/* Step body */}
-      {step === 3 ? (
-        <AssignmentWorkspace
-          draft={draft}
-          patch={patch}
-          members={members}
-          editingId={editingId}
-        />
+      {step === 2 ? (
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="min-w-0 rounded-xl border border-border/70 bg-card p-4">
+            <SchedulesStep draft={draft} patch={patch} />
+          </div>
+          <div className="mx-auto w-full max-w-[390px] rounded-[28px] border border-border/70 bg-background p-3 shadow-[0_2px_12px_rgba(16,42,67,0.06)] xl:max-w-none xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
+            <AssignmentWorkspace
+              draft={draft}
+              patch={patch}
+              members={members}
+              editingId={editingId}
+            />
+          </div>
+        </div>
       ) : (
         <div
           className={cn(
@@ -320,8 +332,7 @@ export function SuguanBuilderPage() {
               onChange={(docFormat) => patch({ docFormat })}
             />
           )}
-          {step === 2 && <SchedulesStep draft={draft} patch={patch} />}
-          {step === 4 && (
+          {step === 3 && (
             <PreviewStep
               draft={draft}
               onSave={handleSave}
@@ -411,7 +422,15 @@ export function SuguanBuilderPage() {
 
       <StartModeDialog
         open={startOpen}
-        onOpenChange={setStartOpen}
+        onOpenChange={(next) => {
+          // Dismissing means "never mind". Close the dialog, then put the user
+          // back on the page they left, so Cancel and the backdrop behave the
+          // same instead of dumping them on an empty builder. When there is no
+          // remembered origin (a deliberate "start over" from inside the
+          // builder) this just closes the dialog and leaves them here.
+          setStartOpen(next)
+          if (!next) dismissNewSuguan()
+        }}
         suguan={suguanList}
         onStartNew={() => {
           setEditingId(null)
@@ -419,6 +438,7 @@ export function SuguanBuilderPage() {
           setDraft(createEmptyDraft(voices))
           setStep(0)
           setStartOpen(false)
+          clearBuilderReturnPage()
         }}
         onCopy={(source) => {
           setEditingId(null)
@@ -426,7 +446,8 @@ export function SuguanBuilderPage() {
           setDraft(createCopyDraft(source, voices))
           setStep(0)
           setStartOpen(false)
-          toast.success(`Copied "${source.eventTitle || source.date}".`)
+          clearBuilderReturnPage()
+          toast.success(`Copied "${source.date}".`)
         }}
       />
     </div>

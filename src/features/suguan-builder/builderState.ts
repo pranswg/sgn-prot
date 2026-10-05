@@ -5,10 +5,8 @@ import type {
   SuguanDocFormat,
   SuguanDutyRole,
   SuguanEvent,
-  SuguanFormation,
   SuguanGroup,
   SuguanScheduleSection,
-  SuguanType,
   VoicePosition,
 } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
@@ -21,18 +19,15 @@ import {
 } from '@/lib/suguanUtils'
 
 export interface SuguanDraft {
-  type: SuguanType
   docFormat: SuguanDocFormat
   coverage: SuguanCoverage | null
   date: string
   time: string
   serviceTypeId: string
-  eventTitle: string
   pagsasanayDate: string
   pagtupadDate: string
   group: SuguanGroup
   events: SuguanEvent[]
-  formation: SuguanFormation | null
   voiceCapacities: Record<string, number>
   assignments: SuguanAssignment[]
   schedules: SuguanScheduleSection[]
@@ -40,12 +35,7 @@ export interface SuguanDraft {
   destinadoName: string
 }
 
-export type BuilderStepId =
-  | 'coverage'
-  | 'document'
-  | 'schedules'
-  | 'assignments'
-  | 'preview'
+export type BuilderStepId = 'coverage' | 'document' | 'schedules' | 'preview'
 
 export interface BuilderStepDef {
   id: BuilderStepId
@@ -59,7 +49,7 @@ export const BUILDER_STEPS: BuilderStepDef[] = [
     id: 'coverage',
     title: 'Coverage & Service',
     short: 'Coverage',
-    description: 'Choose the type, duration, coverage, choir, and service of this Suguan.',
+    description: 'Choose the duration, coverage, choir, and service of this Suguan.',
   },
   {
     id: 'document',
@@ -69,15 +59,10 @@ export const BUILDER_STEPS: BuilderStepDef[] = [
   },
   {
     id: 'schedules',
-    title: 'Worship Schedules',
+    title: 'Schedules',
     short: 'Schedules',
-    description: 'Pick the worship schedules that make up this Suguan.',
-  },
-  {
-    id: 'assignments',
-    title: 'Assignments',
-    short: 'Assignments',
-    description: 'Assign members to each schedule and set duty roles.',
+    description:
+      'Pick the worship schedules, then assign members and duty roles.',
   },
   {
     id: 'preview',
@@ -112,18 +97,15 @@ export function groupGendersFor(group: SuguanGroup): ('female' | 'male')[] {
 export function createEmptyDraft(voices: VoicePosition[]): SuguanDraft {
   const coverage = defaultCoverage()
   return {
-    type: 'regular',
     docFormat: { ...DEFAULT_DOC_FORMAT },
     coverage,
     date: coverage.startDate,
     time: '19:00',
     serviceTypeId: 'pagsamba',
-    eventTitle: '',
     pagsasanayDate: '',
     pagtupadDate: '',
     group: 'babae',
     events: generateEventsFromCoverage(coverage),
-    formation: null,
     voiceCapacities: defaultCapacities(voices),
     assignments: [],
     schedules: [],
@@ -137,24 +119,17 @@ export function createDraftFromSuguan(
   voices: VoicePosition[],
 ): SuguanDraft {
   return {
-    type: suguan.type ?? 'regular',
     docFormat: suguan.docFormat
       ? { ...DEFAULT_DOC_FORMAT, ...suguan.docFormat }
       : { ...DEFAULT_DOC_FORMAT },
-    coverage:
-      suguan.coverage ??
-      (suguan.type === 'regular'
-        ? inferCoverageFromEvents(suguan.events ?? [])
-        : null),
+    coverage: suguan.coverage ?? inferCoverageFromEvents(suguan.events ?? []),
     date: suguan.date || todayPHT(),
     time: suguan.time || '09:00',
     serviceTypeId: suguan.serviceTypeId || 'pagsamba',
-    eventTitle: suguan.eventTitle ?? '',
     pagsasanayDate: suguan.pagsasanayDate ?? '',
     pagtupadDate: suguan.pagtupadDate ?? '',
     group: suguan.group ?? 'babae',
     events: suguan.events ?? [],
-    formation: suguan.formation ?? null,
     voiceCapacities: suguan.voiceCapacities ?? defaultCapacities(voices),
     assignments: suguan.assignments ?? [],
     schedules: (suguan.schedules ?? []).map((s) => ({
@@ -188,10 +163,7 @@ export function createCopyDraft(source: Suguan, voices: VoicePosition[]): Suguan
           oneWeekPagtupadEndDate: undefined,
         }
       : null
-  const events =
-    base.type === 'regular' && coverage
-      ? generateEventsFromCoverage(coverage)
-      : []
+  const events = coverage ? generateEventsFromCoverage(coverage) : []
   return {
     ...base,
     coverage,
@@ -224,15 +196,12 @@ export function buildPreviewSuguan(draft: SuguanDraft): Suguan {
     date: draft.date,
     time: draft.time,
     serviceTypeId: draft.serviceTypeId,
-    type: draft.type,
-    eventTitle: draft.type === 'special' ? draft.eventTitle : undefined,
     group: draft.group,
     docFormat: draft.docFormat,
     coverage: draft.coverage,
     pagsasanayDate: draft.pagsasanayDate,
     pagtupadDate: draft.pagtupadDate,
-    formation: draft.formation,
-    events: draft.type === 'regular' ? draft.events : [],
+    events: draft.events,
     voiceCapacities: draft.voiceCapacities,
     assignments: draft.assignments,
     schedules:
@@ -241,7 +210,7 @@ export function buildPreviewSuguan(draft: SuguanDraft): Suguan {
         : [
             {
               id: '__draft_single__',
-              scheduleLabel: draft.type === 'special' ? 'SPECIAL' : 'SUGUAN',
+              scheduleLabel: 'SUGUAN',
               scheduleDay: '',
               scheduleTime: '',
               assignments: draft.assignments,
@@ -257,21 +226,16 @@ export function buildPreviewSuguan(draft: SuguanDraft): Suguan {
 export function isStepComplete(draft: SuguanDraft, index: number): boolean {
   switch (index) {
     case 0:
-      if (draft.type === 'special') {
-        return Boolean(draft.date) && draft.eventTitle.trim().length > 0
-      }
       return (
-      draft.coverage != null &&
-      Boolean(draft.serviceTypeId) &&
-      // A blank Pagsasanay date plans no events, so the step is not finished
-      // until the user has chosen one.
-      draft.events.length > 0
-    )
+        draft.coverage != null &&
+        Boolean(draft.serviceTypeId) &&
+        // A blank Pagsasanay date plans no events, so the step is not finished
+        // until the user has chosen one.
+        draft.events.length > 0
+      )
     case 1:
       return Boolean(draft.docFormat.paperSize && draft.docFormat.orientation)
     case 2:
-      return true
-    case 3:
       return totalAssigned(draft) > 0
     default:
       return true
@@ -286,17 +250,13 @@ export function maxReachableStep(draft: SuguanDraft): number {
 
 export function saveBlockers(draft: SuguanDraft): string[] {
   const blockers: string[] = []
-  if (draft.type === 'regular') {
-    if (!draft.coverage) blockers.push('Choose a Suguan coverage.')
-    if (draft.coverage && !isDateKey(draft.coverage.startDate))
-      blockers.push('Choose a Pagsasanay date.')
-    if (draft.events.length === 0)
-      blockers.push('No schedule events were generated for this coverage.')
-    if (!draft.serviceTypeId) blockers.push('Choose a service type.')
-    if (draft.schedules.length === 0) blockers.push('Add at least one worship schedule.')
-  } else if (!draft.eventTitle.trim()) {
-    blockers.push('Provide a name for the event.')
-  }
+  if (!draft.coverage) blockers.push('Choose a Suguan coverage.')
+  if (draft.coverage && !isDateKey(draft.coverage.startDate))
+    blockers.push('Choose a Pagsasanay date.')
+  if (draft.events.length === 0)
+    blockers.push('No schedule events were generated for this coverage.')
+  if (!draft.serviceTypeId) blockers.push('Choose a service type.')
+  if (draft.schedules.length === 0) blockers.push('Add at least one worship schedule.')
   if (totalAssigned(draft) === 0) blockers.push('Assign at least one member.')
   return blockers
 }

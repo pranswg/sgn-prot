@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { FileUp, SearchX, Users, Venus, Mars } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,11 +22,15 @@ import { cn } from '@/lib/utils'
 import {
   formatMemberName,
   groupMembersByGender,
+  paginate,
+  type MemberPage,
+  type MemberPageSize,
   type MemberSort,
 } from '@/lib/memberDirectory'
 import { MemberInitialsAvatar } from './MemberInitialsAvatar'
 import { MemberPositionsCell } from './MemberPositionsCell'
 import { MemberRowActions } from './MemberRowActions'
+import { PageSizeControl, SectionPaginator } from './SectionPaginator'
 
 interface MemberDirectoryTableProps {
   members: Member[]
@@ -38,19 +43,22 @@ interface MemberDirectoryTableProps {
   onImport: () => void
   hasAnyMembers: boolean
   onClearFilters: () => void
+  pageSize: MemberPageSize
+  onPageSizeChange: (size: MemberPageSize) => void
 }
 
 const COLUMN_COUNT = 8
 
 const headClass =
-  'h-11 bg-muted/40 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
+  'h-11 bg-background text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
 
 interface ChoirSectionHeaderProps {
   icon: typeof Users
   iconClass: string
   title: string
   count: number
-  startNumber: number
+  /** e.g. `#3-#7`. Omitted when the section is empty. */
+  rangeLabel?: string
 }
 
 function ChoirSectionHeader({
@@ -58,10 +66,10 @@ function ChoirSectionHeader({
   iconClass,
   title,
   count,
-  startNumber,
+  rangeLabel,
 }: ChoirSectionHeaderProps) {
   return (
-    <TableRow className="border-y border-border/60 bg-muted/30 hover:bg-muted/30">
+    <TableRow className="border-y border-border bg-background hover:bg-background">
       <TableCell colSpan={COLUMN_COUNT} className="px-4 py-2">
         <div className="flex items-center gap-2.5">
           <Icon className={cn('size-3.5', iconClass)} />
@@ -71,9 +79,11 @@ function ChoirSectionHeader({
           <span className="rounded border border-border bg-background px-1.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
             {count}
           </span>
-          <span className="text-[0.625rem] tabular-nums text-muted-foreground/60">
-            #{startNumber}&ndash;#{startNumber + count - 1}
-          </span>
+          {rangeLabel ? (
+            <span className="text-[0.625rem] tabular-nums text-muted-foreground/60">
+              {rangeLabel}
+            </span>
+          ) : null}
           <span aria-hidden className="h-px flex-1 bg-border/60" />
         </div>
       </TableCell>
@@ -130,7 +140,16 @@ export function MemberDirectoryTable({
   onImport,
   hasAnyMembers,
   onClearFilters,
+  pageSize,
+  onPageSizeChange,
 }: MemberDirectoryTableProps) {
+  // The women's and men's tables page independently, so each keeps its own page
+  // number rather than sharing one cursor across both sections.
+  const [pages, setPages] = useState<Record<string, number>>({})
+
+  const setSectionPage = (key: string, page: number) =>
+    setPages((current) => ({ ...current, [key]: page }))
+
   if (members.length === 0) {
     return (
       <MemberDirectoryEmptyState
@@ -142,14 +161,16 @@ export function MemberDirectoryTable({
   }
 
   const { women, men } = groupMembersByGender(members)
-  const sections = [
+  const choirSections = [
     {
+      key: 'women',
       title: "Women's Choir",
       members: women,
       icon: Venus,
       iconClass: 'text-pink-500',
     },
     {
+      key: 'men',
       title: "Men's Choir",
       members: men,
       icon: Mars,
@@ -157,18 +178,34 @@ export function MemberDirectoryTable({
     },
   ].filter((section) => section.members.length > 0)
 
-  // Numbering runs continuously down the visible list, across both sections.
-  const rowNumbers = new Map<string, number>()
-  let next = 1
-  for (const section of sections) {
-    for (const member of section.members) {
-      rowNumbers.set(member.id, next)
-      next += 1
-    }
-  }
+  const sections = choirSections.map((section) => ({
+    ...section,
+    // `paginate` clamps, so a stale page 4 left over from a wider filter set
+    // cannot blank the table.
+    page: paginate(section.members, pages[section.key] ?? 1, pageSize),
+  }))
+
+  const anyPaged = sections.some((section) => section.page.pageCount > 1)
 
   return (
     <>
+      {anyPaged ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/20 px-4 py-2.5">
+          <p className="text-[0.6875rem] text-muted-foreground">
+            Paged per choir section
+          </p>
+          <PageSizeControl
+            value={pageSize}
+            onChange={(size) => {
+              // Keeping the current page while the page size changes would
+              // silently jump the user; start over at the top instead.
+              setPages({})
+              onPageSizeChange(size)
+            }}
+          />
+        </div>
+      ) : null}
+
       {/* Desktop / tablet: dense table */}
       <div className="hidden md:block">
         <Table className="min-w-[54rem]">
@@ -193,125 +230,76 @@ export function MemberDirectoryTable({
           <TableBody>
             {sections.map((section) => (
               <ChoirSection
-                key={section.title}
-                {...section}
-                rowNumbers={rowNumbers}
+                key={section.key}
+                title={section.title}
+                page={section.page}
+                icon={section.icon}
+                iconClass={section.iconClass}
                 voices={voices}
                 references={references}
                 sort={sort}
                 onView={onView}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onPageChange={(page) => setSectionPage(section.key, page)}
               />
             ))}
           </TableBody>
         </Table>
       </div>
 
-      {/* Mobile: card list instead of a horizontally scrolling table */}
-      <div className="flex flex-col gap-5 p-4 md:hidden">
-        {sections.map((section) => (
-          <section key={section.title} className="flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <section.icon className={cn('size-3.5', section.iconClass)} />
-              <h3 className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-foreground/75">
-                {section.title}
-              </h3>
-              <span className="rounded border border-border bg-muted/50 px-1.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
-                {section.members.length}
-              </span>
-              <span aria-hidden className="h-px flex-1 bg-border/60" />
-            </div>
-            <ul className="flex flex-col gap-2.5">
-              {section.members.map((member) => (
-                <li
-                  key={member.id}
-                  className="flex flex-col gap-2.5 rounded-lg border border-border/70 bg-card p-3"
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
-                      {rowNumbers.get(member.id) ?? '—'}
-                    </span>
-                    <MemberInitialsAvatar member={member} sort={sort} />
-                    <div className="min-w-0 flex-1 leading-tight">
-                      <p className="truncate text-[0.8125rem] font-semibold text-foreground">
-                        {formatMemberName(member, sort)}
-                      </p>
-                      <p className="mt-0.5 text-[0.6875rem] tabular-nums text-muted-foreground">
-                        {references.get(member.id) ?? '—'}
-                      </p>
-                    </div>
-                    <MemberRowActions
-                      member={member}
-                      sort={sort}
-                      onView={onView}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <VoiceBadge name={getVoiceName(member.voicePosition, voices)} />
-                    <MembershipBadge type={member.membershipType} />
-                    <GenderBadge gender={member.gender} />
-                    <MemberStatusBadge active={member.isActive} />
-                  </div>
-                  <MemberPositionsCell positions={member.positions} max={3} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </>
+      </>
   )
 }
 
 interface ChoirSectionProps {
   title: string
-  members: Member[]
+  page: MemberPage<Member>
   icon: typeof Users
   iconClass: string
-  rowNumbers: Map<string, number>
   voices: VoicePosition[]
   references: Map<string, string>
   sort: MemberSort
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onDelete: (member: Member) => void
+  onPageChange: (page: number) => void
 }
 
 function ChoirSection({
   title,
-  members,
+  page,
   icon,
   iconClass,
-  rowNumbers,
   voices,
   references,
   sort,
   onView,
   onEdit,
   onDelete,
+  onPageChange,
 }: ChoirSectionProps) {
-  const startNumber = rowNumbers.get(members[0].id) ?? 1
-
   return (
     <>
       <ChoirSectionHeader
         icon={icon}
         iconClass={iconClass}
         title={title}
-        count={members.length}
-        startNumber={startNumber}
+        count={page.total}
+        rangeLabel={
+          page.pageCount > 1
+            ? `#${page.firstItem}-#${page.lastItem} of #${page.total}`
+            : `#1-#${page.total}`
+        }
       />
-      {members.map((member) => (
+      {page.items.map((member, index) => (
         <TableRow
           key={member.id}
-          className="h-14 border-b border-border/60 transition-colors hover:bg-brand-teal-soft/30"
+          className="h-14 border-b border-border transition-colors hover:bg-background"
         >
           <TableCell className="w-14 text-center align-middle">
             <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
-              {rowNumbers.get(member.id) ?? '—'}
+              {page.firstItem + index}
             </span>
           </TableCell>
           <TableCell>
@@ -353,6 +341,18 @@ function ChoirSection({
           </TableCell>
         </TableRow>
       ))}
+
+      {page.pageCount > 1 ? (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={COLUMN_COUNT} className="p-0">
+            <SectionPaginator
+              label={title}
+              page={page}
+              onPageChange={onPageChange}
+            />
+          </TableCell>
+        </TableRow>
+      ) : null}
     </>
   )
 }

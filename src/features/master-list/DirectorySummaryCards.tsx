@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { GraduationCap, Music2, ShieldCheck, Users } from 'lucide-react'
+import { GraduationCap, Music2, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { DirectoryStats } from '@/lib/memberDirectory'
@@ -59,7 +59,7 @@ export function DirectorySummaryCards({ stats }: SummaryCardsProps) {
   const voiceMax = Math.max(1, ...stats.voiceCounts.map((v) => v.count))
 
   return (
-    <div className="hidden grid-cols-1 gap-3 sm:grid-cols-2 md:grid xl:grid-cols-4">
+    <div className="hidden grid-cols-1 gap-3 sm:grid-cols-2 md:grid md:grid-cols-3">
       <CardShell
         label="Total Members"
         icon={Users}
@@ -132,25 +132,6 @@ export function DirectorySummaryCards({ stats }: SummaryCardsProps) {
         )}
         <p className="text-xs text-muted-foreground">
           {voiceTotal} members assigned to a voice
-        </p>
-      </CardShell>
-
-      <CardShell
-        label="Choir Positions"
-        icon={ShieldCheck}
-        iconWrapClass="bg-amber-500/10"
-        iconClass="text-amber-600 dark:text-amber-400"
-      >
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-semibold leading-none tracking-tight tabular-nums">
-            {stats.withPrivileges}
-          </span>
-          <span className="text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
-            of {stats.total}
-          </span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Members with special privileges
         </p>
       </CardShell>
     </div>

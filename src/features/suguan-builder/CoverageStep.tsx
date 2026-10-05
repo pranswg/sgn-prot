@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { CalendarDays, Sparkles, CalendarRange, Check } from 'lucide-react'
+import { CalendarDays, CalendarRange, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +29,6 @@ import type {
   SuguanCoverage,
   SuguanCoverageTemplate,
   SuguanGroup,
-  SuguanType,
 } from '@/core/types/suguan'
 import type { SuguanDraft } from './builderState'
 
@@ -37,28 +36,6 @@ interface CoverageStepProps {
   draft: SuguanDraft
   patch: (p: Partial<SuguanDraft>) => void
 }
-
-const TYPES: {
-  id: SuguanType
-  title: string
-  description: string
-  icon: typeof CalendarDays
-}[] = [
-  {
-    id: 'regular',
-    title: 'Regular Worship Service',
-    description:
-      'Weekly service with Pagsasanay and Pagtupad columns and multiple worship schedules.',
-    icon: CalendarDays,
-  },
-  {
-    id: 'special',
-    title: 'Special Occasion',
-    description:
-      'Anniversaries, district events, and choir presentations with a Koro formation.',
-    icon: Sparkles,
-  },
-]
 
 const DURATIONS: {
   id: SuguanCoverageTemplate
@@ -148,8 +125,8 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
   const coverage = draft.coverage ?? fallbackCoverage
 
   const events = useMemo(
-    () => (draft.type === 'regular' ? generateEventsFromCoverage(coverage) : []),
-    [coverage, draft.type],
+    () => generateEventsFromCoverage(coverage),
+    [coverage],
   )
 
   /** The auto-suggested Pagtupad date for the currently entered Pagsasanay date. */
@@ -197,11 +174,11 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
       coverage: next,
       events: nextEvents,
       date: laterDateKey(pagtupad, pagsasanay, next.startDate),
-      // Written unconditionally (not spread-conditionally) so clearing the
-      // Pagsasanay date also clears the derived dates. Otherwise a stale
-      // `pagsasanayDate` would outlive the coverage it came from.
-      ...(draft.type === 'regular' ? { pagsasanayDate: pagsasanay ?? '' } : {}),
-      ...(draft.type === 'regular' ? { pagtupadDate: pagtupad ?? '' } : {}),
+      // Written unconditionally so clearing the Pagsasanay date also clears
+      // the derived dates. Otherwise a stale `pagsasanayDate` would outlive
+      // the coverage it came from.
+      pagsasanayDate: pagsasanay ?? '',
+      pagtupadDate: pagtupad ?? '',
     })
   }
 
@@ -240,297 +217,245 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
     })
   }
 
-  const isSpecial = draft.type === 'special'
-
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
         <StepHeading
-          title="1. Suguan type"
-          hint="Regular services build a signature sheet. Special occasions also get a Koro formation."
+          title="1. Duration & coverage"
+          hint="Coverage decides the Pagsasanay and Pagtupad columns printed on the sheet."
         />
-        <div className="grid gap-3 md:grid-cols-2">
-          {TYPES.map((t) => (
+        <div className="grid gap-3 md:grid-cols-3">
+          {DURATIONS.map((t) => (
             <SelectionCard
               key={t.id}
-              active={draft.type === t.id}
-              onClick={() => patch({ type: t.id })}
+              active={coverage.template === t.id}
+              onClick={() => selectTemplate(t.id)}
               title={t.title}
+              meta={t.duration}
               description={t.description}
-              icon={t.icon}
             />
           ))}
         </div>
-      </section>
 
-      {isSpecial ? (
-        <section className="flex flex-col gap-3">
-          <StepHeading
-            title="2. Event details"
-            hint="The event name is printed on the sheet title."
-          />
-          <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-2">
+        {coverage.template === 'one-week' ? (
+          <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="grid gap-1.5">
-              <Label htmlFor="eventTitle">Event name</Label>
+              <Label htmlFor="cw-date" className="text-xs text-muted-foreground">
+                Worship date
+              </Label>
               <Input
-                id="eventTitle"
-                value={draft.eventTitle}
-                onChange={(e) => patch({ eventTitle: e.target.value })}
-                placeholder="e.g. 50th Anniversary, District Event"
+                id="cw-date"
+                type="date"
+                value={coverage.oneWeekDate ?? ''}
+                onChange={(e) =>
+                  applyCoverage({ ...coverage, oneWeekDate: e.target.value })
+                }
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="cw-psd" className="text-xs text-muted-foreground">
+                Pagsasanay date
+              </Label>
               <Input
-                id="date"
+                id="cw-psd"
                 type="date"
-                value={draft.date}
-                onChange={(e) => patch({ date: e.target.value })}
+                value={coverage.oneWeekPagsasanayDate ?? ''}
+                onChange={(e) =>
+                  applyCoverage({
+                    ...coverage,
+                    oneWeekPagsasanayDate: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="cw-ptd" className="text-xs text-muted-foreground">
+                Pagtupad start
+              </Label>
+              <Input
+                id="cw-ptd"
+                type="date"
+                disabled={!hasOneWeekRehearsal}
+                value={coverage.oneWeekPagtupadDate ?? ''}
+                onChange={(e) =>
+                  applyCoverage({
+                    ...coverage,
+                    oneWeekPagtupadDate: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="cw-pte" className="text-xs text-muted-foreground">
+                Pagtupad end (optional)
+              </Label>
+              <Input
+                id="cw-pte"
+                type="date"
+                disabled={!hasOneWeekRehearsal}
+                value={coverage.oneWeekPagtupadEndDate ?? ''}
+                onChange={(e) =>
+                  applyCoverage({
+                    ...coverage,
+                    oneWeekPagtupadEndDate: e.target.value || undefined,
+                  })
+                }
               />
             </div>
           </div>
-        </section>
-      ) : (
-        <>
-          <section className="flex flex-col gap-3">
-            <StepHeading
-              title="2. Duration & coverage"
-              hint="Coverage decides the Pagsasanay and Pagtupad columns printed on the sheet."
-            />
-            <div className="grid gap-3 md:grid-cols-3">
-              {DURATIONS.map((t) => (
-                <SelectionCard
-                  key={t.id}
-                  active={coverage.template === t.id}
-                  onClick={() => selectTemplate(t.id)}
-                  title={t.title}
-                  meta={t.duration}
-                  description={t.description}
-                />
-              ))}
-            </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              {!hasPagsasanay ? (
+                'Choose a Pagsasanay date to see the Pagtupad dates. Every date is kept exactly as entered.'
+              ) : suggestedService === null ? (
+                'No worship days are configured. Add a worship schedule in Settings to have the Pagtupad dates suggested automatically.'
+              ) : (
+                <>
+                  Pagtupad covers{' '}
+                  <span className="font-medium text-foreground">
+                    {suggestedService.days
+                      .map((d) => WEEKDAY_LONG[d])
+                      .join(' and ')}
+                  </span>{' '}
+                  ({formatDateKeyNumeric(suggestedService.start)}
+                  {suggestedService.end !== suggestedService.start &&
+                    `–${formatDateKeyNumeric(suggestedService.end)}`}
+                  ). The Pagsasanay date is kept exactly as entered, and
+                  every date stays editable.
+                </>
+              )}
+            </p>
 
-            {coverage.template === 'one-week' ? (
-              <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="cw-date" className="text-xs text-muted-foreground">
-                    Worship date
-                  </Label>
+            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,260px)_1fr] md:items-end">
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="cw-start"
+                  className="text-xs text-muted-foreground"
+                >
+                  Petsa ng Pagsasanay
+                </Label>
+                <div className="flex items-center gap-2">
+                  <CalendarRange className="size-4 shrink-0 text-muted-foreground" />
                   <Input
-                    id="cw-date"
+                    id="cw-start"
                     type="date"
-                    value={coverage.oneWeekDate ?? ''}
-                    onChange={(e) =>
-                      applyCoverage({ ...coverage, oneWeekDate: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="cw-psd" className="text-xs text-muted-foreground">
-                    Pagsasanay date
-                  </Label>
-                  <Input
-                    id="cw-psd"
-                    type="date"
-                    value={coverage.oneWeekPagsasanayDate ?? ''}
+                    value={coverage.startDate}
                     onChange={(e) =>
                       applyCoverage({
                         ...coverage,
-                        oneWeekPagsasanayDate: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="cw-ptd" className="text-xs text-muted-foreground">
-                    Pagtupad start
-                  </Label>
-                  <Input
-                    id="cw-ptd"
-                    type="date"
-                    disabled={!hasOneWeekRehearsal}
-                    value={coverage.oneWeekPagtupadDate ?? ''}
-                    onChange={(e) =>
-                      applyCoverage({
-                        ...coverage,
-                        oneWeekPagtupadDate: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="cw-pte" className="text-xs text-muted-foreground">
-                    Pagtupad end (optional)
-                  </Label>
-                  <Input
-                    id="cw-pte"
-                    type="date"
-                    disabled={!hasOneWeekRehearsal}
-                    value={coverage.oneWeekPagtupadEndDate ?? ''}
-                    onChange={(e) =>
-                      applyCoverage({
-                        ...coverage,
-                        oneWeekPagtupadEndDate: e.target.value || undefined,
+                        startDate: e.target.value,
                       })
                     }
                   />
                 </div>
               </div>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  {!hasPagsasanay ? (
-                    'Choose a Pagsasanay date to see the Pagtupad dates. Every date is kept exactly as entered.'
-                  ) : suggestedService === null ? (
-                    'No worship days are configured. Add a worship schedule in Settings to have the Pagtupad dates suggested automatically.'
-                  ) : (
-                    <>
-                      Pagtupad covers{' '}
-                      <span className="font-medium text-foreground">
-                        {suggestedService.days
-                          .map((d) => WEEKDAY_LONG[d])
-                          .join(' and ')}
-                      </span>{' '}
+              <div className="grid gap-3">
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label
+                      htmlFor="cw-ptd-2w-start"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Pagtupad start
+                    </Label>
+                    <Input
+                      id="cw-ptd-2w-start"
+                      type="date"
+                      disabled={!hasPagsasanay}
+                      value={currentPagtupad?.date ?? ''}
+                      onChange={(e) =>
+                        applyCoverage({
+                          ...coverage,
+                          pagtupadStartOverride:
+                            e.target.value || undefined,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label
+                      htmlFor="cw-ptd-2w-end"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Pagtupad end
+                    </Label>
+                    <Input
+                      id="cw-ptd-2w-end"
+                      type="date"
+                      disabled={!hasPagsasanay}
+                      value={currentPagtupad?.endDate ?? ''}
+                      onChange={(e) =>
+                        applyCoverage({
+                          ...coverage,
+                          pagtupadEndOverride: e.target.value || undefined,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                {suggestedService &&
+                  (suggestedService.start !== currentPagtupad?.date ||
+                    suggestedService.end !== currentPagtupad?.endDate) && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto justify-start p-0 text-xs"
+                      onClick={() =>
+                        applyCoverage({
+                          ...coverage,
+                          pagtupadStartOverride: undefined,
+                          pagtupadEndOverride: undefined,
+                        })
+                      }
+                    >
+                      Use{' '}
+                      {suggestedService.days
+                        .map((d) => WEEKDAY_LONG[d])
+                        .join(' &amp; ')}{' '}
                       ({formatDateKeyNumeric(suggestedService.start)}
                       {suggestedService.end !== suggestedService.start &&
                         `–${formatDateKeyNumeric(suggestedService.end)}`}
-                      ). The Pagsasanay date is kept exactly as entered, and
-                      every date stays editable.
-                    </>
+                      )
+                    </Button>
                   )}
-                </p>
-
-                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,260px)_1fr] md:items-end">
-                  <div className="grid gap-1.5">
-                    <Label
-                      htmlFor="cw-start"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Petsa ng Pagsasanay
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <CalendarRange className="size-4 shrink-0 text-muted-foreground" />
-                      <Input
-                        id="cw-start"
-                        type="date"
-                        value={coverage.startDate}
-                        onChange={(e) =>
-                          applyCoverage({
-                            ...coverage,
-                            startDate: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-3">
-                    <div className="grid gap-1.5 sm:grid-cols-2">
-                      <div className="grid gap-1.5">
-                        <Label
-                          htmlFor="cw-ptd-2w-start"
-                          className="text-xs text-muted-foreground"
-                        >
-                          Pagtupad start
-                        </Label>
-                        <Input
-                          id="cw-ptd-2w-start"
-                          type="date"
-                          disabled={!hasPagsasanay}
-                          value={currentPagtupad?.date ?? ''}
-                          onChange={(e) =>
-                            applyCoverage({
-                              ...coverage,
-                              pagtupadStartOverride:
-                                e.target.value || undefined,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="grid gap-1.5">
-                        <Label
-                          htmlFor="cw-ptd-2w-end"
-                          className="text-xs text-muted-foreground"
-                        >
-                          Pagtupad end
-                        </Label>
-                        <Input
-                          id="cw-ptd-2w-end"
-                          type="date"
-                          disabled={!hasPagsasanay}
-                          value={currentPagtupad?.endDate ?? ''}
-                          onChange={(e) =>
-                            applyCoverage({
-                              ...coverage,
-                              pagtupadEndOverride: e.target.value || undefined,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                    {suggestedService &&
-                      (suggestedService.start !== currentPagtupad?.date ||
-                        suggestedService.end !== currentPagtupad?.endDate) && (
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="h-auto justify-start p-0 text-xs"
-                          onClick={() =>
-                            applyCoverage({
-                              ...coverage,
-                              pagtupadStartOverride: undefined,
-                              pagtupadEndOverride: undefined,
-                            })
-                          }
-                        >
-                          Use{' '}
-                          {suggestedService.days
-                            .map((d) => WEEKDAY_LONG[d])
-                            .join(' &amp; ')}{' '}
-                          ({formatDateKeyNumeric(suggestedService.start)}
-                          {suggestedService.end !== suggestedService.start &&
-                            `–${formatDateKeyNumeric(suggestedService.end)}`}
-                          )
-                        </Button>
-                      )}
-                  </div>
-                </div>
-              </>
-            )}
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <StepHeading
-              title="3. Service"
-              hint="The service is used for the sheet title and file naming."
-            />
-            <div className="grid gap-3 rounded-lg border p-4">
-              <div className="grid gap-1.5">
-                <Label htmlFor="serviceType">Service type</Label>
-                <Select
-                  value={draft.serviceTypeId}
-                  onValueChange={(v) => patch({ serviceTypeId: v })}
-                >
-                  <SelectTrigger id="serviceType" className="w-full">
-                    <SelectValue placeholder="Select a service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allServiceTypes().map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
-          </section>
-        </>
-      )}
+          </>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <StepHeading
-          title={isSpecial ? '3. Choir' : '4. Choir'}
+          title="2. Service"
+          hint="The service is used for the sheet title and file naming."
+        />
+        <div className="grid gap-3 rounded-lg border p-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="serviceType">Service type</Label>
+            <Select
+              value={draft.serviceTypeId}
+              onValueChange={(v) => patch({ serviceTypeId: v })}
+            >
+              <SelectTrigger id="serviceType" className="w-full">
+                <SelectValue placeholder="Select a service" />
+              </SelectTrigger>
+              <SelectContent>
+                {allServiceTypes().map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <StepHeading
+          title="3. Choir"
           hint="Only members of the selected choir can be assigned."
         />
         <div className="grid gap-3 md:grid-cols-3">
@@ -547,7 +472,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
         </div>
       </section>
 
-      {!isSpecial && events.length > 0 && (
+      {events.length > 0 && (
         <section className="flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Signature columns

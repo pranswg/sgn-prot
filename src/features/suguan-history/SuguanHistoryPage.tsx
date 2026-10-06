@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -56,6 +57,7 @@ import type { Suguan } from '@/core/types/suguan'
 export function SuguanHistoryPage() {
   const suguan = useSuguanStore((s) => s.suguan)
   const deleteSuguan = useSuguanStore((s) => s.deleteSuguan)
+  const deleteMany = useSuguanStore((s) => s.deleteMany)
   const clearHistory = useSuguanStore((s) => s.clear)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
   const editSuguanInBuilder = useNavStore((s) => s.editSuguanInBuilder)
@@ -66,16 +68,22 @@ export function SuguanHistoryPage() {
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [exportingId, setExportingId] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Suguan | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [deleteTargets, setDeleteTargets] = useState<Suguan[] | null>(null)
   const [clearOpen, setClearOpen] = useState(false)
 
   const confirmDelete = () => {
-    if (!deleteTarget) return
-    deleteSuguan(deleteTarget.id)
+    if (!deleteTargets || deleteTargets.length === 0) return
+    const ids = deleteTargets.map((s) => s.id)
+    if (ids.length === 1) deleteSuguan(ids[0])
+    else deleteMany(ids)
     toast.success(
-      `Suguan on ${formatDate(deleteTarget.date)} deleted from history.`,
+      ids.length === 1
+        ? `Suguan on ${formatDate(deleteTargets[0].date)} deleted from history.`
+        : `${ids.length} Suguan records deleted from history.`,
     )
-    setDeleteTarget(null)
+    setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)))
+    setDeleteTargets(null)
   }
 
   const confirmClear = () => {
@@ -126,6 +134,25 @@ export function SuguanHistoryPage() {
       })
   }, [suguan, query, typeFilter, allTypes])
 
+  const allSelected = filtered.length > 0 && filtered.every((s) => selectedIds.includes(s.id))
+
+  const toggleRow = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
+
+  const toggleAll = () => {
+    const visibleIds = filtered.map((s) => s.id)
+    setSelectedIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !visibleIds.includes(id))
+        : [...new Set([...prev, ...visibleIds])],
+    )
+  }
+
+  const selectedRecords = filtered.filter((s) => selectedIds.includes(s.id))
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -171,28 +198,65 @@ export function SuguanHistoryPage() {
         </Select>
       </div>
 
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2">
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
+              Deselect all
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteTargets(selectedRecords)}
+              disabled={selectedRecords.length === 0}
+            >
+              <Trash2 className="size-4" />
+              Delete selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label="Select all Suguans"
+                  checked={allSelected}
+                  onCheckedChange={toggleAll}
+                  disabled={filtered.length === 0}
+                />
+              </TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Time</TableHead>
               <TableHead>Service</TableHead>
               <TableHead>Gender</TableHead>
               <TableHead>Assigned</TableHead>
-              <TableHead className="w-24 text-right">Actions</TableHead>
+              <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   No Suguan records found. Create one with the Suguan Builder.
                 </TableCell>
               </TableRow>
             ) : (
               filtered.map((s) => (
                 <TableRow key={s.id}>
+                  <TableCell>
+                    <Checkbox
+                      aria-label={`Select Suguan on ${formatDate(s.date)}`}
+                      checked={selectedIds.includes(s.id)}
+                      onCheckedChange={() => toggleRow(s.id)}
+                    />
+                  </TableCell>
                   <TableCell>{formatDate(s.date)}</TableCell>
                   <TableCell>{s.time}</TableCell>
                   <TableCell>{recordLabel(s)}</TableCell>
@@ -220,6 +284,13 @@ export function SuguanHistoryPage() {
                       >
                         <Eye className="size-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setDeleteTargets([s])}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -242,7 +313,7 @@ export function SuguanHistoryPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             variant="destructive"
-                            onClick={() => setDeleteTarget(s)}
+                            onClick={() => setDeleteTargets([s])}
                           >
                             <Trash2 className="size-4" />
                             Delete from history
@@ -259,16 +330,20 @@ export function SuguanHistoryPage() {
       </div>
 
       <AlertDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        open={!!deleteTargets}
+        onOpenChange={(o) => !o && setDeleteTargets(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this Suguan?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteTargets && deleteTargets.length === 1
+                ? 'Delete this Suguan?'
+                : `Delete ${deleteTargets?.length ?? 0} Suguans?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget
-                ? `${formatDate(deleteTarget.date)} — ${recordLabel(deleteTarget)}. This will permanently remove the record from history.`
-                : ''}
+              {deleteTargets && deleteTargets.length === 1
+                ? `${formatDate(deleteTargets[0].date)} — ${recordLabel(deleteTargets[0])}. This will permanently remove the record from history.`
+                : `This permanently deletes ${deleteTargets?.length ?? 0} Suguan records, including their rosters, duty roles, and document settings. This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

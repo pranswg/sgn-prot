@@ -29,6 +29,7 @@ interface SuguanState {
   setDutyRole: (suguanId: string, dutyRoleId: string, memberId: string, memberName: string) => void
   removeDutyRole: (suguanId: string, dutyRoleId: string) => void
   deleteSuguan: (id: string) => void
+  deleteMany: (ids: string[]) => void
   importData: (suguan: Suguan[]) => void
   clear: () => void
 }
@@ -141,6 +142,11 @@ export const useSuguanStore = create<SuguanState>()(
 
       deleteSuguan: (id) => {
         set((s) => ({ suguan: s.suguan.filter((su) => su.id !== id) }))
+      },
+
+      deleteMany: (ids) => {
+        const toDelete = new Set(ids)
+        set((s) => ({ suguan: s.suguan.filter((su) => !toDelete.has(su.id)) }))
       },
 
       importData: (suguan) => {

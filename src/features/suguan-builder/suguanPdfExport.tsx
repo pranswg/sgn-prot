@@ -5,6 +5,7 @@ import {
   PT_TO_MM,
   SIG_RULE_BORDER,
   SIG_RULE_PAD,
+  suguanSheetAccent,
   type SheetMembers,
   type SheetPageBlock,
 } from '@/lib/suguanExport'
@@ -21,8 +22,12 @@ import sheetBoldUrl from '@/assets/fonts/Inter-Bold.ttf?url'
 const BORDER = { r: 139, g: 139, b: 139 }
 const HEADER_FILL = { r: 242, g: 242, b: 242 }
 const PAGSASANAY_FILL = { r: 255, g: 242, b: 204 }
-const PAGTUPAD_FILL = { r: 217, g: 234, b: 211 }
-const SCHEDULE_FILL = { r: 198, g: 239, b: 206 }
+
+const hexRgb = (hex: string): { r: number; g: number; b: number } => ({
+  r: parseInt(hex.slice(1, 3), 16),
+  g: parseInt(hex.slice(3, 5), 16),
+  b: parseInt(hex.slice(5, 7), 16),
+})
 
 async function fetchAsBase64(url: string): Promise<string> {
   const res = await fetch(url)
@@ -58,6 +63,9 @@ export async function exportSuguanPdf(
   const m = layout.margins
   const scale = layout.scale || 1
   const sigGeo = layout.sig
+  const accent = suguanSheetAccent(suguan.group)
+  const pagtupadRgb = hexRgb(accent.pagtupadFill)
+  const scheduleRgb = hexRgb(accent.scheduleFill)
 
   const titleSz = fs.titleFontSize * scale
   const headerSz = fs.headerFontSize * scale
@@ -124,7 +132,7 @@ export async function exportSuguanPdf(
     doc.rect(xName, headerTopY, layout.nameColWidthMm, layout.headerRowH * 2, 'F')
 
     layout.events.forEach((e, i) => {
-      const fill = e.type === 'pagsasanay' ? PAGSASANAY_FILL : PAGTUPAD_FILL
+      const fill = e.type === 'pagsasanay' ? PAGSASANAY_FILL : pagtupadRgb
       doc.setFillColor(fill.r, fill.g, fill.b)
       doc.rect(eventXs[i], headerTopY, layout.eventColWidthMm, layout.headerRowH, 'F')
       doc.rect(eventXs[i], headerTopY + layout.headerRowH, layout.eventColWidthMm, layout.headerRowH, 'F')
@@ -180,7 +188,7 @@ export async function exportSuguanPdf(
       switch (block.kind) {
         case 'section-label': {
           const section = layout.sections[block.sectionIndex]
-          doc.setFillColor(SCHEDULE_FILL.r, SCHEDULE_FILL.g, SCHEDULE_FILL.b)
+          doc.setFillColor(scheduleRgb.r, scheduleRgb.g, scheduleRgb.b)
           doc.rect(xName, y, layout.nameColWidthMm, layout.sectionLabelRowH, 'F')
           doc.rect(x0, y, layout.noColWidthMm, layout.sectionLabelRowH, 'S')
           doc.rect(xName, y, layout.nameColWidthMm, layout.sectionLabelRowH, 'S')
@@ -219,9 +227,6 @@ export async function exportSuguanPdf(
           return
         }
         case 'sig-gap': {
-          // Deliberate blank space between the table and the signatures. This
-          // block used to be skipped here, which pulled the signatures up
-          // against the last row in the PDF.
           y += sigGeo.gapMm
           return
         }

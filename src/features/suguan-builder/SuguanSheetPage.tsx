@@ -14,13 +14,13 @@ import {
   SIG_RULE_BORDER,
   SIG_RULE_GAP,
   SIG_RULE_PAD,
+  suguanSheetAccent,
   type SheetMembers,
   type SheetPageBlock,
   type SuguanSheetLayout,
 } from '@/lib/suguanExport'
 
 const BORDER = '#8b8b8b'
-const SCHEDULE_FILL = '#C6EFCE'
 const PT_TO_PX = 96 / 72
 const PX_TO_MM = 25.4 / 96
 
@@ -89,6 +89,7 @@ export function SuguanSheetPage({
   const { layout, sig } = readout
   const fs = layout.fs
   const events = layout.events
+  const accent = suguanSheetAccent(suguan.group)
   const px = (mm: number) => mm * mmToPx
   const sigGeo = layout.sig
 
@@ -98,6 +99,24 @@ export function SuguanSheetPage({
   // Locked to fixed sizes so fit-page scaling never shrinks the signatures.
   const sigNameMm = sigGeo.nameFontSizePt * PT_TO_MM
   const sigRolePx = sigGeo.roleFontSizePt * PT_TO_PX
+  const sigBlockIndex = blocks.findIndex((block) => block.kind === 'sig-gap')
+  const sigPrecedingContentMm = blocks
+    .slice(0, sigBlockIndex < 0 ? blocks.length : sigBlockIndex)
+    .reduce(
+      (height, block) =>
+        height +
+        (block.kind === 'section-label'
+          ? layout.sectionLabelRowH
+          : block.kind === 'member'
+            ? layout.bodyRowH
+            : 0),
+      0,
+    )
+  const sigTopMm =
+    layout.margins.top +
+    layout.topBlockH +
+    sigPrecedingContentMm +
+    sigGeo.gapMm
 
   // Long names shrink by the same amount in both renderers.
   const pmNameSizePt = fitFontSizePt({
@@ -135,7 +154,7 @@ export function SuguanSheetPage({
             style={{
               height: px(layout.sectionLabelRowH),
               fontSize: headerPx,
-              background: SCHEDULE_FILL,
+              background: accent.scheduleFill,
               border: `0.5px solid ${BORDER}`,
               textAlign: 'center',
               verticalAlign: 'middle',
@@ -196,102 +215,16 @@ export function SuguanSheetPage({
       )
     }
 
-    if (block.kind === 'sig-gap') {
-      return (
-        <tr key="sig-gap">
-          <td
-            colSpan={layout.totalCols}
-            style={{
-              height: px(sigGeo.gapMm),
-              padding: 0,
-              border: 'none',
-              fontSize: 0,
-              lineHeight: 0,
-            }}
-          />
-        </tr>
-      )
+    if (
+      block.kind === 'sig-gap' ||
+      block.kind === 'sig-name' ||
+      block.kind === 'sig-title'
+    ) {
+      return null
     }
 
-    if (block.kind === 'sig-name') {
-      return (
-        <tr key="sig-name">
-          <td
-            colSpan={layout.totalCols}
-            style={{ height: px(sigGeo.nameRowMm), padding: 0, border: 'none' }}
-          >
-            <div
-              className="flex w-full items-start text-black"
-              style={{ height: px(sigGeo.nameRowMm) }}
-            >
-              <div className="flex flex-1 justify-center">
-                <span
-                  style={{
-                    display: 'inline-block',
-                    marginTop: px(nameMarginTopMm),
-                    paddingLeft: px(SIG_RULE_PAD),
-                    paddingRight: px(SIG_RULE_PAD),
-                    paddingBottom: px(namePadBottomMm),
-                    borderBottom: `${px(SIG_RULE_BORDER)} solid #000`,
-                    lineHeight: SIG_LINE,
-                    fontSize: pmNameSizePt * PT_TO_PX,
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {sig.pmName}
-                </span>
-              </div>
-              <div className="flex flex-1 justify-center">
-                <span
-                  style={{
-                    display: 'inline-block',
-                    marginTop: px(nameMarginTopMm),
-                    paddingLeft: px(SIG_RULE_PAD),
-                    paddingRight: px(SIG_RULE_PAD),
-                    paddingBottom: px(namePadBottomMm),
-                    borderBottom: `${px(SIG_RULE_BORDER)} solid #000`,
-                    lineHeight: SIG_LINE,
-                    fontSize: destinadoNameSizePt * PT_TO_PX,
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {sig.destinadoName}
-                </span>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )
-    }
-
-    return (
-      <tr key="sig-title">
-        <td
-          colSpan={layout.totalCols}
-          style={{ height: px(sigGeo.roleRowMm), padding: 0, border: 'none' }}
-        >
-          <div
-            className="flex w-full items-start text-black"
-            style={{ height: px(sigGeo.roleRowMm) }}
-          >
-            <div
-              className="flex flex-1 justify-center text-center"
-              style={{ fontSize: sigRolePx, lineHeight: SIG_LINE }}
-            >
-              PANGULONG MANG-AAWIT
-            </div>
-            <div
-              className="flex flex-1 justify-center text-center"
-              style={{ fontSize: sigRolePx, lineHeight: SIG_LINE }}
-            >
-              DESTINADO
-            </div>
-          </div>
-        </td>
-      </tr>
-    )
+    const unreachable: never = block
+    throw new Error(`Unhandled sheet block: ${JSON.stringify(unreachable)}`)
   }
 
   // Role text sits at the top of its row with the shared line height, so its
@@ -369,7 +302,7 @@ export function SuguanSheetPage({
                 PANGALAN
               </th>
               {events.map((e, i) => {
-                const bg = e.type === 'pagsasanay' ? '#FFF2CC' : '#D9EAD3'
+                const bg = e.type === 'pagsasanay' ? '#FFF2CC' : accent.pagtupadFill
                 return (
                   <th
                     key={i}
@@ -388,7 +321,7 @@ export function SuguanSheetPage({
             </tr>
             <tr>
               {events.map((e, i) => {
-                const bg = e.type === 'pagsasanay' ? '#FFF2CC' : '#D9EAD3'
+                const bg = e.type === 'pagsasanay' ? '#FFF2CC' : accent.pagtupadFill
                 return (
                   <th
                     key={`d${i}`}
@@ -410,6 +343,74 @@ export function SuguanSheetPage({
           <tbody>{blocks.map(renderBlock)}</tbody>
         </table>
       </div>
+      {blocks.some((block) => block.kind === 'sig-name') && (
+        <div
+          className="absolute z-10 flex flex-col text-black"
+          style={{
+            left: px(layout.margins.left),
+            right: px(layout.margins.right),
+            top: px(sigTopMm),
+            pointerEvents: 'none',
+          }}
+        >
+          <div style={{ height: px(sigGeo.gapMm), flexShrink: 0 }} />
+          <div
+            className="flex w-full items-start"
+            style={{ height: px(sigGeo.nameRowMm), flexShrink: 0 }}
+          >
+            <div className="flex flex-1 justify-center">
+              <span
+                style={{
+                  display: 'inline-block',
+                  marginTop: px(nameMarginTopMm),
+                  paddingLeft: px(SIG_RULE_PAD),
+                  paddingRight: px(SIG_RULE_PAD),
+                  paddingBottom: px(namePadBottomMm),
+                  borderBottom: `${px(SIG_RULE_BORDER)} solid #000`,
+                  lineHeight: SIG_LINE,
+                  fontSize: pmNameSizePt * PT_TO_PX,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {sig.pmName}
+              </span>
+            </div>
+            <div className="flex flex-1 justify-center">
+              <span
+                style={{
+                  display: 'inline-block',
+                  marginTop: px(nameMarginTopMm),
+                  paddingLeft: px(SIG_RULE_PAD),
+                  paddingRight: px(SIG_RULE_PAD),
+                  paddingBottom: px(namePadBottomMm),
+                  borderBottom: `${px(SIG_RULE_BORDER)} solid #000`,
+                  lineHeight: SIG_LINE,
+                  fontSize: destinadoNameSizePt * PT_TO_PX,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {sig.destinadoName}
+              </span>
+            </div>
+          </div>
+          <div
+            className="flex w-full items-start text-center"
+            style={{
+              height: px(sigGeo.roleRowMm),
+              flexShrink: 0,
+              fontSize: sigRolePx,
+              lineHeight: SIG_LINE,
+            }}
+          >
+            <div className="flex flex-1 justify-center">
+              PANGULONG MANG-AAWIT
+            </div>
+            <div className="flex flex-1 justify-center">DESTINADO</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

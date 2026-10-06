@@ -21,8 +21,28 @@ import {
 } from '@/lib/suguanUtils'
 
 const PAGSASANAY_FILL = 'FFF2CC'
-const PAGTUPAD_FILL = 'D9EAD3'
 const HEADER_FILL = 'F2F2F2'
+
+/**
+ * The exported sheet's accent fills depend on the choir: green for the Women's
+ * choir, blue for the Men's choir, gold for Mixed. Every renderer (preview,
+ * PDF, and Excel) picks its fills through `suguanSheetAccent`, so the exported
+ * file's palette can never drift between the three.
+ */
+export interface SuguanSheetAccent {
+  scheduleFill: string
+  pagtupadFill: string
+}
+
+export const SUGUAN_SHEET_ACCENTS: Record<SuguanGroup, SuguanSheetAccent> = {
+  babae: { scheduleFill: '#C6EFCE', pagtupadFill: '#D9EAD3' },
+  lalaki: { scheduleFill: '#C2E1FA', pagtupadFill: '#D2E6F8' },
+  mixed: { scheduleFill: '#F8E7C0', pagtupadFill: '#FAF0D8' },
+}
+
+export function suguanSheetAccent(group: SuguanGroup): SuguanSheetAccent {
+  return SUGUAN_SHEET_ACCENTS[group] ?? SUGUAN_SHEET_ACCENTS.babae
+}
 
 /** Points to millimetres; shared so every renderer converts units identically. */
 export const PT_TO_MM = 25.4 / 72
@@ -43,8 +63,8 @@ function colLetter(n: number): string {
   return s
 }
 
-function eventFill(type: SuguanEventType): string {
-  return type === 'pagsasanay' ? PAGSASANAY_FILL : PAGTUPAD_FILL
+function eventFill(type: SuguanEventType, pagtupadFill: string): string {
+  return type === 'pagsasanay' ? PAGSASANAY_FILL : pagtupadFill
 }
 
 function thinBorder(): {
@@ -174,13 +194,13 @@ export function computeNameLayout(
  * table's left edge.
  */
 export interface SignatureGeometry {
-  /** Deliberate blank space between the last member row and the block. */
+  /** Clear space above the signature text within its bottom-anchored overlay. */
   gapMm: number
   /** Height of the row holding the names and their signature rules. */
   nameRowMm: number
   /** Height of the row holding the role titles. */
   roleRowMm: number
-  /** `gapMm + nameRowMm + roleRowMm`; reserved before the table is flowed. */
+  /** `gapMm + nameRowMm + roleRowMm`; height of the signature overlay. */
   totalMm: number
   nameFontSizePt: number
   roleFontSizePt: number
@@ -336,30 +356,43 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
   const pages: SheetPageBlock[][] = []
   let blocks: SheetPageBlock[] = []
   let cursor = 0
+  const contentCapacity = Math.max(0, opts.usableTableH - opts.sig.totalMm)
 
   const breakPage = () => {
-    pages.push(blocks)
+    if (blocks.length > 0) pages.push(blocks)
     blocks = []
     cursor = 0
   }
 
   opts.sections.forEach((section, si) => {
-    if (cursor + opts.sectionLabelRowH > opts.usableTableH) breakPage()
-    blocks.push({ kind: 'section-label', sectionIndex: si })
-    cursor += opts.sectionLabelRowH
+    let rowIndex = 0
+    let needsLabel = true
 
-    section.rows.forEach((_row, ri) => {
-      if (cursor + opts.bodyRowH > opts.usableTableH) breakPage()
-      blocks.push({ kind: 'member', sectionIndex: si, rowIndex: ri })
-      cursor += opts.bodyRowH
-    })
+    do {
+      if (cursor + opts.sectionLabelRowH > contentCapacity) breakPage()
+      blocks.push({ kind: 'section-label', sectionIndex: si })
+      cursor += opts.sectionLabelRowH
+      needsLabel = false
+
+      while (
+        rowIndex < section.rows.length &&
+        cursor + opts.bodyRowH <= contentCapacity
+      ) {
+        blocks.push({ kind: 'member', sectionIndex: si, rowIndex })
+        cursor += opts.bodyRowH
+        rowIndex++
+      }
+
+      if (rowIndex < section.rows.length) {
+        breakPage()
+        needsLabel = true
+      }
+    } while (needsLabel)
   })
 
-  if (cursor + opts.sig.totalMm > opts.usableTableH) breakPage()
   blocks.push({ kind: 'sig-gap' }, { kind: 'sig-name' }, { kind: 'sig-title' })
-  cursor += opts.sig.totalMm
 
-  pages.push(blocks)
+  if (blocks.length > 0) pages.push(blocks)
   return pages
 }
 
@@ -408,21 +441,24 @@ export function computeSuguanLayout(
   const headerTopY = margins.top + titleRowH
   const topBlockH = titleRowH + globalHeaderBlockH
   const usableTableH =
-    Math.max(0, dims.height - margins.top - margins.bottom - topBlockH - sig.totalMm)
+    Math.max(0, dims.height - margins.top - margins.bottom - topBlockH)
 
-  const fitPage = fmt.scaling === 'fit-page'
+  const fitToPage = fmt.scaling !== 'fit-width'
   let scale = 1
   let bodyFontSizePt = nameLayout.nameFontSize
 
-  if (fitPage && rowCount > 0) {
+  if (fitToPage && rowCount > 0) {
     const totalContentH = sections.reduce(
       (acc, s) => acc + sectionLabelRowH + s.rows.length * bodyRowH,
       0,
     )
     const needed = totalContentH + sig.totalMm
     if (needed > usableTableH) {
-      scale = Math.max(0.4, usableTableH / needed)
-      bodyRowH = Math.max(fs.bodyFontSize * PT_TO_MM * 1.25, bodyRowH * scale)
+      const fixedSectionH = sections.length * sectionLabelRowH
+      const availableBodyH = Math.max(0, usableTableH - sig.totalMm - fixedSectionH)
+      const totalBodyH = rowCount * bodyRowH
+      scale = Math.min(1, Math.max(0.4, (availableBodyH / totalBodyH) * 0.98))
+      bodyRowH = Math.max(6 * 1.25 * PT_TO_MM, bodyRowH * scale)
       bodyFontSizePt = Math.max(6, nameLayout.nameFontSize * scale)
     }
   }
@@ -436,9 +472,9 @@ export function computeSuguanLayout(
   })
 
   const pageCount = pages.length
-  const rowsPerPage = fitPage
+  const rowsPerPage = fmt.scaling === 'fit-page'
     ? rowCount || 1
-    : Math.max(1, Math.floor(usableTableH / bodyRowH))
+    : Math.max(1, Math.floor((usableTableH - sig.totalMm) / bodyRowH))
 
   return {
     fmt,
@@ -489,6 +525,7 @@ export async function exportSuguanExcel(
 
   const layout = computeSuguanLayout(suguan, members, docFormat)
   const events = suguan.events
+  const accent = suguanSheetAccent(suguan.group)
   const totalCols = 2 + events.length
   const lastCol = totalCols
 
@@ -539,7 +576,7 @@ export async function exportSuguanExcel(
   events.forEach((event, i) => {
     const labelCell = sheet.getCell(headerRow1, 3 + i)
     labelCell.value = eventTypeLabel(event.type)
-    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type)}` } }
+    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}` } }
     labelCell.font = { bold: true, size: fs.headerFontSize }
     labelCell.alignment = { horizontal: 'center', vertical: 'middle' }
     labelCell.border = { top: thinBorder(), left: thinBorder(), right: thinBorder(), bottom: thinBorder() }
@@ -548,7 +585,7 @@ export async function exportSuguanExcel(
     dateCell.value = formatEventDate(event)
     dateCell.font = { bold: true, size: fs.headerFontSize }
     dateCell.alignment = { horizontal: 'center', vertical: 'middle' }
-    dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type)}` } }
+    dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}` } }
     dateCell.border = { top: thinBorder(), left: thinBorder(), right: thinBorder(), bottom: thinBorder() }
   })
 
@@ -576,7 +613,7 @@ export async function exportSuguanExcel(
     labelCell.value = section.label
     labelCell.font = { bold: true, size: fs.headerFontSize, family: 2 }
     labelCell.alignment = { horizontal: 'center', vertical: 'middle' }
-    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } }
+    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${accent.scheduleFill.slice(1)}` } }
     for (let col = 1; col <= lastCol; col++) {
       sheet.getCell(rn, col).border = fullBorder()
     }

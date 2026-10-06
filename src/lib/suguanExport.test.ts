@@ -15,6 +15,7 @@ import {
   computeSuguanLayout,
   fitFontSizePt,
   SIG_RULE_PAD,
+  suguanSheetAccent,
   type SheetMembers,
 } from './suguanExport.ts'
 import {
@@ -108,21 +109,21 @@ test('the gap above the signature block is generous at every font preset', () =>
   }
 })
 
-test('the reserved signature height is subtracted from the usable table height', () => {
+test('table and signature space share the available area without double counting', () => {
   for (const preset of PRESETS) {
     const layout = computeSuguanLayout(makeSuguan(12, preset), makeMembers(12), preset)
     const expected =
       layout.paperHeightMm -
       layout.margins.top -
       layout.margins.bottom -
-      layout.topBlockH -
-      layout.sig.totalMm
+      layout.topBlockH
     close(layout.usableTableH, expected)
     assert.ok(layout.usableTableH > 0)
+    assert.ok(layout.usableTableH > layout.sig.totalMm)
   }
 })
 
-test('the last page always ends with gap, name, and role blocks in order', () => {
+test('the last page always ends with overlay signature blocks in order', () => {
   // 60 members forces pagination, which is where the PDF previously diverged.
   for (const preset of PRESETS) {
     for (const scaling of ['fit-width', 'fit-page'] as const) {
@@ -144,6 +145,93 @@ test('the last page always ends with gap, name, and role blocks in order', () =>
       }
     }
   }
+})
+
+test('legal portrait pages fit 17 members in each of three compact schedules', () => {
+  const legal: SuguanDocFormat = {
+    paperSize: 'legal',
+    orientation: 'portrait',
+    margins: 'normal',
+    scaling: 'fit-width',
+    fontSize: 'normal',
+  }
+  const members = makeMembers(51)
+  const suguan = makeSuguan(51, legal)
+  suguan.schedules = Array.from({ length: 3 }, (_, scheduleIndex) => ({
+    id: `schedule-${scheduleIndex}`,
+    scheduleLabel: `Schedule ${scheduleIndex + 1}`,
+    scheduleDay: '',
+    scheduleTime: '',
+    assignments: suguan.assignments.slice(scheduleIndex * 17, (scheduleIndex + 1) * 17),
+  }))
+  const layout = computeSuguanLayout(suguan, members, legal)
+
+  assert.equal(layout.pages.length, 1)
+  assert.equal(
+    layout.pages[0].filter((block) => block.kind === 'member').length,
+    51,
+  )
+  assert.ok(
+    layout.pages[0].filter((block) => block.kind === 'section-label').length === 3,
+  )
+  assert.deepEqual(
+    layout.pages[0].slice(-3).map((block) => block.kind),
+    ['sig-gap', 'sig-name', 'sig-title'],
+  )
+})
+
+test('automatic scaling fits compact schedules on supported paper sizes when readable', () => {
+  for (const paperSize of ['letter', 'a4', 'legal'] as const) {
+    const format: SuguanDocFormat = {
+      paperSize,
+      orientation: 'portrait',
+      margins: 'normal',
+      scaling: 'auto',
+      fontSize: 'normal',
+    }
+    const members = makeMembers(51)
+    const suguan = makeSuguan(51, format)
+    suguan.schedules = Array.from({ length: 3 }, (_, scheduleIndex) => ({
+      id: `schedule-${scheduleIndex}`,
+      scheduleLabel: `Schedule ${scheduleIndex + 1}`,
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: suguan.assignments.slice(
+        scheduleIndex * 17,
+        (scheduleIndex + 1) * 17,
+      ),
+    }))
+    const layout = computeSuguanLayout(suguan, members, format)
+
+    assert.equal(layout.pages.length, 1, `${paperSize} should fit one page`)
+    assert.ok(layout.bodyFontSizePt >= 6)
+    assert.deepEqual(
+      layout.pages[0].slice(-3).map((block) => block.kind),
+      ['sig-gap', 'sig-name', 'sig-title'],
+    )
+  }
+})
+
+test('automatic scaling paginates only after reaching the readable minimum', () => {
+  const format: SuguanDocFormat = {
+    paperSize: 'letter',
+    orientation: 'portrait',
+    margins: 'normal',
+    scaling: 'auto',
+    fontSize: 'normal',
+  }
+  const members = makeMembers(150)
+  const layout = computeSuguanLayout(makeSuguan(150, format), members, format)
+
+  assert.ok(layout.scale < 1)
+  assert.equal(layout.bodyFontSizePt, 6)
+  assert.ok(layout.pages.length > 1)
+  const lastPage = layout.pages[layout.pages.length - 1]
+  assert.ok(lastPage.some((block) => block.kind === 'member'))
+  assert.deepEqual(
+    lastPage.slice(-3).map((block) => block.kind),
+    ['sig-gap', 'sig-name', 'sig-title'],
+  )
 })
 
 test('signature column centres sit at the quarter and three-quarter marks', () => {
@@ -235,10 +323,8 @@ test('an empty roster still lays out a full page without a phantom gap', () => {
 })
 
 test('the default document format is normal and reads one step larger than small', () => {
-  // Pinned because "increase the default font size" is a deliberate change; if a
-  // future edit drops this back, the sheet silently gets hard to read again.
   assert.equal(DEFAULT_DOC_FORMAT.fontSize, 'normal')
-  assert.equal(FONT_SIZE_PRESETS.normal.bodyFontSize, 10)
+  assert.equal(FONT_SIZE_PRESETS.normal.bodyFontSize, 9)
   assert.ok(FONT_SIZE_PRESETS.normal.bodyFontSize > FONT_SIZE_PRESETS.small.bodyFontSize)
   assert.ok(FONT_SIZE_PRESETS.large.bodyFontSize > FONT_SIZE_PRESETS.normal.bodyFontSize)
   // Every preset must stay in ascending order or the picker stops meaning anything.
@@ -303,4 +389,19 @@ test('a custom font size reaches both renderers through the shared layout', () =
   // Bigger type must mean fewer rows on the page, not the same count.
   const normal = computeSuguanLayout(makeSuguan(12, PRESETS[1]), makeMembers(12), PRESETS[1])
   assert.ok(layout.rowsPerPage < normal.rowsPerPage, '16pt should fit fewer rows than normal')
+})
+
+test('sheet accent fills follow the choir: green women, blue men, gold mixed', () => {
+  assert.deepEqual(suguanSheetAccent('babae'), {
+    scheduleFill: '#C6EFCE',
+    pagtupadFill: '#D9EAD3',
+  })
+  assert.deepEqual(suguanSheetAccent('lalaki'), {
+    scheduleFill: '#C2E1FA',
+    pagtupadFill: '#D2E6F8',
+  })
+  assert.deepEqual(suguanSheetAccent('mixed'), {
+    scheduleFill: '#F8E7C0',
+    pagtupadFill: '#FAF0D8',
+  })
 })

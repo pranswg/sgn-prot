@@ -32,6 +32,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { exportSuguanPdf } from './suguanPdfExport'
+import { SuguanSheetPreview } from './SuguanSheetPreview'
 import { buildPreviewSuguan, saveBlockers, totalAssigned, type SuguanDraft } from './builderState'
 
 const MAX_VISIBLE_CONFLICTS = 5
@@ -151,6 +152,26 @@ export function PreviewStep({
           </ul>
         </div>
       )}
+
+      <section aria-labelledby="suguan-document-preview-title" className="space-y-2">
+        <div>
+          <h2
+            id="suguan-document-preview-title"
+            className="text-sm font-semibold tracking-tight"
+          >
+            Document Preview
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            This is the sheet layout used for the PDF export.
+          </p>
+        </div>
+        <SuguanSheetPreview
+          suguan={preview}
+          members={members}
+          docFormat={draft.docFormat}
+          previewWidth={900}
+        />
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>

@@ -207,11 +207,11 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
 
       <CardRow<DocScaling>
         label="Scaling / fit"
-        hint="Controls how the table fills the page when it is exported."
+        hint="Automatically scales to one page when readable; otherwise starts a new page only when needed."
         value={value.scaling}
         onChange={(v) => set({ scaling: v })}
         options={[
-          { id: 'auto', label: 'Automatic', description: 'Natural size' },
+          { id: 'auto', label: 'Automatic', description: 'Fit when possible' },
           { id: 'fit-width', label: 'Fit width', description: 'One page wide' },
           { id: 'fit-page', label: 'Fit page', description: 'One page total' },
         ]}
@@ -261,4 +261,3 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
     </div>
   )
 }
-

@@ -43,13 +43,16 @@ export const useAuthStore = create<AuthState>()(
           }
         }
 
-        const { passwordHash, passwordSalt } = await hashPassword(input.password)
+        const { passwordHash, passwordSalt, hashAlgo } = await hashPassword(
+          input.password,
+        )
         const account: Account = {
           id: nanoid(),
           username: normalizeUsername(input.username),
           fullName: input.fullName.trim(),
           passwordHash,
           passwordSalt,
+          hashAlgo,
           role: roleForNewAccount(accounts),
           createdAt: new Date().toISOString(),
         }
@@ -114,3 +117,37 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 )
+
+/**
+ * Default account so anyone can sign in without a registration dance. It only
+ * seeds while the username is missing — existing accounts are never touched —
+ * and signs in only when nobody is signed in already, mirroring `register`.
+ *
+ * The credentials deliberately bypass `validateRegistration`: the username is
+ * two characters and the password is all digits, both of which the form rules
+ * reject. Do not "fix" this by validating them; the account is created by the
+ * app itself, not typed into the form.
+ */
+async function seedDefaultAccount(): Promise<void> {
+  const seed = 'fr'
+  if (isUsernameTaken(useAuthStore.getState().accounts, seed)) return
+  const { passwordHash, passwordSalt, hashAlgo } = await hashPassword('12345678')
+  // Re-check after the await: a real registration can land while hashing runs.
+  if (isUsernameTaken(useAuthStore.getState().accounts, seed)) return
+  const account: Account = {
+    id: nanoid(),
+    username: seed,
+    fullName: 'FR',
+    passwordHash,
+    passwordSalt,
+    hashAlgo,
+    role: roleForNewAccount(useAuthStore.getState().accounts),
+    createdAt: new Date().toISOString(),
+  }
+  useAuthStore.setState((s) => ({
+    accounts: [...s.accounts, account],
+    currentAccountId: s.currentAccountId ?? account.id,
+  }))
+}
+
+void seedDefaultAccount()

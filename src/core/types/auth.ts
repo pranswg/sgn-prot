@@ -10,16 +10,27 @@
 
 export type AccountRole = 'admin' | 'member'
 
+/**
+ * Which KDF produced `passwordHash`. `pbkdf2` needs WebCrypto's `subtle`, which
+ * browsers expose only on secure origins (https or localhost); `simplified` is
+ * the iterated-SHA-256 fallback used on insecure origins such as a phone
+ * loading the dev server over plain http on the LAN. Verification must use the
+ * same algorithm that produced the stored digest.
+ */
+export type PasswordHashAlgo = 'pbkdf2' | 'simplified'
+
 export interface Account {
   id: string
   /** Lower-cased, trimmed. The login key, so it must stay unique. */
   username: string
   /** As typed at registration. Display only; never used to log in. */
   fullName: string
-  /** Lower-case hex PBKDF2 digest. Never a plaintext password. */
+  /** Lower-case hex digest. Never a plaintext password. */
   passwordHash: string
   /** Lower-case hex salt, unique per account. */
   passwordSalt: string
+  /** How `passwordHash` was produced; assumed `pbkdf2` when absent. */
+  hashAlgo?: PasswordHashAlgo
   role: AccountRole
   createdAt: string
 }

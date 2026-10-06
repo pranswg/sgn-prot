@@ -294,7 +294,11 @@ because there is no router in this app; the mode is local state.
 
 **There is no server.** Accounts live in `localStorage` under `choir-auth`, and a
 password is stored only as a PBKDF2-SHA256 digest (210k iterations) plus a
-per-account salt. That keeps plaintext out of the backup file. It is not
+per-account salt. On insecure origins (a phone hitting the dev server over
+plain http, where `crypto.subtle` does not exist) hashing falls back to an
+iterated pure-JS SHA-256 KDF instead of throwing; the account records which
+`hashAlgo` produced it and verification must use the same one. That keeps
+plaintext out of the backup file. It is not
 security: anyone with devtools can read the store, or overwrite it to sign in as
 anyone. Do not describe this to the user as protecting their data, and do not
 build features that assume it does — there is no real authorisation anywhere.
@@ -312,6 +316,11 @@ Rules if you touch it:
 - `roleForNewAccount` grants `admin` to the first registration only because a
   fresh install needs someone to see that an admin exists. It is not an
   authorisation check.
+- `authStore` seeds a default account (`fr` / `12345678`) whenever that
+  username is missing, and signs in as it only when nobody is signed in
+  already. The credentials intentionally fail `validateRegistration`
+  (two-character username, all-digit password) — the seed creates the account
+  directly, so do not route it through the form rules.
 
 ## Feature map
 

@@ -22,6 +22,7 @@ import {
   normalizeUsername,
   passwordStrengthProblems,
   roleForNewAccount,
+  sha256Hex,
   validateConfirmation,
   validateFullName,
   validatePassword,
@@ -174,8 +175,8 @@ test('hashPassword never stores the plaintext and is salted per call', async () 
 })
 
 test('verifyPassword accepts the right password and rejects the wrong one', async () => {
-  const { passwordHash, passwordSalt } = await hashPassword('choir2026')
-  const stored = account({ passwordHash, passwordSalt })
+  const { passwordHash, passwordSalt, hashAlgo } = await hashPassword('choir2026')
+  const stored = account({ passwordHash, passwordSalt, hashAlgo })
 
   assert.equal(await verifyPassword('choir2026', stored), true)
   assert.equal(await verifyPassword('choir2025', stored), false)
@@ -188,4 +189,43 @@ test('verifyPassword fails closed on an account with no stored hash', async () =
   // Guards a half-migrated record rather than throwing or defaulting to true.
   assert.equal(await verifyPassword('choir2026', account({ passwordHash: '' })), false)
   assert.equal(await verifyPassword('choir2026', account({ passwordSalt: '' })), false)
+})
+
+test('sha256Hex matches the published test vectors', () => {
+  // The pure-JS fallback KDF rests on this function; a broken compression
+  // schedule would still round-trip but produce a digest no other reader
+  // could reproduce.
+  assert.equal(
+    sha256Hex(''),
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  )
+  assert.equal(
+    sha256Hex('abc'),
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+  )
+  assert.equal(
+    sha256Hex('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq'),
+    '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1',
+  )
+  // Two-block input, exercises the padding and length encoding.
+  assert.equal(
+    sha256Hex('a'.repeat(1000)),
+    '41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3',
+  )
+})
+
+test('the simplified KDF verifies and stays salted like PBKDF2', async () => {
+  const first = await hashPassword('choir2026', 'simplified')
+  assert.equal(first.hashAlgo, 'simplified')
+  const stored = account({
+    passwordHash: first.passwordHash,
+    passwordSalt: first.passwordSalt,
+    hashAlgo: first.hashAlgo,
+  })
+
+  assert.equal(await verifyPassword('choir2026', stored), true)
+  assert.equal(await verifyPassword('choir2025', stored), false)
+  // Same password, fresh salt: the digest must still differ.
+  const second = await hashPassword('choir2026', 'simplified')
+  assert.notEqual(second.passwordHash, first.passwordHash)
 })

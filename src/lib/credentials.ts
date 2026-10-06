@@ -10,7 +10,12 @@
  * is not a substitute for server-side auth.
  */
 
-import type { Account, AccountRole, NewAccountInput } from '@/core/types/auth'
+import type {
+  Account,
+  AccountRole,
+  NewAccountInput,
+  PasswordHashAlgo,
+} from '@/core/types/auth'
 
 /**
  * Iteration count for PBKDF2-SHA256. High enough to make an offline guess
@@ -18,6 +23,13 @@ import type { Account, AccountRole, NewAccountInput } from '@/core/types/auth'
  * (~100ms on current hardware). Do not lower this to "speed up" login.
  */
 const PBKDF2_ITERATIONS = 210_000
+
+/**
+ * Rounds for the `simplified` fallback KDF. Pure-JS SHA-256 is far slower per
+ * round than WebCrypto, so this is an order of magnitude fewer than PBKDF2 —
+ * enough to avoid a bare digest while keeping login under a few hundred ms.
+ */
+const SIMPLIFIED_ITERATIONS = 20_000
 
 const SALT_BYTES = 16
 const USERNAME_MIN = 3
@@ -149,6 +161,122 @@ function randomSaltHex(): string {
   return toHex(salt)
 }
 
+/**
+ * WebCrypto's `subtle` (and therefore PBKDF2) exists only on secure origins —
+ * https or localhost. A phone loading the dev server over plain http on the
+ * LAN has no `crypto.subtle`, and every hashing call would throw. That is the
+ * origin of the old "Could not process the password on this browser" toast.
+ */
+function subtleAvailable(): boolean {
+  return (
+    typeof globalThis.crypto?.subtle?.importKey === 'function'
+  )
+}
+
+const SHA256_K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
+  0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+  0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
+  0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+  0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+  0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+  0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
+  0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+])
+
+/**
+ * Pure-JS SHA-256, exported so tests can pin it against the published test
+ * vectors. It exists only for the `simplified` fallback KDF below; every
+ * secure origin still goes through WebCrypto's PBKDF2.
+ */
+export function sha256Hex(input: string): string {
+  const bytes = new TextEncoder().encode(input)
+  const bitLen = bytes.length * 8
+  const totalLen = Math.ceil((bytes.length + 9) / 64) * 64
+  const data = new Uint8Array(totalLen)
+  data.set(bytes)
+  data[bytes.length] = 0x80
+  const view = new DataView(data.buffer)
+  view.setUint32(totalLen - 8, Math.floor(bitLen / 0x100000000))
+  view.setUint32(totalLen - 4, bitLen >>> 0)
+
+  let h0 = 0x6a09e667
+  let h1 = 0xbb67ae85
+  let h2 = 0x3c6ef372
+  let h3 = 0xa54ff53a
+  let h4 = 0x510e527f
+  let h5 = 0x9b05688c
+  let h6 = 0x1f83d9ab
+  let h7 = 0x5be0cd19
+  const w = new Uint32Array(64)
+
+  for (let offset = 0; offset < totalLen; offset += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4)
+    for (let i = 16; i < 64; i++) {
+      const x = w[i - 15]
+      const y = w[i - 2]
+      const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3)
+      const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10)
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0
+    }
+
+    let a = h0
+    let b = h1
+    let c = h2
+    let d = h3
+    let e = h4
+    let f = h5
+    let g = h6
+    let h = h7
+    for (let i = 0; i < 64; i++) {
+      const s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7))
+      const ch = (e & f) ^ (~e & g)
+      const t1 = (h + s1 + ch + SHA256_K[i] + w[i]) | 0
+      const s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10))
+      const maj = (a & b) ^ (a & c) ^ (b & c)
+      const t2 = (s0 + maj) | 0
+      h = g
+      g = f
+      f = e
+      e = (d + t1) | 0
+      d = c
+      c = b
+      b = a
+      a = (t1 + t2) | 0
+    }
+    h0 = (h0 + a) | 0
+    h1 = (h1 + b) | 0
+    h2 = (h2 + c) | 0
+    h3 = (h3 + d) | 0
+    h4 = (h4 + e) | 0
+    h5 = (h5 + f) | 0
+    h6 = (h6 + g) | 0
+    h7 = (h7 + h) | 0
+  }
+
+  return [h0, h1, h2, h3, h4, h5, h6, h7]
+    .map((x) => (x >>> 0).toString(16).padStart(8, '0'))
+    .join('')
+}
+
+/**
+ * Fallback KDF for origins without `crypto.subtle`: repeated SHA-256 over the
+ * password, salt, and round counter. Deterministic, salted, and far from
+ * state-of-the-art — but the same honest trade-off as the rest of this store:
+ * it keeps plaintext out of `localStorage`, not out of a determined attacker's
+ * reach.
+ */
+async function simplifiedHex(password: string, saltHex: string): Promise<string> {
+  let state = sha256Hex(`${password}:${saltHex}:0`)
+  for (let i = 1; i < SIMPLIFIED_ITERATIONS; i++) {
+    state = sha256Hex(`${state}:${password}:${saltHex}`)
+  }
+  return state
+}
+
 async function pbkdf2Hex(password: string, saltHex: string): Promise<string> {
   const encoder = new TextEncoder()
   const key = await crypto.subtle.importKey(
@@ -174,15 +302,29 @@ async function pbkdf2Hex(password: string, saltHex: string): Promise<string> {
 }
 
 /**
- * Returns the digest and the fresh salt that produced it. The caller stores
- * both; neither can be derived from the other.
+ * Returns the digest, the fresh salt that produced it, and which KDF was
+ * used. The caller stores all three; neither digest nor salt can be derived
+ * from the other.
+ *
+ * PBKDF2 on secure origins, the iterated-SHA-256 fallback elsewhere. Pass
+ * `algo` to force a path (used by tests).
  */
 export async function hashPassword(
   password: string,
-): Promise<{ passwordHash: string; passwordSalt: string }> {
+  algo?: PasswordHashAlgo,
+): Promise<{
+  passwordHash: string
+  passwordSalt: string
+  hashAlgo: PasswordHashAlgo
+}> {
   const passwordSalt = randomSaltHex()
-  const passwordHash = await pbkdf2Hex(password, passwordSalt)
-  return { passwordHash, passwordSalt }
+  const hashAlgo: PasswordHashAlgo =
+    algo ?? (subtleAvailable() ? 'pbkdf2' : 'simplified')
+  const passwordHash =
+    hashAlgo === 'simplified'
+      ? await simplifiedHex(password, passwordSalt)
+      : await pbkdf2Hex(password, passwordSalt)
+  return { passwordHash, passwordSalt, hashAlgo }
 }
 
 /**
@@ -201,10 +343,17 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 
 export async function verifyPassword(
   password: string,
-  account: Pick<Account, 'passwordHash' | 'passwordSalt'>,
+  account: Pick<Account, 'passwordHash' | 'passwordSalt' | 'hashAlgo'>,
 ): Promise<boolean> {
   if (!account.passwordHash || !account.passwordSalt) return false
-  const candidate = await pbkdf2Hex(password, account.passwordSalt)
+  const algo = account.hashAlgo ?? 'pbkdf2'
+  // A pbkdf2 digest cannot be recomputed without `subtle`. Failing closed
+  // beats comparing against the fallback digest, which would never match.
+  if (algo === 'pbkdf2' && !subtleAvailable()) return false
+  const candidate =
+    algo === 'simplified'
+      ? await simplifiedHex(password, account.passwordSalt)
+      : await pbkdf2Hex(password, account.passwordSalt)
   return timingSafeEqualHex(candidate, account.passwordHash)
 }
 

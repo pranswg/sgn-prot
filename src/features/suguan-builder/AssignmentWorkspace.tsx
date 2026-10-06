@@ -386,6 +386,14 @@ export function AssignmentWorkspace({
     setAssignments(list)
   }
 
+  const selectSection = (id: string) => {
+    setActiveId(id)
+    // A preset is only meaningful for the schedule it was loaded into, so
+    // switching schedules must clear the choice, letting the same preset be
+    // picked again for the next schedule.
+    setPresetId('')
+  }
+
   const loadPreset = (id: string) => {
     const preset = presets.find((p) => p.id === id)
     if (!preset || !section) return
@@ -689,7 +697,7 @@ export function AssignmentWorkspace({
               <span className="truncate">{sections[0].scheduleLabel}</span>
             </div>
           ) : (
-            <Select value={section?.id ?? ''} onValueChange={setActiveId}>
+            <Select value={section?.id ?? ''} onValueChange={selectSection}>
               <SelectTrigger className="mt-3 h-12 w-full gap-2 border-0 bg-brand-navy px-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-none hover:bg-brand-navy/90 focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&_svg]:text-white/70">
                 <SelectValue placeholder="Choose schedule" />
               </SelectTrigger>
@@ -838,7 +846,7 @@ export function AssignmentWorkspace({
         ) : (
           <Tabs
             value={section?.id ?? ''}
-            onValueChange={setActiveId}
+            onValueChange={selectSection}
             className="w-full min-w-0 sm:max-w-[60%]"
           >
             <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-full border border-border/60 bg-background p-1 sm:rounded-lg sm:border-0 sm:bg-white/5">

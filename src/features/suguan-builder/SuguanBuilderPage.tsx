@@ -336,7 +336,7 @@ export function SuguanBuilderPage() {
       )}
 
       {/* Bottom navigation */}
-      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur xl:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur xl:hidden">
         <Button
           variant="outline"
           className="flex-1"

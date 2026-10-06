@@ -21,6 +21,11 @@ export function MobileBottomNav() {
   const page = useNavStore((s) => s.page)
   const navigate = useNavStore((s) => s.navigate)
 
+  // The builder has its own fixed Back/Next bar on the same edge and the same
+  // z-index; rendering both stacked the tab bar on top of the step navigation
+  // and hid Next completely. The focused step flow replaces the tab bar.
+  if (page === 'suguan-builder') return null
+
   return (
     <nav
       aria-label="Primary"

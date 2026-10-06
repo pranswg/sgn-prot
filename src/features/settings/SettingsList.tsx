@@ -16,9 +16,7 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import {
   Dialog,
@@ -79,11 +77,11 @@ export interface SettingsListProps<T extends { id: string; custom?: boolean }> {
 /**
  * One management card for one reference list.
  *
- * The dropdown is gone: every entry is on screen, so the list reads as
- * something to scan and edit rather than something to open first. The same
- * component renders the desktop card and the mobile collapsible card, with the
- * form presented as a dialog on desktop and a bottom sheet on a phone, so the
- * two breakpoints cannot drift into different rules.
+ * The card starts collapsed on both breakpoints: the header is a toggle, so
+ * the page reads as a short list of sections rather than every entry dumped on
+ * screen at once. The same component renders the desktop card and the mobile
+ * card, with the form presented as a dialog on desktop and a bottom sheet on a
+ * phone, so the two breakpoints cannot drift into different rules.
  */
 export function SettingsList<T extends { id: string; custom?: boolean }>({
   items,
@@ -101,7 +99,7 @@ export function SettingsList<T extends { id: string; custom?: boolean }>({
   className,
 }: SettingsListProps<T>) {
   const isMobile = useIsMobile()
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<T | null>(null)
   const [values, setValues] = useState<ReferenceValues>({})
@@ -120,6 +118,7 @@ export function SettingsList<T extends { id: string; custom?: boolean }>({
     editing === null ? -1 : items.findIndex((item) => item.id === editing.id)
 
   const openAdd = () => {
+    setExpanded(true)
     setEditing(null)
     setValues(
       Object.fromEntries(
@@ -243,49 +242,47 @@ export function SettingsList<T extends { id: string; custom?: boolean }>({
   return (
     <section className={cn('flex flex-col', className)}>
       <Card>
-        {isMobile ? (
-          <CardHeader>
-            <button
-              type="button"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((open) => !open)}
-              className="flex min-w-0 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-base leading-snug font-medium text-foreground">
-                  {title}
-                </span>
-                <span className="mt-1 block text-sm text-muted-foreground">
-                  {description}
-                </span>
+        <CardHeader>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((open) => !open)}
+            className="flex min-w-0 items-start gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base leading-snug font-medium text-foreground">
+                {title}
               </span>
-              <ChevronDown
-                className={cn(
-                  'mt-1 size-4 shrink-0 text-muted-foreground transition-transform duration-200',
-                  expanded && 'rotate-180',
-                )}
-              />
-            </button>
-            <CardAction>
-              <Button size="icon-sm" aria-label={`Add ${noun}`} onClick={openAdd}>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                {description}
+              </span>
+            </span>
+            <ChevronDown
+              className={cn(
+                'mt-1 size-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                expanded && 'rotate-180',
+              )}
+            />
+          </button>
+          <CardAction>
+            {isMobile ? (
+              <Button
+                size="icon-sm"
+                aria-label={`Add ${noun}`}
+                onClick={openAdd}
+              >
                 <Plus className="size-4" />
               </Button>
-            </CardAction>
-          </CardHeader>
-        ) : (
-          <CardHeader>
-            <CardTitle>{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
-            <CardAction>
+            ) : (
               <Button size="sm" onClick={openAdd}>
                 <Plus className="size-3.5" />
                 Add {cap(noun)}
               </Button>
-            </CardAction>
-          </CardHeader>
-        )}
+            )}
+          </CardAction>
+        </CardHeader>
 
-        {(!isMobile || expanded) && (
+        {expanded && (
           <CardContent>
             {items.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">

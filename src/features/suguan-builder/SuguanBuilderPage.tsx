@@ -316,15 +316,7 @@ export function SuguanBuilderPage() {
           </div>
         </div>
       ) : (
-        <div
-          className={cn(
-            'min-w-0 rounded-xl border border-border/70 bg-card p-4',
-            // Form-only step: keep the column readable instead of stretching
-            // inputs across very wide monitors. Schedules and review are dense
-            // tables and should use the full width.
-            step === 0 && 'mx-auto w-full xl:max-w-5xl',
-          )}
-        >
+        <div className="min-w-0 rounded-xl border border-border/70 bg-card p-4">
           {step === 0 && <CoverageStep draft={draft} patch={patch} />}
           {step === 1 && (
             <DocumentSetupStep

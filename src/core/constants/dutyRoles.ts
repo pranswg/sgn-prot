@@ -14,8 +14,6 @@ export const DUTY_ROLES_MAP = Object.fromEntries(
 
 export const REGULAR_WORSHIP_DUTY_ROLES = [
   'oic',
-  'pangulong-mang-aawit',
-  'kalihim',
   'organista',
   'organista-reserve',
 ]

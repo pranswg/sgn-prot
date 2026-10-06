@@ -132,12 +132,19 @@ export function buildSections(
     Array.isArray(suguan.schedules) && suguan.schedules.length > 0
       ? suguan.schedules
       : []
+  const oicMemberId =
+    (Array.isArray(suguan.dutyRoles) ? suguan.dutyRoles : []).find(
+      (d) => d.dutyRoleId === 'oic',
+    )?.memberId ?? ''
   const mapRows = (assignments: Suguan['assignments']) =>
     sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
-      (a, i) => ({
-        no: i + 1,
-        name: assignmentDisplayName(a.memberName, a.memberId, members),
-      }),
+      (a, i) => {
+        const name = assignmentDisplayName(a.memberName, a.memberId, members)
+        return {
+          no: i + 1,
+          name: a.memberId === oicMemberId ? `${name} - OIC` : name,
+        }
+      },
     )
   if (schedules.length > 0) {
     return schedules.map((sec) => ({
@@ -626,8 +633,26 @@ export async function exportSuguanExcel(
       noCell.font = { size: fs.bodyFontSize }
       noCell.alignment = { horizontal: 'center', vertical: 'middle' }
       const nameCell = sheet.getCell(rn, 2)
-      nameCell.value = row.name
-      nameCell.font = { size: layout.nameFontSize }
+      if (
+        typeof row.name === 'string' &&
+        row.name.endsWith(' - OIC')
+      ) {
+        nameCell.value = {
+          richText: [
+            {
+              text: row.name.slice(0, -6),
+              font: { size: layout.nameFontSize },
+            },
+            {
+              text: row.name.slice(-6),
+              font: { size: layout.nameFontSize, bold: true },
+            },
+          ],
+        }
+      } else {
+        nameCell.value = row.name
+        nameCell.font = { size: layout.nameFontSize }
+      }
       nameCell.alignment = { horizontal: 'left', vertical: 'middle' }
       for (let col = 1; col <= lastCol; col++) {
         sheet.getCell(rn, col).border = {

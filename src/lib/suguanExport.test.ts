@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildSections,
   computeSuguanLayout,
   fitFontSizePt,
   SIG_RULE_PAD,
@@ -26,6 +27,7 @@ import {
   FONT_SIZE_PRESETS,
   normalizeDocFormat,
   resolveFontSizePreset,
+  resolveSignatureNames,
   scaleFontSizePreset,
 } from './suguanUtils.ts'
 import type { Suguan, SuguanDocFormat } from '../core/types/suguan.ts'
@@ -404,4 +406,54 @@ test('sheet accent fills follow the choir: green women, blue men, gold mixed', (
     scheduleFill: '#F8E7C0',
     pagtupadFill: '#FAF0D8',
   })
+})
+
+test('the OIC duty holder is marked "- OIC" on their sheet row', () => {
+  const members = makeMembers(4)
+  const suguan = makeSuguan(4, PRESETS[1])
+  suguan.dutyRoles = [
+    { dutyRoleId: 'oic', memberId: 'm1', memberName: 'Maria Reyes' },
+  ]
+  const names = buildSections(suguan, members).flatMap((s) =>
+    s.rows.map((r) => r.name),
+  )
+  assert.ok(
+    names.includes('Reyes, Maria - OIC'),
+    'the OIC member should read "Reyes, Maria - OIC"',
+  )
+  assert.equal(names.filter((n) => n.includes(' - OIC')).length, 1)
+})
+
+test('without an OIC duty role no " - OIC" marker appears', () => {
+  const members = makeMembers(3)
+  const names = buildSections(makeSuguan(3, PRESETS[1]), members).flatMap((s) =>
+    s.rows.map((r) => r.name),
+  )
+  assert.ok(!names.some((n) => n.includes(' - OIC')))
+})
+
+test('the signature Pangulong comes from the master list, not a duty role', () => {
+  const suguan = makeSuguan(2, PRESETS[1])
+  suguan.dutyRoles = [
+    {
+      dutyRoleId: 'pangulong-mang-aawit',
+      memberId: 'm0',
+      memberName: 'Jose Santos',
+    },
+  ]
+  const { pmName } = resolveSignatureNames(suguan, [
+    {
+      firstName: 'Juan',
+      lastName: 'Dela Cruz',
+      isActive: true,
+      positions: ['pangulong-mang-aawit'],
+    },
+  ])
+  assert.equal(pmName, 'Juan Dela Cruz')
+
+  const { pmName: fallback } = resolveSignatureNames(
+    { ...suguan, dutyRoles: [] },
+    [],
+  )
+  assert.equal(fallback, '')
 })

@@ -207,12 +207,20 @@ export async function exportSuguanPdf(
         case 'member': {
           const section = layout.sections[block.sectionIndex]
           const row = section.rows[block.rowIndex]
-          applyFont('normal', bodySz)
+          const isOic = row.name.endsWith(' - OIC')
           const nameSize = fitFontSizePt({
             text: row.name,
             startSizePt: bodySz,
             maxWidthMm: layout.nameColWidthMm - 1.6,
             measureMm: (t, s) => {
+              if (isOic) {
+                // The marker renders bold, so the fitted size must reserve the
+                // wider bold glyphs or the marker overflows the name column.
+                applyFont('normal', s)
+                const baseW = textWidth(t.slice(0, -6))
+                applyFont('bold', s)
+                return baseW + textWidth(t.slice(-6))
+              }
               applyFont('normal', s)
               return textWidth(t)
             },
@@ -222,7 +230,15 @@ export async function exportSuguanPdf(
           }
           applyFont('normal', nameSize)
           centerText(String(row.no), x0 + layout.noColWidthMm / 2, y + layout.bodyRowH / 2)
-          leftText(row.name, xName + 0.79, y + layout.bodyRowH / 2)
+          if (isOic) {
+            const baseName = row.name.slice(0, -6)
+            leftText(baseName, xName + 0.79, y + layout.bodyRowH / 2)
+            const baseW = textWidth(baseName)
+            applyFont('bold', nameSize)
+            leftText(row.name.slice(-6), xName + 0.79 + baseW, y + layout.bodyRowH / 2)
+          } else {
+            leftText(row.name, xName + 0.79, y + layout.bodyRowH / 2)
+          }
           y += layout.bodyRowH
           return
         }

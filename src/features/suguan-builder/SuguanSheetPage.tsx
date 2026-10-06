@@ -200,7 +200,14 @@ export function SuguanSheetPage({
               paddingLeft: 3,
             }}
           >
-            {row.name}
+            {row.name.endsWith(' - OIC') ? (
+              <span>
+                {row.name.slice(0, -6)}
+                <span style={{ fontWeight: 700 }}>{row.name.slice(-6)}</span>
+              </span>
+            ) : (
+              row.name
+            )}
           </td>
           {events.map((_, j) => (
             <td

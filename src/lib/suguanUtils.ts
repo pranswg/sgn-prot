@@ -57,18 +57,19 @@ export function resolveSignatureNames(
   suguan: Pick<Suguan, 'dutyRoles' | 'destinadoName'>,
   members: SignatureMember[],
 ): SignatureNames {
-  const fromDutyRole = suguan.dutyRoles.find(
-    (d) => d.dutyRoleId === 'pangulong-mang-aawit',
-  )?.memberName
+  // The Pangulong Mang-aawit is whoever holds that position in the master
+  // list. The old step-3 picker is gone, so a leftover duty role only fills in
+  // for legacy records that predate the master-list lookup.
   const fromMasterList = members.find(
     (m) => (m.isActive ?? false) && (m.positions ?? []).includes('pangulong-mang-aawit'),
   )
+  const fromDutyRole = suguan.dutyRoles.find(
+    (d) => d.dutyRoleId === 'pangulong-mang-aawit',
+  )?.memberName
   return {
-    pmName:
-      fromDutyRole ??
-      (fromMasterList
-        ? `${fromMasterList.firstName} ${fromMasterList.lastName}`
-        : ''),
+    pmName: fromMasterList
+      ? `${fromMasterList.firstName} ${fromMasterList.lastName}`
+      : (fromDutyRole ?? ''),
     destinadoName: (suguan.destinadoName ?? '').trim(),
   }
 }

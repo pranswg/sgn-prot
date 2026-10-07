@@ -359,10 +359,13 @@ export async function buildOrganistaSuguanPdf(
     let headingY = margins.top + churchLineHeight * scale / 2
     pdf.setFont('times', 'normal')
     pdf.setFontSize(churchFontSizePt * scale)
-    pdf.text(`Lokal ng ${churchName.trim() || 'Sta. Monica'}`, centerX, headingY, {
-      align: 'center',
-      baseline: 'middle',
-    })
+    const churchLine = churchName.trim()
+    if (churchLine) {
+      pdf.text(`Lokal ng ${churchLine}`, centerX, headingY, {
+        align: 'center',
+        baseline: 'middle',
+      })
+    }
     headingY +=
       (churchLineHeight / 2 + headingGap + scriptLineHeight / 2) * scale
 
@@ -528,7 +531,7 @@ export async function buildOrganistaSuguanPdf(
 }
 
 export function OrganistaSuguanMakerPage() {
-  const [churchName, setChurchName] = useState('Sta. Monica')
+  const [churchName, setChurchName] = useState('')
   const [destinadoName, setDestinadoName] = useState('')
   const [services, setServices] = useState<OrganistaService[]>(() => defaultServices())
   const createRecord = useOrganistaSuguanStore((state) => state.createRecord)
@@ -609,8 +612,8 @@ export function OrganistaSuguanMakerPage() {
       const link = document.createElement('a')
       const fileUrl = URL.createObjectURL(blob)
       link.href = fileUrl
-      link.download = `${(churchName || 'Sta-Monica')
-        .trim()
+      const trimmedChurch = churchName.trim()
+      link.download = `${(trimmedChurch ? trimmedChurch : 'Lokal')
         .replace(/\s+/g, '-')
         .toUpperCase()}-Organista-Suguan.pdf`
       document.body.append(link)
@@ -627,7 +630,7 @@ export function OrganistaSuguanMakerPage() {
   const saveToHistory = () => {
     if (!requirePagsasanayDate()) return
     createRecord({
-      churchName: churchName.trim() || 'Sta. Monica',
+      churchName: churchName.trim(),
       pagsasanayDate,
       services,
       docFormat,
@@ -658,7 +661,7 @@ export function OrganistaSuguanMakerPage() {
         destinadoName,
       )
       pdfUrl = URL.createObjectURL(blob)
-      const previewTitle = `${churchName || 'Sta. Monica'} - Organist Suguan`
+      const previewTitle = `${churchName.trim() ? `${churchName.trim()} - ` : ''}Organist Suguan`
         .replace(/[&<>"]/g, (character) => ({
           '&': '&amp;',
           '<': '&lt;',
@@ -738,7 +741,6 @@ export function OrganistaSuguanMakerPage() {
               id="church-name"
               value={churchName}
               onChange={(event) => setChurchName(event.target.value)}
-              placeholder="Sta. Monica"
             />
           </div>
 

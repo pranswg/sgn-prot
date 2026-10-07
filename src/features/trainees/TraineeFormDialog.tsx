@@ -126,7 +126,7 @@ export function TraineeFormDialog({
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="firstName">First Name</Label>
               <Input
                 id="firstName"
@@ -135,7 +135,7 @@ export function TraineeFormDialog({
                 placeholder="First name"
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="lastName">Last Name</Label>
               <Input
                 id="lastName"
@@ -146,31 +146,31 @@ export function TraineeFormDialog({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label>Gender</Label>
               <Select
                 value={form.gender}
                 onValueChange={(v) => handleGenderChange(v as 'male' | 'female')}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
                   <SelectItem value="female">Female</SelectItem>
                   <SelectItem value="male">Male</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label>Target Voice Position</Label>
               <Select
                 value={form.voicePosition}
                 onValueChange={(v) => setForm((f) => ({ ...f, voicePosition: v }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
                   <SelectItem value={UNASSIGNED_VOICE_ID}>
                     No voice assigned yet
                   </SelectItem>
@@ -184,7 +184,7 @@ export function TraineeFormDialog({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label>Status</Label>
               <Select
                 value={form.status}
@@ -192,16 +192,16 @@ export function TraineeFormDialog({
                   setForm((f) => ({ ...f, status: v as 'active' | 'inactive' }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label>Date Added</Label>
               <Input
                 type="date"
@@ -210,7 +210,7 @@ export function TraineeFormDialog({
               />
             </div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <Label>Notes</Label>
             <Input
               value={form.notes}

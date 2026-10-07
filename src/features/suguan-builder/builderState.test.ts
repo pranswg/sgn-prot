@@ -119,6 +119,11 @@ test('copy keeps the coverage template but clears every calendar date', () => {
   assert.deepEqual(copy.events, [])
 })
 
+test('copy records the source so its picker entry can be hidden once used', () => {
+  const copy = createCopyDraft(source, voices)
+  assert.equal(copy.copiedFromId, source.id)
+})
+
 test('copy snapshots the source, so editing a copy never mutates the saved Suguan', () => {
   const copy = createCopyDraft(source, voices)
 

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+﻿import { Fragment, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Check,
   Eye,
-  FileText,
   Plus,
   RotateCcw,
   UserRound,
@@ -42,7 +41,7 @@ import {
 
 export type { SuguanDraft } from './builderState'
 
-const STEP_ICONS = [CalendarDays, FileText, CalendarClock, Eye]
+const STEP_ICONS = [CalendarDays, CalendarClock, UserRound, Eye]
 
 export function SuguanBuilderPage() {
   const navigate = useNavStore((s) => s.navigate)
@@ -72,7 +71,9 @@ export function SuguanBuilderPage() {
 
   const initialKey = editingId ?? '__new__'
   const [loadedKey, setLoadedKey] = useState(initialKey)
-  const [step, setStep] = useState(existing ? 4 : 0)
+  const [step, setStep] = useState(
+    existing ? BUILDER_STEPS.length - 1 : 0,
+  )
   const [draft, setDraft] = useState<SuguanDraft>(() =>
     existing ? createDraftFromSuguan(existing, voices) : createEmptyDraft(voices),
   )
@@ -83,7 +84,7 @@ export function SuguanBuilderPage() {
     setDraft(
       existing ? createDraftFromSuguan(existing, voices) : createEmptyDraft(voices),
     )
-    setStep(existing ? 4 : 0)
+    setStep(existing ? BUILDER_STEPS.length - 1 : 0)
     setStartOpen(!existing)
   }
 
@@ -141,8 +142,9 @@ export function SuguanBuilderPage() {
       docFormat: draft.docFormat,
       coverage: draft.coverage ?? undefined,
       events: draft.events,
-      pagsasanayDate: draft.pagsasanayDate || undefined,
+pagsasanayDate: draft.pagsasanayDate || undefined,
       pagtupadDate: draft.pagtupadDate || undefined,
+      copiedFromId: draft.copiedFromId || undefined,
       destinadoName: draft.destinadoName.trim() || undefined,
     })
     updateSuguan(created.id, {
@@ -163,8 +165,8 @@ export function SuguanBuilderPage() {
     <div className="flex flex-col gap-4 pb-24 xl:pb-0">
       {/* Page header */}
       <div className="flex flex-col gap-3.5 rounded-xl border border-border/70 bg-card p-4">
-        {/* Compact mobile header — schedules step only */}
-        {step === 2 && (
+        {/* Compact mobile header — schedules and assignments steps */}
+        {(step === 1 || step === 2) && (
           <div className="-mx-4 -mt-4 flex items-center gap-3 border-b border-border/70 px-4 py-3 md:hidden">
             <Button
               variant="ghost"
@@ -176,8 +178,8 @@ export function SuguanBuilderPage() {
               <ArrowLeft className="size-4.5" />
             </Button>
             <div className="min-w-0 flex-1 text-center">
-              <p className="truncate text-sm font-semibold text-foreground">
-                Suguan Builder
+<p className="truncate text-sm font-semibold text-foreground">
+                Choir Suguan
               </p>
               <p className="truncate text-[0.6875rem] text-muted-foreground">
                 Step {step + 1} of {BUILDER_STEPS.length} —{' '}
@@ -196,7 +198,7 @@ export function SuguanBuilderPage() {
         <div
           className={cn(
             'flex flex-wrap items-start justify-between gap-3',
-            step === 2 && 'hidden md:flex',
+            (step === 1 || step === 2) && 'hidden md:flex',
           )}
         >
           <div className="flex min-w-0 items-start gap-3">
@@ -204,8 +206,8 @@ export function SuguanBuilderPage() {
               <CalendarDays className="size-5" />
             </span>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
-                Suguan Builder
+<h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                Choir Suguan
               </h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Create and manage your choir service schedules and assignments.
@@ -223,12 +225,38 @@ export function SuguanBuilderPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden xl:flex"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={step === 0}
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
             <Badge variant="outline" className="tabular-nums">
               {draft.schedules.length > 0
                 ? `${draft.schedules.length} schedule${draft.schedules.length !== 1 ? 's' : ''}`
                 : 'No schedule'}
             </Badge>
+            {!existing && !startOpen && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden text-muted-foreground xl:flex"
+                onClick={startNewSuguan}
+              >
+                <RotateCcw className="size-4" />
+                Start over
+              </Button>
+            )}
+{!isLast && !stepComplete && (
+              <p className="hidden text-xs text-muted-foreground xl:block">
+                Complete the required fields for this step to continue.
+              </p>
+            )}
             <Button variant="outline" size="sm" onClick={() => setStartOpen(true)}>
               <Plus className="size-4" />
               Start new / copy
@@ -281,7 +309,11 @@ export function SuguanBuilderPage() {
                       !reachable && 'cursor-not-allowed opacity-40',
                     )}
                   >
-                    <StepIcon className="size-[18px]" />
+                      {passed ? (
+                        <Check className="size-[18px]" />
+                      ) : (
+                        <StepIcon className="size-[18px]" />
+                      )}
                   </button>
                   <span
                     className={cn(
@@ -301,39 +333,62 @@ export function SuguanBuilderPage() {
       </div>
 
       {/* Step body */}
-      {step === 2 ? (
-        <div className="flex min-w-0 flex-col gap-4">
-          <div className="min-w-0 rounded-xl border border-border/70 bg-card p-4">
-            <SchedulesStep draft={draft} patch={patch} />
-          </div>
-          <div className="mx-auto w-full max-w-[390px] rounded-[28px] border border-border/70 bg-background p-3 shadow-[0_2px_12px_rgba(16,42,67,0.06)] xl:max-w-none xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none">
-            <AssignmentWorkspace
-              draft={draft}
-              patch={patch}
-              members={members}
-              editingId={editingId}
-            />
-          </div>
+      {step === 1 ? (
+        <div className="min-w-0">
+          <SchedulesStep draft={draft} patch={patch} />
+        </div>
+      ) : step === 2 ? (
+        <div className="min-w-0">
+          <AssignmentWorkspace
+            draft={draft}
+            patch={patch}
+            members={members}
+            editingId={editingId}
+          />
         </div>
       ) : (
         <div className="min-w-0 rounded-xl border border-border/70 bg-card p-4">
-          {step === 0 && <CoverageStep draft={draft} patch={patch} />}
-          {step === 1 && (
-            <DocumentSetupStep
-              value={draft.docFormat}
-              onChange={(docFormat) => patch({ docFormat })}
-            />
+          {step === 0 && (
+            <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+              <div className="min-w-0 flex-1">
+                <CoverageStep draft={draft} patch={patch} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DocumentSetupStep
+                  value={draft.docFormat}
+                  onChange={(docFormat) => patch({ docFormat })}
+                />
+              </div>
+            </div>
           )}
           {step === 3 && (
             <PreviewStep
               draft={draft}
               onSave={handleSave}
               isExisting={Boolean(existing)}
-              editingId={editingId}
             />
           )}
         </div>
       )}
+
+{/* Primary action — bottom right on desktop; mobile uses the fixed bar */}
+      <div className="hidden justify-end xl:flex">
+        {isLast ? (
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saveBlockers(draft).length > 0}
+          >
+            <Check className="size-4" />
+            Save Suguan
+          </Button>
+        ) : (
+          <Button size="sm" onClick={goNext} disabled={!stepComplete}>
+            Next
+            <ArrowRight className="size-4" />
+          </Button>
+        )}
+      </div>
 
       {/* Bottom navigation */}
       <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur xl:hidden">
@@ -370,48 +425,6 @@ export function SuguanBuilderPage() {
         )}
       </div>
 
-      <div className="hidden items-center justify-between gap-3 xl:flex">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
-          >
-            <ArrowLeft className="size-4" />
-            Back
-          </Button>
-          {!existing && !startOpen && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground"
-              onClick={startNewSuguan}
-            >
-              <RotateCcw className="size-4" />
-              Start over
-            </Button>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {!isLast && !stepComplete && (
-            <p className="text-xs text-muted-foreground">
-              Complete the required fields for this step to continue.
-            </p>
-          )}
-          {isLast ? (
-            <Button onClick={handleSave} disabled={saveBlockers(draft).length > 0}>
-              <Check className="size-4" />
-              Save Suguan
-            </Button>
-          ) : (
-            <Button onClick={goNext} disabled={!stepComplete}>
-              Next
-              <ArrowRight className="size-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-
       <StartModeDialog
         open={startOpen}
         onOpenChange={(next) => {
@@ -445,3 +458,4 @@ export function SuguanBuilderPage() {
     </div>
   )
 }
+

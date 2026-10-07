@@ -224,7 +224,7 @@ export function MemberFormDialog({
             </div>
             <p className="text-xs text-muted-foreground">
               Positions control which duty roles a member may be assigned in the
-              Suguan Builder. Organista and Assistant Tagapagturo are treated
+              Choir Suguan. Organista and Assistant Tagapagturo are treated
               as equivalent.
             </p>
           </div>

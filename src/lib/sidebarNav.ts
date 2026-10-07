@@ -10,8 +10,10 @@
 import {
   CalendarPlus,
   GraduationCap,
+  Grid2X2,
   History,
   LayoutDashboard,
+  Music4,
   Settings,
   Users,
   type LucideIcon,
@@ -69,15 +71,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', page: 'dashboard', icon: LayoutDashboard },
   { label: 'Master List', page: 'master-list', icon: Users },
   { label: 'Trainees', page: 'trainees', icon: GraduationCap },
-  { label: 'Suguan Builder', page: 'suguan-builder', icon: CalendarPlus },
+  { label: 'Koro Maker', page: 'koro-maker', icon: Grid2X2 },
+  { label: 'Organist Suguan', page: 'organista-suguan-maker', icon: Music4 },
+  { label: 'Choir Suguan', page: 'suguan-builder', icon: CalendarPlus },
   { label: 'Suguan History', page: 'suguan-history', icon: History },
   { label: 'Settings', page: 'settings', icon: Settings },
 ]
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   { label: 'Overview', pages: ['dashboard'] },
-  { label: 'Choir Management', pages: ['master-list', 'trainees'] },
-  { label: 'Suguan', pages: ['suguan-builder', 'suguan-history'] },
+  { label: 'Choir Management', pages: ['master-list', 'trainees', 'koro-maker'] },
+  { label: 'Suguan', pages: ['suguan-builder', 'organista-suguan-maker', 'suguan-history'] },
   { label: 'System', pages: ['settings'] },
 ]
 

@@ -1,6 +1,7 @@
 import {
   CalendarPlus,
   GraduationCap,
+  Grid2X2,
   LayoutDashboard,
   MoreHorizontal,
   Users,
@@ -12,6 +13,7 @@ const ITEMS: { label: string; page: Page; icon: typeof Users }[] = [
   { label: 'Dashboard', page: 'dashboard', icon: LayoutDashboard },
   { label: 'Members', page: 'master-list', icon: Users },
   { label: 'Trainees', page: 'trainees', icon: GraduationCap },
+  { label: 'Koro', page: 'koro-maker', icon: Grid2X2 },
   { label: 'Suguan', page: 'suguan-builder', icon: CalendarPlus },
   { label: 'More', page: 'settings', icon: MoreHorizontal },
 ]
@@ -31,7 +33,7 @@ export function MobileBottomNav() {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-6">
         {ITEMS.map((item) => {
           const isActive =
             page === item.page ||

@@ -86,6 +86,14 @@ uses a different font, and registering this file as `Inter` restyles the entire
 application. The user prefers the preview font; keep both renderers on the same
 files.
 
+The Organist Suguan PDF keeps a second bundled font:
+`src/assets/fonts/SegoeScript.ttf` is a copy of the Windows system font,
+imported as a URL and base64-fed into jsPDF (`addFileToVFS` + `addFont` +
+`setFont`) so the "SUGUAN NG MGA ORGANISTA" heading is real vector text, not a
+canvas raster. Do not revert it to a times/helvetica heading; the user insisted
+the Segoe Script look stays. It fails closed to `times` bold if the asset
+cannot be fetched.
+
 ## Dates and time zones
 
 Canonical calendar dates are **`YYYY-MM-DD` strings**, never `Date` objects.

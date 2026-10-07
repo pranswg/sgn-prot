@@ -25,6 +25,7 @@ export function DashboardPage() {
   const suguan = useSuguanStore((s) => s.suguan)
   const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
   const navigate = useNavStore((s) => s.navigate)
+  const navigateToDirectory = useNavStore((s) => s.navigateToDirectory)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
 
@@ -54,11 +55,11 @@ export function DashboardPage() {
     s.serviceTypeId
 
   const stats = [
-    { label: 'Total Members', value: members.length, icon: Users, color: 'text-sky-600 dark:text-sky-400' },
-    { label: 'Active Members', value: activeMembers.length, icon: Music2, color: 'text-emerald-600 dark:text-emerald-400' },
-    { label: 'Active Trainees', value: activeTrainees.length, icon: GraduationCap, color: 'text-violet-600 dark:text-violet-400' },
-    { label: "Women's Choir", value: women.length, icon: Trophy, color: 'text-pink-600 dark:text-pink-400' },
-    { label: "Men's Choir", value: men.length, icon: Trophy, color: 'text-sky-600 dark:text-sky-400' },
+    { label: 'Total Members', value: members.length, icon: Users, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('all') },
+    { label: 'Active Members', value: activeMembers.length, icon: Music2, color: 'text-emerald-600 dark:text-emerald-400', go: () => navigateToDirectory('active') },
+    { label: "Women's Choir", value: women.length, icon: Trophy, color: 'text-pink-600 dark:text-pink-400', go: () => navigateToDirectory('female') },
+    { label: "Men's Choir", value: men.length, icon: Trophy, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('male') },
+    { label: 'Trainees', value: activeTrainees.length, icon: GraduationCap, color: 'text-violet-600 dark:text-violet-400', go: () => navigate('trainees') },
   ]
 
   return (
@@ -82,17 +83,25 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex size-10 items-center justify-center rounded-md bg-muted">
-                <s.icon className={`size-5 ${s.color}`} />
-              </div>
-              <div>
-                <p className="text-2xl font-semibold leading-none">{s.value}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <button
+            key={s.label}
+            type="button"
+            onClick={s.go}
+            aria-label={`${s.label}: ${s.value}. Go to ${s.label}`}
+            className="group cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Card className="transition-colors group-hover:bg-accent/40 group-hover:shadow-md">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex size-10 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-card">
+                  <s.icon className={`size-5 ${s.color}`} />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold leading-none">{s.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
         ))}
       </div>
 

@@ -288,15 +288,20 @@ export function TraineePage() {
               No trainees to display.
             </li>
           ) : (
-            filtered.map((t) => (
+            filtered.map((t, index) => (
               <li
                 key={t.id}
                 className="overflow-hidden rounded-xl border border-border/60 bg-card p-3.5 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold tracking-tight text-foreground">
-                      {t.firstName} {t.lastName}
+                    <p className="flex items-center gap-2">
+                      <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-muted text-[0.6875rem] font-semibold tabular-nums text-muted-foreground">
+                        {index + 1}
+                      </span>
+                      <span className="truncate text-sm font-semibold tracking-tight text-foreground">
+                        {t.firstName} {t.lastName}
+                      </span>
                     </p>
                     <p className="mt-1 flex flex-wrap items-center gap-1.5">
                       <GenderBadge gender={t.gender} />
@@ -351,6 +356,9 @@ export function TraineePage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
+                <TableHead className={`${headClass} w-14 text-center`}>
+                  #
+                </TableHead>
                 <TableHead className={headClass}>Name</TableHead>
                 <TableHead className={headClass}>Gender</TableHead>
                 <TableHead className={headClass}>Voice Position</TableHead>
@@ -366,7 +374,7 @@ export function TraineePage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                     No trainees to display.
                   </TableCell>
                 </TableRow>
@@ -375,7 +383,7 @@ export function TraineePage() {
                   <Fragment key={key}>
                     {/* Choir section divider, matching the Master List table. */}
                     <TableRow className="border-y border-border bg-background hover:bg-background">
-                      <TableCell colSpan={6} className="px-4 py-2">
+                      <TableCell colSpan={7} className="px-4 py-2">
                         <div className="flex items-center gap-2.5">
                           <Icon className={cn('size-3.5', iconClass)} />
                           <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-foreground/75">
@@ -392,11 +400,16 @@ export function TraineePage() {
                       </TableCell>
                     </TableRow>
 
-                    {members.map((t) => (
+                    {members.map((t, index) => (
                       <TableRow
                         key={t.id}
                         className="h-14 border-b border-border transition-colors hover:bg-background"
                       >
+                        <TableCell className="w-14 text-center align-middle">
+                          <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+                            {index + 1}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <div className="font-medium">
                             {t.firstName} {t.lastName}

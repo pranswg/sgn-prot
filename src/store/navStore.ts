@@ -1,9 +1,12 @@
 import { create } from 'zustand'
+import type { DirectoryStartView } from '@/lib/memberDirectory'
 
 export type Page =
   | 'dashboard'
   | 'master-list'
   | 'trainees'
+  | 'koro-maker'
+  | 'organista-suguan-maker'
   | 'suguan-builder'
   | 'suguan-history'
   | 'suguan-detail'
@@ -32,6 +35,19 @@ interface NavState {
   navigate: (page: Page) => void
   /** Goes to `previousPage`, or the dashboard when there is nowhere to go. */
   goBack: () => void
+  /**
+   * One-shot initial directory view for the next Master List visit, set by the
+   * dashboard KPI cards. MasterListPage reads it while first rendering and
+   * clears it via `clearDirectoryStart`, so a later plain `navigate` to the
+   * Master List never re-applies an old filtered view.
+   */
+  directoryStart: DirectoryStartView | null
+  /**
+   * Jump to the Master List with a KPI card's view pre-applied, rather than
+   * landing on the wide-open directory.
+   */
+  navigateToDirectory: (start: DirectoryStartView) => void
+  clearDirectoryStart: () => void
   openSuguanDetail: (id: string) => void
   startNewSuguan: () => void
   /** Returns to `builderReturnPage`, or `null` if there is nowhere to go back to. */
@@ -47,6 +63,7 @@ export const useNavStore = create<NavState>()((set, get) => ({
   builderSuguanId: null,
   builderReturnPage: null,
   previousPage: null,
+  directoryStart: null,
   navigate: (page) =>
     set((s) => ({
       page,
@@ -61,10 +78,26 @@ export const useNavStore = create<NavState>()((set, get) => ({
       // `startNewSuguan`, so this has to handle the origin too.
       builderReturnPage:
         page === 'suguan-builder' && s.page !== 'suguan-builder' ? s.page : null,
+      // A plain navigation must not re-apply a KPI card's filtered view.
+      directoryStart: null,
     })),
+  navigateToDirectory: (start) =>
+    set((s) => ({
+      page: 'master-list',
+      directoryStart: start,
+      selectedSuguanId: null,
+      builderSuguanId: null,
+      previousPage: s.page === 'master-list' ? s.previousPage : s.page,
+      builderReturnPage: null,
+    })),
+  clearDirectoryStart: () => set({ directoryStart: null }),
   goBack: () => {
-    const { previousPage, navigate } = get()
-    navigate(previousPage ?? 'dashboard')
+    const { page, previousPage, navigate } = get()
+    // A direct page swap (dismissing the start dialog returns to Settings
+    // without going through `navigate`) can leave `previousPage` pointing at
+    // the screen we are already on. Navigating there would be a no-op, so the
+    // back button would appear dead. Fall back to the dashboard instead.
+    navigate(previousPage && previousPage !== page ? previousPage : 'dashboard')
   },
   openSuguanDetail: (id) =>
     set({
@@ -72,6 +105,7 @@ export const useNavStore = create<NavState>()((set, get) => ({
       selectedSuguanId: id,
       builderSuguanId: null,
       builderReturnPage: null,
+      directoryStart: null,
     }),
   startNewSuguan: () => {
     const { page } = get()
@@ -82,15 +116,16 @@ export const useNavStore = create<NavState>()((set, get) => ({
       // Already in the builder means this is a deliberate "start over", not a
       // jump from elsewhere, so there is no origin worth returning to.
       builderReturnPage: page === 'suguan-builder' ? null : page,
+      directoryStart: null,
     })
   },
   dismissNewSuguan: () => {
     const { builderReturnPage } = get()
     if (!builderReturnPage || builderReturnPage === 'suguan-builder') {
-      set({ builderReturnPage: null })
+      set({ builderReturnPage: null, directoryStart: null })
       return null
     }
-    set({ page: builderReturnPage, builderReturnPage: null })
+    set({ page: builderReturnPage, builderReturnPage: null, directoryStart: null })
     return builderReturnPage
   },
   clearBuilderReturnPage: () => set({ builderReturnPage: null }),
@@ -100,5 +135,6 @@ export const useNavStore = create<NavState>()((set, get) => ({
       builderSuguanId: id,
       selectedSuguanId: null,
       builderReturnPage: null,
+      directoryStart: null,
     }),
 }))

@@ -45,7 +45,7 @@ import {
   planEventsFromCoverage,
   schedulesForTemplate,
   suggestPagtupadBlock,
-
+  worshipWeekFromRehearsal,
 } from './suguanDates.ts'
 
 const WEDNESDAY = 3
@@ -355,6 +355,42 @@ test('weekend boundaries survive month and year rollovers', () => {
   assert.equal(suggestPagtupadBlock('2026-12-26', WEEKEND_SCHEDULES)?.start, '2027-01-02')
   // Feb 2028 has no 29th; the arithmetic must not depend on it existing.
   assert.equal(suggestPagtupadBlock('2028-02-26', WEEKEND_SCHEDULES)?.end, '2028-03-05')
+})
+
+test('a rehearsal resolves the whole worship week: Wed, Thu, Sat, Sun', () => {
+  const week = worshipWeekFromRehearsal('2026-10-07')
+  assert.deepEqual(week, {
+    wednesday: '2026-10-07',
+    thursday: '2026-10-08',
+    saturday: '2026-10-10',
+    sunday: '2026-10-11',
+  })
+})
+
+test('a rehearsal on any weekday maps into that calendar week', () => {
+  // Tuesday 2026-10-06 and Saturday 2026-10-10 both belong to Oct 5-11.
+  for (const rehearsal of ['2026-10-05', '2026-10-06', '2026-10-10', '2026-10-11']) {
+    assert.deepEqual(worshipWeekFromRehearsal(rehearsal), {
+      wednesday: '2026-10-07',
+      thursday: '2026-10-08',
+      saturday: '2026-10-10',
+      sunday: '2026-10-11',
+    })
+  }
+})
+
+test('a rehearsal week crossing a month boundary keeps its four days', () => {
+  assert.deepEqual(worshipWeekFromRehearsal('2026-10-31'), {
+    wednesday: '2026-10-28',
+    thursday: '2026-10-29',
+    saturday: '2026-10-31',
+    sunday: '2026-11-01',
+  })
+})
+
+test('a blank or invalid rehearsal date derives no week', () => {
+  assert.equal(worshipWeekFromRehearsal(''), null)
+  assert.equal(worshipWeekFromRehearsal('2026-02-30'), null)
 })
 
 test('a 2-week Pagtupad override shifts the whole block for both weeks', () => {

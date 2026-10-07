@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Download,
@@ -55,6 +55,7 @@ import {
   countMembersByPosition,
   DEFAULT_MEMBER_PAGE_SIZE,
   filterMembers,
+  filtersForStartView,
   formatMemberName,
   hasActiveDirectoryFilters,
   paginate,
@@ -74,7 +75,7 @@ import {
   MemberDirectoryEmptyState,
 } from './MemberDirectoryTable'
 import { PageSizeControl, SectionPaginator } from './SectionPaginator'
-import { MobileStatCards } from './MobileStatCards'
+import { MobileStatCards, type MobileStatAction } from './MobileStatCards'
 import { MobileDirectoryHeader } from './MobileDirectoryHeader'
 import { MobileMemberCard } from './MobileMemberCard'
 import { MemberActionSheet } from './MemberActionSheet'
@@ -137,14 +138,23 @@ export function MasterListPage() {
   const voices = useSettingsStore((s) => s.voices)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
+  const navigate = useNavStore((s) => s.navigate)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
   const isMobile = useIsMobile()
 
   const voiceMap = useMemo(() => allVoices(), [allVoices])
 
-  const [filters, setFilters] = useState<MemberDirectoryFilters>(
-    EMPTY_DIRECTORY_FILTERS,
-  )
+  // The dashboard KPI cards navigate straight into a filtered Master List, so
+  // the first filters are the one-shot view they set rather than the wide-open
+  // directory. It is read during first render and then forgotten so a later
+  // plain navigation cannot re-apply a card the user has long left.
+  const [filters, setFilters] = useState<MemberDirectoryFilters>(() => {
+    const start = useNavStore.getState().directoryStart
+    return start ? filtersForStartView(start) : EMPTY_DIRECTORY_FILTERS
+  })
+  useEffect(() => {
+    useNavStore.getState().clearDirectoryStart()
+  }, [])
   const [sort, setSort] = useState<MemberSort>('last-name')
   const [pageSize, setPageSize] =
     useState<MemberPageSize>(DEFAULT_MEMBER_PAGE_SIZE)
@@ -197,6 +207,16 @@ export function MasterListPage() {
 
   const filtersActive = hasActiveDirectoryFilters(filters)
   const activeFilterCount = countActiveDirectoryFilters(filters)
+  // Which KPI card the directory currently reflects: the wide-open view maps
+  // to Total, otherwise the status filter's card. Null when narrowed by a
+  // filter no card owns (voice, position, query).
+  const selectedStat: MobileStatAction | null = !filtersActive
+    ? 'all'
+    : filters.status === 'active'
+      ? 'active'
+      : filters.status === 'inactive'
+        ? 'inactive'
+        : null
   // The search field has its own clear button, so the chip row only offers a
   // bulk clear for the selections that do not.
   const selectableFilterCount =
@@ -214,6 +234,22 @@ export function MasterListPage() {
 
   const clearFilters = () => setFilters(EMPTY_DIRECTORY_FILTERS)
 
+  // Tapping a KPI card either narrows the directory to that cohort or jumps to
+  // the Trainees tab. The filters reset first so the listed members are exactly
+  // the cohort the card counts.
+  const selectStat = (action: MobileStatAction) => {
+    if (action === 'trainees') {
+      navigate('trainees')
+      return
+    }
+    setFilters(
+      action === 'all'
+        ? EMPTY_DIRECTORY_FILTERS
+        : { ...EMPTY_DIRECTORY_FILTERS, status: action },
+    )
+    setMobilePage(1)
+  }
+
   const openAddDialog = () => {
     setEditingMember(null)
     setFormOpen(true)
@@ -229,7 +265,7 @@ export function MasterListPage() {
   const handleAssign = (member: Member) => {
     startNewSuguan()
     toast.success(
-      `Suguan Builder ready — assign ${formatMemberName(member, sort)} to a slot.`,
+      `Choir Suguan ready — assign ${formatMemberName(member, sort)} to a slot.`,
     )
   }
 
@@ -322,7 +358,11 @@ export function MasterListPage() {
         }
       />
 
-      <MobileStatCards stats={stats} />
+      <MobileStatCards
+        stats={stats}
+        selected={selectedStat}
+        onSelect={selectStat}
+      />
       <DirectorySummaryCards stats={stats} />
 
       {/* Search & filter toolbar. Every directory filter lives here (choir
@@ -698,10 +738,11 @@ export function MasterListPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 <ul className="flex flex-col gap-2">
-                  {mobilePageResult.items.map((member) => (
+                  {mobilePageResult.items.map((member, index) => (
                     <MobileMemberCard
                       key={member.id}
                       member={member}
+                      number={mobilePageResult.firstItem + index}
                       reference={references.get(member.id)}
                       voices={voiceMap}
                       sort={sort}

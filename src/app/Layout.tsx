@@ -29,6 +29,8 @@ import { useSidebarStore } from '@/store/sidebarStore'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { MasterListPage } from '@/features/master-list/MasterListPage'
 import { TraineePage } from '@/features/trainees/TraineePage'
+import { KoroMakerPage } from '@/features/koro-maker/KoroMakerPage'
+import { OrganistaSuguanMakerPage } from '@/features/organista-suguan-maker/OrganistaSuguanMakerPage'
 import { SuguanBuilderPage } from '@/features/suguan-builder/SuguanBuilderPage'
 import { SuguanHistoryPage } from '@/features/suguan-history/SuguanHistoryPage'
 import { SuguanDetailPage } from '@/features/suguan-history/SuguanDetailPage'
@@ -43,6 +45,10 @@ function CurrentPage() {
       return <MasterListPage />
     case 'trainees':
       return <TraineePage />
+    case 'koro-maker':
+      return <KoroMakerPage />
+    case 'organista-suguan-maker':
+      return <OrganistaSuguanMakerPage />
     case 'suguan-builder':
       return <SuguanBuilderPage />
     case 'suguan-history':
@@ -77,9 +83,19 @@ const PAGE_META: Record<
     title: 'Trainees',
     subtitle: 'Track choir trainees and promote them into the Master List.',
   },
+  'koro-maker': {
+    group: 'Choir Management',
+    title: 'Koro Maker',
+    subtitle: 'Arrange choir members and voice parts for special occasions.',
+  },
+  'organista-suguan-maker': {
+    group: 'Suguan',
+    title: 'Organist Suguan',
+    subtitle: 'Create a printable organist sign-up sheet from a church service schedule.',
+  },
   'suguan-builder': {
     group: 'Suguan',
-    title: 'Suguan Builder',
+    title: 'Choir Suguan',
     subtitle: 'Build worship service schedules, assignments, and duty roles.',
   },
   'suguan-history': {
@@ -111,9 +127,11 @@ function Breadcrumb() {
         <li className="hidden sm:block">
           <button
             type="button"
-            onClick={() =>
-              navigate(meta.group === 'Suguan' ? 'suguan-builder' : 'dashboard')
-            }
+            onClick={() => {
+              if (meta.group === 'Suguan') navigate('suguan-builder')
+              else if (meta.group === 'Choir Management') navigate('master-list')
+              else navigate('dashboard')
+            }}
             className="text-muted-foreground transition-colors hover:text-foreground"
           >
             {meta.group}

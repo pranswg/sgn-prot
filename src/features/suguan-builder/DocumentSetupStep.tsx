@@ -1,5 +1,7 @@
-﻿import { useMemo } from 'react'
+﻿import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, FileText, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -119,10 +121,55 @@ function CardRow<T extends string>({
   )
 }
 
+/**
+ * Mobile-only disclosure trigger. The desktop layout keeps every section open
+ * in a two-column row, so this button is `lg:hidden` and its content panel is
+ * `lg:flex` regardless of the open flag.
+ */
+function DisclosureButton({
+  open,
+  onToggle,
+  icon: Icon,
+  children,
+}: {
+  open: boolean
+  onToggle: () => void
+  icon: typeof FileText
+  children: ReactNode
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onToggle}
+      className="w-full justify-between lg:hidden"
+    >
+      <span className="flex items-center gap-2">
+        <Icon className="size-4 text-muted-foreground" />
+        {children}
+      </span>
+      <ChevronDown
+        className={cn(
+          'size-4 text-muted-foreground transition-transform',
+          open && 'rotate-180',
+        )}
+      />
+    </Button>
+  )
+}
+
 export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
   const dims = useMemo(() => docPaperDimensionsMm(value), [value])
   const margins = useMemo(() => docMarginsMm(value), [value])
   const set = (p: Partial<SuguanDocFormat>) => onChange({ ...value, ...p })
+
+  /**
+   * Mobile only: step 1 stacks coverage above the document options, so the
+   * document panel and its margins/scaling group would fill the screen before
+   * anything else is reachable. Both start collapsed on small screens.
+   */
+  const [docOpen, setDocOpen] = useState(false)
+  const [layoutOpen, setLayoutOpen] = useState(false)
 
   // Read the live preset so the derived sizes shown next to the custom input are
   // the ones the renderers will actually use, including after a clamp.
@@ -131,15 +178,29 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <DisclosureButton
+        open={docOpen}
+        onToggle={() => setDocOpen((o) => !o)}
+        icon={FileText}
+      >
+        Document setup
+      </DisclosureButton>
+
+      <div
+        className={cn(
+          'flex-col gap-6 lg:flex',
+          docOpen ? 'flex' : 'hidden',
+        )}
+      >
       <CardRow<DocPaperSize>
         label="Paper size"
         hint="Match the printer paper used for the printed sheet."
         value={value.paperSize}
         onChange={(v) => set({ paperSize: v })}
         options={[
-          { id: 'letter', label: PAPER_SIZE_LABELS.letter.short, description: '8.5 Ã— 11 in' },
-          { id: 'a4', label: PAPER_SIZE_LABELS.a4.short, description: '210 Ã— 297 mm' },
-          { id: 'legal', label: PAPER_SIZE_LABELS.legal.short, description: '8.5 Ã— 14 in' },
+          { id: 'letter', label: PAPER_SIZE_LABELS.letter.short, description: '8.5 × 11 in' },
+          { id: 'a4', label: PAPER_SIZE_LABELS.a4.short, description: '210 × 297 mm' },
+          { id: 'legal', label: PAPER_SIZE_LABELS.legal.short, description: '8.5 × 14 in' },
           { id: 'custom', label: 'Custom', description: 'Enter your own' },
         ]}
       />
@@ -164,60 +225,12 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
         value={value.orientation}
         onChange={(v) => set({ orientation: v })}
         options={[
-          { id: 'portrait', label: 'Portrait', description: 'Default â€” narrower date columns' },
+          { id: 'portrait', label: 'Portrait', description: 'Default — narrower date columns' },
           { id: 'landscape', label: 'Landscape', description: 'Wider, best for many columns' },
         ]}
       />
 
-      <CardRow<DocMargins>
-        label="Margins"
-        value={value.margins}
-        onChange={(v) => set({ margins: v })}
-        options={[
-          { id: 'normal', label: 'Normal', description: '10 mm sides' },
-          { id: 'narrow', label: 'Narrow', description: '5 mm all round' },
-          { id: 'custom', label: 'Custom', description: 'Enter your own' },
-        ]}
-      />
-
-      {value.margins === 'custom' && (
-        <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
-          <UnitInput
-            label="Top margin (mm)"
-            value={value.customMarginTopMm}
-            onChange={(v) => set({ customMarginTopMm: v })}
-          />
-          <UnitInput
-            label="Bottom margin (mm)"
-            value={value.customMarginBottomMm}
-            onChange={(v) => set({ customMarginBottomMm: v })}
-          />
-          <UnitInput
-            label="Left margin (mm)"
-            value={value.customMarginLeftMm}
-            onChange={(v) => set({ customMarginLeftMm: v })}
-          />
-          <UnitInput
-            label="Right margin (mm)"
-            value={value.customMarginRightMm}
-            onChange={(v) => set({ customMarginRightMm: v })}
-          />
-        </div>
-      )}
-
-      <CardRow<DocScaling>
-        label="Scaling / fit"
-        hint="Automatically scales to one page when readable; otherwise starts a new page only when needed."
-        value={value.scaling}
-        onChange={(v) => set({ scaling: v })}
-        options={[
-          { id: 'auto', label: 'Automatic', description: 'Fit when possible' },
-          { id: 'fit-width', label: 'Fit width', description: 'One page wide' },
-          { id: 'fit-page', label: 'Fit page', description: 'One page total' },
-        ]}
-      />
-
-<CardRow<DocFontSize>
+      <CardRow<DocFontSize>
         label="Font size"
         hint="Applies to the PDF, Excel, and on-screen preview."
         value={value.fontSize}
@@ -253,11 +266,75 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
         </div>
       )}
 
+      <DisclosureButton
+        open={layoutOpen}
+        onToggle={() => setLayoutOpen((o) => !o)}
+        icon={SlidersHorizontal}
+      >
+        Margins &amp; scaling
+      </DisclosureButton>
+
+      <div
+        className={cn(
+          'flex-col gap-6 lg:flex',
+          layoutOpen ? 'flex' : 'hidden',
+        )}
+      >
+        <CardRow<DocMargins>
+          label="Margins"
+          value={value.margins}
+          onChange={(v) => set({ margins: v })}
+          options={[
+            { id: 'normal', label: 'Normal', description: '10 mm sides' },
+            { id: 'narrow', label: 'Narrow', description: '5 mm all round' },
+            { id: 'custom', label: 'Custom', description: 'Enter your own' },
+          ]}
+        />
+
+        {value.margins === 'custom' && (
+          <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+            <UnitInput
+              label="Top margin (mm)"
+              value={value.customMarginTopMm}
+              onChange={(v) => set({ customMarginTopMm: v })}
+            />
+            <UnitInput
+              label="Bottom margin (mm)"
+              value={value.customMarginBottomMm}
+              onChange={(v) => set({ customMarginBottomMm: v })}
+            />
+            <UnitInput
+              label="Left margin (mm)"
+              value={value.customMarginLeftMm}
+              onChange={(v) => set({ customMarginLeftMm: v })}
+            />
+            <UnitInput
+              label="Right margin (mm)"
+              value={value.customMarginRightMm}
+              onChange={(v) => set({ customMarginRightMm: v })}
+            />
+          </div>
+        )}
+
+        <CardRow<DocScaling>
+          label="Scaling / fit"
+          hint="Automatically scales to one page when readable; otherwise starts a new page only when needed."
+          value={value.scaling}
+          onChange={(v) => set({ scaling: v })}
+          options={[
+            { id: 'auto', label: 'Automatic', description: 'Fit when possible' },
+            { id: 'fit-width', label: 'Fit width', description: 'One page wide' },
+            { id: 'fit-page', label: 'Fit page', description: 'One page total' },
+          ]}
+        />
+      </div>
+
       <p className="text-xs text-muted-foreground">
         {resolveFontSizePreset(normalized).label} ·{' '}
         {dims.width.toFixed(0)} × {dims.height.toFixed(0)} mm · margins{' '}
         {margins.top}/{margins.bottom}/{margins.left}/{margins.right} mm
       </p>
+      </div>
     </div>
   )
 }

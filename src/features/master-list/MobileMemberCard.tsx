@@ -13,6 +13,8 @@ import { MemberInitialsAvatar } from './MemberInitialsAvatar'
 
 interface MobileMemberCardProps {
   member: Member
+  /** Position in the current list, shown as a row-number chip. */
+  number: number
   reference?: string
   voices: VoicePosition[]
   sort: MemberSort
@@ -22,13 +24,14 @@ interface MobileMemberCardProps {
 }
 
 /**
- * Compact directory card. The body is one large tap target for the profile, so
- * the card carries no row number — the display reference (M-001) is what
- * identifies the member here. The overflow button stays a sibling of the tap
- * target rather than nested inside it.
+ * Compact directory card. The body is one large tap target for the profile;
+ * the row number chip sits beside the avatar and the display reference (M-001)
+ * under the name. The overflow button stays a sibling of the tap target rather
+ * than nested inside it.
  */
 export function MobileMemberCard({
   member,
+  number,
   reference,
   voices,
   sort,
@@ -45,6 +48,9 @@ export function MobileMemberCard({
           onClick={() => onOpen(member)}
           className="flex min-w-0 flex-1 items-start gap-3 text-left"
         >
+          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+            {number}
+          </span>
           <MemberInitialsAvatar
             member={member}
             sort={sort}

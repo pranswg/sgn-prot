@@ -1,6 +1,7 @@
 import {
   formatDateKey,
   formatDateKeyLong,
+  formatDateKeyLongDate,
   isDateKey,
   isPastPHT,
 } from './phDate'
@@ -15,6 +16,12 @@ export function formatDateLong(isoDate: string): string {
   if (!isoDate) return '—'
   if (!isDateKey(isoDate)) return isoDate
   return formatDateKeyLong(isoDate)
+}
+
+export function formatDateLongDate(isoDate: string): string {
+  if (!isoDate) return '—'
+  if (!isDateKey(isoDate)) return isoDate
+  return formatDateKeyLongDate(isoDate)
 }
 
 export function formatTime(time: string): string {

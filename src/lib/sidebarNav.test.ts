@@ -30,6 +30,8 @@ const ALL_PAGES = [
   'dashboard',
   'master-list',
   'trainees',
+  'koro-maker',
+  'organista-suguan-maker',
   'suguan-builder',
   'suguan-history',
   'suguan-detail',
@@ -73,8 +75,8 @@ test('resolvedNavGroups preserves group order and item order', () => {
     resolved.map((g) => g.items.map((i) => i.label)),
     [
       ['Dashboard'],
-      ['Master List', 'Trainees'],
-      ['Suguan Builder', 'Suguan History'],
+      ['Master List', 'Trainees', 'Koro Maker'],
+      ['Choir Suguan', 'Organist Suguan', 'Suguan History'],
       ['Settings'],
     ],
   )

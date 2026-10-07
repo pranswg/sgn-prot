@@ -36,7 +36,7 @@ export function SectionPaginator({
           <>
             Showing{' '}
             <span className="font-semibold text-foreground/80">
-              {page.firstItem}&ndash;#{page.lastItem}
+            {page.firstItem}&ndash;{page.lastItem}
             </span>{' '}
             of <span className="font-semibold text-foreground/80">{page.total}</span>{' '}
             {label}
@@ -91,7 +91,9 @@ export function PageSizeControl({
 }) {
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <span className="text-[0.6875rem] text-muted-foreground">Rows</span>
+      <span className="text-[0.6875rem] text-muted-foreground">
+        Rows to show
+      </span>
       <div
         role="group"
         aria-label="Members per page"

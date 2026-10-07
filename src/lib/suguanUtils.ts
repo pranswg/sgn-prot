@@ -354,6 +354,7 @@ export {
   suggestBlockForSchedules,
   suggestPagtupadBlock,
   suggestPagtupadDate,
+  worshipWeekFromRehearsal,
 } from './suguanDates'
 
 /**

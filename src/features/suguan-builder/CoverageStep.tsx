@@ -331,7 +331,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
               <div className="grid gap-1.5">
                 <Label
                   htmlFor="cw-start"
-                  className="text-xs text-muted-foreground"
+                  className="text-xs text-foreground"
                 >
                   Petsa ng Pagsasanay
                 </Label>
@@ -355,7 +355,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
                   <div className="grid gap-1.5">
                     <Label
                       htmlFor="cw-ptd-2w-start"
-                      className="text-xs text-muted-foreground"
+                      className="text-xs text-foreground"
                     >
                       Pagtupad start
                     </Label>
@@ -376,7 +376,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
                   <div className="grid gap-1.5">
                     <Label
                       htmlFor="cw-ptd-2w-end"
-                      className="text-xs text-muted-foreground"
+                      className="text-xs text-foreground"
                     >
                       Pagtupad end
                     </Label>

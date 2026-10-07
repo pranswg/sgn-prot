@@ -33,9 +33,14 @@ export interface SuguanDraft {
   schedules: SuguanScheduleSection[]
   dutyRoles: SuguanDutyRole[]
   destinadoName: string
+  copiedFromId?: string | null
 }
 
-export type BuilderStepId = 'coverage' | 'document' | 'schedules' | 'preview'
+export type BuilderStepId =
+  | 'coverage-document'
+  | 'schedules'
+  | 'assignments'
+  | 'preview'
 
 export interface BuilderStepDef {
   id: BuilderStepId
@@ -46,29 +51,28 @@ export interface BuilderStepDef {
 
 export const BUILDER_STEPS: BuilderStepDef[] = [
   {
-    id: 'coverage',
-    title: 'Coverage & Service',
-    short: 'Coverage',
-    description: 'Choose the duration, coverage, choir, and service of this Suguan.',
-  },
-  {
-    id: 'document',
-    title: 'Document Setup',
-    short: 'Document',
-    description: 'Set paper, orientation, margins, and text size for the printed sheet.',
+    id: 'coverage-document',
+    title: 'Coverage & Document',
+    short: 'Coverage & Doc',
+    description: 'Set the service coverage and document layout.',
   },
   {
     id: 'schedules',
     title: 'Schedules',
     short: 'Schedules',
-    description:
-      'Pick the worship schedules, then assign members and duty roles.',
+    description: 'Choose worship schedules to include.',
+  },
+  {
+    id: 'assignments',
+    title: 'Assignments',
+    short: 'Assign',
+    description: 'Assign members and special duties.',
   },
   {
     id: 'preview',
-    title: 'Preview & Export',
+    title: 'Preview',
     short: 'Preview',
-    description: 'Review the sheet, then save, print, or export it.',
+    description: 'Review the Suguan sheet before saving.',
   },
 ]
 
@@ -138,6 +142,7 @@ export function createDraftFromSuguan(
     })),
     dutyRoles: (suguan.dutyRoles ?? []).map((d) => ({ ...d })),
     destinadoName: suguan.destinadoName ?? '',
+    copiedFromId: suguan.copiedFromId,
   }
 }
 
@@ -171,6 +176,7 @@ export function createCopyDraft(source: Suguan, voices: VoicePosition[]): Suguan
     date: '',
     pagsasanayDate: '',
     pagtupadDate: '',
+    copiedFromId: source.id,
   }
 }
 
@@ -218,6 +224,7 @@ export function buildPreviewSuguan(draft: SuguanDraft): Suguan {
           ],
     dutyRoles: draft.dutyRoles,
     destinadoName: draft.destinadoName,
+    copiedFromId: draft.copiedFromId ?? undefined,
     createdAt: '',
     updatedAt: '',
   }
@@ -229,16 +236,19 @@ export function isStepComplete(draft: SuguanDraft, index: number): boolean {
       return (
         draft.coverage != null &&
         Boolean(draft.serviceTypeId) &&
-        // A blank Pagsasanay date plans no events, so the step is not finished
-        // until the user has chosen one.
-        draft.events.length > 0
+        Boolean(draft.date) &&
+        Boolean(draft.time) &&
+        Boolean(draft.group) &&
+        Boolean(draft.docFormat)
       )
     case 1:
-      return Boolean(draft.docFormat.paperSize && draft.docFormat.orientation)
+      return draft.schedules.length > 0
     case 2:
       return totalAssigned(draft) > 0
-    default:
+    case 3:
       return true
+    default:
+      return false
   }
 }
 

@@ -330,6 +330,18 @@ export function formatMonthYearKey(key: DateKey): string {
   return `${month} ${counter.getUTCFullYear()}`
 }
 
+/** Long date without weekday, e.g. `October 19, 2026`. */
+export function formatDateKeyLongDate(key: DateKey): string {
+  if (!isDateKey(key)) return '—'
+  const counter = toCalendarCounter(key)
+  if (!counter) return '—'
+  const month = counter.toLocaleString('en-US', {
+    month: 'long',
+    timeZone: 'UTC',
+  })
+  return `${month} ${counter.getUTCDate()}, ${counter.getUTCFullYear()}`
+}
+
 /** Weekday name only, e.g. `Wednesday`. */
 export function formatWeekday(key: DateKey): string {
   if (!isDateKey(key)) return '—'

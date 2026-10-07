@@ -125,6 +125,7 @@ export interface Suguan {
   assignments: SuguanAssignment[]
   dutyRoles: SuguanDutyRole[]
   destinadoName?: string
+  copiedFromId?: string
   createdAt: string
   updatedAt: string
 }

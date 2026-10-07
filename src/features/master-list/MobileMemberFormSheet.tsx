@@ -361,7 +361,7 @@ export function MobileMemberFormSheet({
               </ul>
               <p className="mt-2 text-xs text-muted-foreground">
                 Positions control which duty roles a member may be assigned in
-                the Suguan Builder.
+                the Choir Suguan.
               </p>
             </FormSection>
 

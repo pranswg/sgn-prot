@@ -50,13 +50,14 @@ export function StartModeDialog({
   const [query, setQuery] = useState('')
   const [mode, setMode] = useState<'new' | 'copy'>('new')
 
-  const recent = useMemo(
-    () =>
-      [...suguan]
-        .sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`))
-        .slice(0, 40),
-    [suguan],
-  )
+  const recent = useMemo(() => {
+    const consumed = new Set<string>()
+    for (const s of suguan) if (s.copiedFromId) consumed.add(s.copiedFromId)
+    return [...suguan]
+      .filter((s) => !consumed.has(s.id))
+      .sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`))
+      .slice(0, 40)
+  }, [suguan])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

@@ -118,6 +118,25 @@ export const EMPTY_DIRECTORY_FILTERS: MemberDirectoryFilters = {
   positions: [],
 }
 
+/**
+ * Directory views the dashboard KPI cards can pre-load. `navigateToDirectory`
+ * carries one of these into the store; MasterListPage maps it to filters on
+ * mount. Kept alongside the filter type so the dashboard and the directory
+ * share one vocabulary rather than two overlapping unions.
+ */
+export type DirectoryStartView = 'all' | 'active' | 'female' | 'male'
+
+/** Resolve a dashboard KPI view into the directory filters it implies. */
+export function filtersForStartView(view: DirectoryStartView): MemberDirectoryFilters {
+  if (view === 'active') {
+    return { ...EMPTY_DIRECTORY_FILTERS, status: 'active' }
+  }
+  if (view === 'female' || view === 'male') {
+    return { ...EMPTY_DIRECTORY_FILTERS, gender: view }
+  }
+  return EMPTY_DIRECTORY_FILTERS
+}
+
 export function hasActiveDirectoryFilters(
   filters: MemberDirectoryFilters,
 ): boolean {

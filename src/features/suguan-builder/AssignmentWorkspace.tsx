@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  BadgeCheck,
   CalendarClock,
   ChevronDown,
   Eraser,
@@ -53,7 +54,6 @@ import {
 } from '@/components/ui/sheet'
 import { VoiceBadge } from '@/components/StatusBadges'
 import { getVoiceName } from '@/core/constants/voicePositions'
-import { REGULAR_WORSHIP_DUTY_ROLES } from '@/core/constants/dutyRoles'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
@@ -121,7 +121,7 @@ function PanelShell({
   dropProps?: HTMLAttributes<HTMLDivElement>
 }) {
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
+    <section className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
       <header className="flex items-center gap-2.5 border-b border-border/70 px-4 py-3">
         <span className="text-brand-navy/60">{icon}</span>
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -142,14 +142,15 @@ function PanelShell({
         )}
       </header>
       {toolbar && <div className="border-b border-border/70 p-3">{toolbar}</div>}
-      <ScrollArea className={scrollClassName}>
-        <div
-          className={cn('flex flex-col gap-1.5 p-3', bodyClassName)}
-          {...dropProps}
-        >
-          {body}
-        </div>
-      </ScrollArea>
+      {/* The drop target is the whole scroll viewport, not just the rows. The
+          pointer can be anywhere over the container when content is short. */}
+      <div className={cn('min-h-0 flex-1', scrollClassName)} {...dropProps}>
+        <ScrollArea className="size-full">
+          <div className={cn('flex flex-col gap-1.5 p-3', bodyClassName)}>
+            {body}
+          </div>
+        </ScrollArea>
+      </div>
     </section>
   )
 }
@@ -158,26 +159,6 @@ function EmptyState({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-border px-4 py-8 text-center">
       <p className="text-sm font-medium text-muted-foreground">{children}</p>
-    </div>
-  )
-}
-
-function VoiceGroupHeader({
-  label,
-  count,
-}: {
-  label: string
-  count: number
-}) {
-  return (
-    <div className="flex items-center gap-2 px-0.5 pt-1">
-      <h4 className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        {label}
-      </h4>
-      <span className="text-[0.625rem] tabular-nums text-muted-foreground/70">
-        {count}
-      </span>
-      <span className="h-px flex-1 bg-border/70" />
     </div>
   )
 }
@@ -212,6 +193,8 @@ export function AssignmentWorkspace({
   // Default alphabetical, per the previous request. Manual mode hands ordering
   // back to the officer via drag and the move up/down controls.
   const [orderMode, setOrderMode] = useState<'alpha' | 'manual'>('alpha')
+  /** Mobile only: the special duties panel starts collapsed under its dropdown. */
+  const [dutiesOpen, setDutiesOpen] = useState(false)
 
   const setAssignments = (next: SuguanAssignment[]) => {
     const schedules = draft.schedules.map((s) =>
@@ -448,13 +431,24 @@ export function AssignmentWorkspace({
 
   const isManual = orderMode === 'manual'
 
-  const isVoiceOpen = (key: string, index: number) =>
-    openVoices[key] ?? index === 0
-  const toggleVoice = (key: string, index: number) =>
-    setOpenVoices((prev) => ({ ...prev, [key]: !(prev[key] ?? index === 0) }))
+  const isVoiceOpen = (key: string) => openVoices[key] ?? true
+  const toggleVoice = (key: string) =>
+    setOpenVoices((prev) => ({ ...prev, [key]: !(prev[key] ?? true) }))
 
-  const presetCard = (
-    <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] xl:rounded-lg">
+  /** The Add Members sheet always opens with a fresh voice filter and query. */
+  const openAddMembers = () => {
+    setVoiceFilter('all')
+    setQuery('')
+    setAddOpen(true)
+  }
+
+  const renderPresetCard = (className?: string) => (
+    <div
+      className={cn(
+        'flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-3.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] xl:rounded-lg',
+        className,
+      )}
+    >
       <div className="flex flex-col gap-2.5">
         <div className="flex flex-col gap-1.5">
           <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
@@ -560,9 +554,8 @@ export function AssignmentWorkspace({
     key: string,
     label: string,
     items: SuguanAssignment[],
-    index: number,
   ) => {
-    const open = isVoiceOpen(key, index)
+    const open = isVoiceOpen(key)
     return (
       <div
         key={key}
@@ -571,7 +564,7 @@ export function AssignmentWorkspace({
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => toggleVoice(key, index)}
+          onClick={() => toggleVoice(key)}
           className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
         >
           <ChevronDown
@@ -588,7 +581,7 @@ export function AssignmentWorkspace({
           </span>
         </button>
         {open && (
-          <div className="flex flex-col gap-2 px-2.5 pb-2.5">
+          <div className="flex max-h-[45vh] flex-col gap-2 overflow-y-auto px-2.5 pb-2.5">
             {items.map((a) => {
               const member = memberById.get(a.memberId)
               const idx = indexOfAssignment(a)
@@ -667,6 +660,69 @@ export function AssignmentWorkspace({
     )
   }
 
+  const renderDesktopGroup = (
+    key: string,
+    label: string,
+    items: SuguanAssignment[],
+  ) => {
+    const open = isVoiceOpen(key)
+    return (
+      <div
+        key={key}
+        className="overflow-hidden rounded-lg border border-border/60 bg-background"
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => toggleVoice(key)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        >
+          <ChevronDown
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
+              open && 'rotate-180',
+            )}
+          />
+          <span className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-foreground">
+            {label}
+          </span>
+          <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+            {items.length}
+          </span>
+        </button>
+        {open && (
+          <div className="flex flex-col gap-1.5 border-t border-border/60 p-1.5">
+            {items.map((a) => (
+              <AssignmentRow
+                key={`${a.memberId}-${a.voicePosition}`}
+                assignment={a}
+                member={memberById.get(a.memberId)}
+                reference={memberRefs.get(a.memberId)}
+                voices={voices}
+                conflicting={doubleBooked.has(a.memberId)}
+                reorderable={isManual}
+                first={indexOfAssignment(a) === 0}
+                last={indexOfAssignment(a) === lastIndexInVoice(a.voicePosition)}
+                onDragStart={() =>
+                  setDrag({
+                    kind: 'assigned',
+                    memberId: a.memberId,
+                    voicePosition: a.voicePosition,
+                  })
+                }
+                onDragEnd={() => setDrag(null)}
+                onDrop={(e) => handleDrop(e, a)}
+                onMove={moveMember}
+                onRemove={removeMember}
+                onReplace={setReplaceTarget}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
       {/* Mobile app layout */}
@@ -689,7 +745,7 @@ export function AssignmentWorkspace({
 
           {sections.length === 0 ? (
             <p className="mt-3 rounded-xl border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground">
-              No schedules yet — add one above.
+              No schedules yet — add one in the Schedules step.
             </p>
           ) : sections.length === 1 ? (
             <div className="mt-3 flex items-center gap-2 rounded-xl bg-brand-navy px-3.5 py-3 text-sm font-semibold uppercase tracking-wide text-white">
@@ -702,15 +758,19 @@ export function AssignmentWorkspace({
                 <SelectValue placeholder="Choose schedule" />
               </SelectTrigger>
               <SelectContent>
-                {sections.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.scheduleLabel} ({s.assignments.length})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+              {sections.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.scheduleLabel} ({s.assignments.length})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {renderPresetCard(
+          'mt-3 border-0 bg-transparent p-0 shadow-none xl:rounded-none',
+        )}
+      </div>
 
         {/* Voice balance chips */}
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
@@ -785,20 +845,19 @@ export function AssignmentWorkspace({
               </EmptyState>
             )}
 
-            {visibleVoiceGroups.map((g, gi) =>
-              renderMobileGroup(g.voice.id, g.voice.name, g.items, gi),
+            {visibleVoiceGroups.map((g) =>
+              renderMobileGroup(g.voice.id, g.voice.name, g.items),
             )}
             {assignedByVoice.orphans.length > 0 &&
               renderMobileGroup(
                 'orphans',
                 'Other',
                 assignedByVoice.orphans,
-                visibleVoiceGroups.length,
               )}
 
             <Button
-              className="sticky bottom-24 mt-1 h-12 w-full rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.3)]"
-              onClick={() => setAddOpen(true)}
+              className="mt-1 h-12 w-full rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.3)]"
+              onClick={openAddMembers}
             >
               <Plus className="size-4.5" />
               Add Members
@@ -806,109 +865,149 @@ export function AssignmentWorkspace({
           </div>
         </div>
 
-        {/* Special duties */}
-        <DutyRolesPanel
-          title="Special Duties"
-          scrollClassName="h-auto"
-          dutyRoles={draft.dutyRoles}
-          onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
-          destinadoName={draft.destinadoName}
-          onDestinadoChange={(destinadoName) => patch({ destinadoName })}
-          members={members}
-          roleIds={REGULAR_WORSHIP_DUTY_ROLES}
-        />
+        {/* Special duties — collapsed behind a dropdown so the roster stays on screen */}
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setDutiesOpen((o) => !o)}
+            aria-expanded={dutiesOpen}
+            className="flex w-full items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:bg-accent/50"
+          >
+            <BadgeCheck className="size-4 shrink-0 text-brand-navy/70" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">
+                Special duties
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Officers and special roles
+              </span>
+            </span>
+            {draft.dutyRoles.length > 0 && (
+              <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+                {draft.dutyRoles.length}
+              </span>
+            )}
+            <ChevronDown
+              className={cn(
+                'size-4 shrink-0 text-muted-foreground transition-transform',
+                dutiesOpen && 'rotate-180',
+              )}
+            />
+          </button>
 
-        {presetCard}
+          {dutiesOpen && (
+            <DutyRolesPanel
+              hideHeader
+              scrollClassName="h-auto"
+              dutyRoles={draft.dutyRoles}
+              onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+              destinadoName={draft.destinadoName}
+              onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+              members={members}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Desktop layout */}
+      {/* Desktop layout — center column of the builder's three-column step */}
       <div className="hidden flex-col gap-4 xl:flex">
-        {/* Schedule selector: navy header with schedule pills */}
-      <header className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 sm:border-0 sm:bg-brand-navy sm:px-4 sm:py-3.5 sm:text-white xl:rounded-lg">
-        <div className="hidden min-w-0 items-center gap-3 sm:flex">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-inset ring-white/15">
-            <UserRoundCheck className="size-4.5 text-brand-teal-bright" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold tracking-tight">
-              Assignments
-            </h2>
-            <p className="truncate text-xs text-white/65">
-              Assign members to each schedule and set duty roles.
+        <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
+          <header className="flex items-center gap-2.5 border-b border-border/70 px-4 py-3">
+            <span className="text-brand-navy/60">
+              <UserRoundCheck className="size-4" />
+            </span>
+            <h3 className="text-sm font-semibold text-foreground">
+              Assign Members
+            </h3>
+            <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-brand-navy">
+              {assignments.length} assigned
+            </span>
+            <span className="ml-auto truncate text-[11px] text-muted-foreground">
+              {section
+                ? [section.scheduleDay, section.scheduleTime]
+                    .filter(Boolean)
+                    .join(' · ')
+                : ''}
+            </span>
+          </header>
+
+          {sections.length === 0 ? (
+            <p className="px-4 py-3 text-xs text-muted-foreground">
+              No schedules yet — add one in the Schedules panel.
             </p>
-          </div>
-        </div>
+          ) : (
+            <Tabs
+              value={section?.id ?? ''}
+              onValueChange={selectSection}
+              className="min-w-0 px-3 py-2.5"
+            >
+              <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-lg bg-muted p-1">
+                {sections.map((s) => (
+                  <TabsTrigger
+                    key={s.id}
+                    value={s.id}
+                    className="gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground data-[state=active]:bg-brand-navy data-[state=active]:text-white"
+                  >
+                    {s.scheduleLabel}
+                    <span className="rounded-full bg-current/15 px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums">
+                      {s.assignments.length}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          )}
 
-        {sections.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground sm:border-0 sm:bg-white/10 sm:text-white/70 sm:ring-1 sm:ring-inset sm:ring-white/15">
-            No schedules yet — add one in the Schedules step.
-          </p>
-        ) : (
-          <Tabs
-            value={section?.id ?? ''}
-            onValueChange={selectSection}
-            className="w-full min-w-0 sm:max-w-[60%]"
-          >
-            <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-full border border-border/60 bg-background p-1 sm:rounded-lg sm:border-0 sm:bg-white/5">
-              {sections.map((s) => (
-                <TabsTrigger
-                  key={s.id}
-                  value={s.id}
-                  className="gap-2 whitespace-nowrap rounded-full border border-border/60 bg-card px-3 text-[0.8125rem] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground data-[state=active]:border-transparent data-[state=active]:bg-[#102A43] data-[state=active]:text-white sm:rounded-lg sm:border-transparent sm:bg-transparent sm:text-[0.875rem] sm:font-medium sm:normal-case sm:text-white/70 sm:hover:text-white sm:data-[state=active]:bg-white sm:data-[state=active]:text-brand-navy"
-                >
-                  {s.scheduleLabel}
-                  <span className="rounded-full bg-current/15 px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums">
-                    {s.assignments.length}
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        )}
-      </header>
+          {renderPresetCard(
+            'rounded-none border-x-0 border-b-0 border-t border-border/60 bg-transparent shadow-none',
+          )}
+        </section>
 
-      {presetCard}
-
-      {/* Three-column workspace */}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,30fr)_minmax(0,38fr)_minmax(0,32fr)]">
-        <div className="min-w-0 xl:order-1">
-          <PanelShell
-          icon={<Users className="size-4" />}
-          title="Available Members"
-          count={available.length}
-          scrollClassName="h-[460px]"
-          toolbar={
-            <div className="flex flex-col gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search members…"
-                  className="h-9 bg-background pl-9"
-                />
-              </div>
-              <Select value={voiceFilter} onValueChange={setVoiceFilter}>
-                <SelectTrigger size="sm" className="w-full bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All voices</SelectItem>
-                  {choirVoices.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Available | Assigned | Special duties */}
+      <div className="grid min-w-0 grid-cols-3 items-stretch gap-4">
+      <div className="h-[560px] min-h-0">
+      <PanelShell
+        icon={<Users className="size-4" />}
+        title="Available Members"
+        count={available.length}
+        scrollClassName="h-full"
+        toolbar={
+          <div className="flex flex-col gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search members…"
+                className="h-9 bg-background pl-9"
+              />
             </div>
-          }
-          body={
-            <>
-              {available.length === 0 && (
-                <EmptyState>No members available for this schedule.</EmptyState>
-              )}
-              {available.map((m) => (
+            <div className="flex flex-wrap gap-1.5">
+              {[{ id: 'all', name: 'All' }, ...choirVoices].map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setVoiceFilter(v.id)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-[0.6875rem] font-medium transition-colors',
+                    voiceFilter === v.id
+                      ? 'border-transparent bg-brand-navy text-white'
+                      : 'border-border/60 bg-background text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {v.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+        body={
+          sections.length === 0 ? (
+            <EmptyState>Add a schedule first to assign members.</EmptyState>
+          ) : available.length === 0 ? (
+            <EmptyState>No members available for this schedule.</EmptyState>
+          ) : (
+            available.map((m) => (
                 <div
                   key={m.id}
                   draggable
@@ -960,20 +1059,20 @@ export function AssignmentWorkspace({
                     <Plus className="size-4" />
                   </Button>
                 </div>
-              ))}
-            </>
-          }
-        />
-        </div>
+            ))
+          )
+        }
+      />
+      </div>
 
-        <div className="min-w-0 xl:order-2">
-          <PanelShell
-            icon={<UsersRound className="size-4" />}
-          title="Assigned"
-          count={assignments.length}
-          meta={isManual ? 'Drag to reorder' : 'Sorted A–Z'}
-          scrollClassName="h-[460px]"
-          headerExtra={
+      <div className="h-[560px] min-h-0">
+      <PanelShell
+        icon={<UsersRound className="size-4" />}
+        title="Assigned"
+        count={assignments.length}
+        meta={isManual ? 'Drag to reorder' : 'Sorted A–Z'}
+        scrollClassName="h-full"
+        headerExtra={
             <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
               <button
                 type="button"
@@ -1008,104 +1107,40 @@ export function AssignmentWorkspace({
             },
             onDrop: (e: DragEvent) => handleDrop(e),
           }}
-          body={
-            <>
-              {assignments.length === 0 && (
-                <EmptyState>
-                  No members assigned yet. Add members from the Available Members
-                  panel.
-                </EmptyState>
+        body={
+          <>
+            {assignments.length === 0 && (
+              <EmptyState>
+                No members assigned yet. Add members from the Available Members
+                panel.
+              </EmptyState>
+            )}
+            {visibleVoiceGroups.map((g) =>
+              renderDesktopGroup(g.voice.id, g.voice.name, g.items),
+            )}
+            {assignedByVoice.orphans.length > 0 &&
+              renderDesktopGroup(
+                'orphans',
+                'Other',
+                assignedByVoice.orphans,
               )}
-              {assignedByVoice.groups.map((group) =>
-                group.items.length === 0 ? null : (
-                  <div key={group.voice.id} className="flex flex-col gap-1.5">
-                    <VoiceGroupHeader
-                      label={group.voice.name}
-                      count={group.items.length}
-                    />
-                    {group.items.map((a) => (
-                      <AssignmentRow
-                        key={`${a.memberId}-${a.voicePosition}`}
-                        assignment={a}
-                        member={memberById.get(a.memberId)}
-                        reference={memberRefs.get(a.memberId)}
-                        voices={voices}
-                        conflicting={doubleBooked.has(a.memberId)}
-                        reorderable={isManual}
-                        first={indexOfAssignment(a) === 0}
-                        last={
-                          indexOfAssignment(a) ===
-                          lastIndexInVoice(a.voicePosition)
-                        }
-                        onDragStart={() =>
-                          setDrag({
-                            kind: 'assigned',
-                            memberId: a.memberId,
-                            voicePosition: a.voicePosition,
-                          })
-                        }
-                        onDragEnd={() => setDrag(null)}
-                        onDrop={(e) => handleDrop(e, a)}
-                        onMove={moveMember}
-                        onRemove={removeMember}
-                        onReplace={setReplaceTarget}
-                      />
-                    ))}
-                  </div>
-                ),
-              )}
-              {assignedByVoice.orphans.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <VoiceGroupHeader
-                    label="Other"
-                    count={assignedByVoice.orphans.length}
-                  />
-                  {assignedByVoice.orphans.map((a) => (
-                    <AssignmentRow
-                      key={`${a.memberId}-${a.voicePosition}`}
-                      assignment={a}
-                      member={memberById.get(a.memberId)}
-                      reference={memberRefs.get(a.memberId)}
-                      voices={voices}
-                      conflicting={doubleBooked.has(a.memberId)}
-                      reorderable={isManual}
-                      first={indexOfAssignment(a) === 0}
-                      last={
-                        indexOfAssignment(a) === lastIndexInVoice(a.voicePosition)
-                      }
-                      onDragStart={() =>
-                        setDrag({
-                          kind: 'assigned',
-                          memberId: a.memberId,
-                          voicePosition: a.voicePosition,
-                        })
-                      }
-                      onDragEnd={() => setDrag(null)}
-                      onDrop={(e) => handleDrop(e, a)}
-                      onMove={moveMember}
-                      onRemove={removeMember}
-                      onReplace={setReplaceTarget}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          }
-        />
-        </div>
+          </>
+        }
+      />
+      </div>
 
-        <div className="min-w-0 xl:order-3">
-          <DutyRolesPanel
-            dutyRoles={draft.dutyRoles}
-            onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
-            destinadoName={draft.destinadoName}
-            onDestinadoChange={(destinadoName) => patch({ destinadoName })}
-            members={members}
-            roleIds={REGULAR_WORSHIP_DUTY_ROLES}
-          />
-        </div>
+      <div className="h-[560px] min-h-0">
+      <DutyRolesPanel
+        dutyRoles={draft.dutyRoles}
+        onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+        destinadoName={draft.destinadoName}
+        onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+        members={members}
+        scrollClassName="h-full flex-1 min-h-0"
+      />
       </div>
       </div>
+    </div>
 
       <Dialog
         open={!!replaceTarget}

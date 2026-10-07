@@ -18,6 +18,7 @@ export interface SuguanConfigInput {
   pagtupadDate?: string
   schedules?: SuguanScheduleSection[]
   destinadoName?: string
+  copiedFromId?: string
 }
 
 interface SuguanState {
@@ -160,7 +161,7 @@ export const useSuguanStore = create<SuguanState>()(
     }),
     {
       name: 'choir-suguan',
-      version: 6,
+      version: 7,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Pick<SuguanState, 'suguan'>
         const list = Array.isArray(state.suguan) ? state.suguan : []

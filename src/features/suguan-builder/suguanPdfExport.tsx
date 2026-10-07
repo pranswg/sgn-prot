@@ -56,7 +56,9 @@ export async function exportSuguanPdf(
   suguan: Suguan,
   members: SheetMembers[],
   docFormat?: SuguanDocFormat | null,
-): Promise<void> {
+  titleOverride?: string,
+  output: 'download' | 'preview' = 'download',
+): Promise<Blob | void> {
   const { jsPDF } = await import('jspdf')
   const layout = computeSuguanLayout(suguan, members, docFormat)
   const { fmt, fs } = layout
@@ -118,7 +120,10 @@ export async function exportSuguanPdf(
     doc.line(x1, m.top, x1, headerTopY)
 
     applyFont('bold', titleSz)
-    const titleLines = doc.splitTextToSize(suguanSheetTitle(suguan), tableW - 1.1)
+    const titleLines = doc.splitTextToSize(
+      titleOverride?.trim() || suguanSheetTitle(suguan),
+      tableW - 1.1,
+    )
     const titleLineH = titleSz * 1.15 * PT_TO_MM
     const titleBlockH = titleLines.length * titleLineH
     let titleY = m.top + Math.max(0.5, (layout.titleRowH - titleBlockH) / 2)
@@ -301,5 +306,6 @@ export async function exportSuguanPdf(
     for (const block of blocks) renderBlock(block)
   })
 
+  if (output === 'preview') return doc.output('blob')
   downloadBlob(doc.output('blob'), suguanFileName(suguan, 'pdf'))
 }

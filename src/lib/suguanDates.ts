@@ -231,6 +231,35 @@ export function coverageLastDate(coverage: SuguanCoverage): string {
   return coverage.oneWeekDate ?? shiftKey(coverage.startDate, 8)
 }
 
+/** The four worship days the Organist Suguan covers, one per weekday. */
+export type WorshipWeek = {
+  wednesday: string
+  thursday: string
+  saturday: string
+  sunday: string
+}
+
+/**
+ * The single worship week for the Organist Suguan: the calendar week
+ * (Monday–Sunday) that contains the rehearsal date, expanded to its Wednesday,
+ * Thursday, Saturday and Sunday. One Pagsasanay date therefore resolves the
+ * whole week's services without any per-day selectors.
+ *
+ * @returns `null` when `rehearsalDate` is not a usable `YYYY-MM-DD` key.
+ */
+export function worshipWeekFromRehearsal(
+  rehearsalDate: string,
+): WorshipWeek | null {
+  if (!isDateKey(rehearsalDate)) return null
+  const monday = shiftKey(rehearsalDate, -((weekdayOf(rehearsalDate) + 6) % 7))
+  return {
+    wednesday: shiftKey(monday, 2),
+    thursday: shiftKey(monday, 3),
+    saturday: shiftKey(monday, 5),
+    sunday: shiftKey(monday, 6),
+  }
+}
+
 /**
  * Resolves one Pagtupad range from an optional override pair and a suggestion.
  *

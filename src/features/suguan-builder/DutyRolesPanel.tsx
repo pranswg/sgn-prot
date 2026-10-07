@@ -30,9 +30,31 @@ interface DutyRolesPanelProps {
   roleIds?: string[]
   title?: string
   scrollClassName?: string
+  /** Hide the built-in header, for callers that render their own toggle above it. */
+  hideHeader?: boolean
 }
 
 const CLEAR_VALUE = '__clear__'
+
+/**
+ * Roles kept out of the Special Duties picker. The Pangulong Mang-aawit is
+ * read straight from the master list by `resolveSignatureNames` and printed on
+ * the exported sheet from there, so picking it here would only be a second
+ * source of truth. The Kalihim has no printed slot at all.
+ */
+const HIDDEN_DUTY_ROLE_IDS = new Set(['pangulong-mang-aawit', 'kalihim'])
+
+/**
+ * Preferred display order for duty roles. Roles not listed here (custom roles
+ * such as a user-added "Atpa", or the remaining standard ones) keep their
+ * stored order after these, so Settings stays the source of truth.
+ */
+const ROLE_ORDER = ['pangulong-mang-aawit', 'organista', 'atpa', 'oic']
+
+function roleRank(id: string): number {
+  const index = ROLE_ORDER.indexOf(id)
+  return index === -1 ? ROLE_ORDER.length : index
+}
 
 function eligiblePositionText(roleId: string): string {
   const required = DUTY_ROLE_REQUIRED_POSITIONS[roleId]
@@ -47,17 +69,20 @@ export function DutyRolesPanel({
   onDestinadoChange,
   members,
   roleIds,
-  title = 'Duty Roles',
+  title = 'Special Duties',
   scrollClassName = 'h-[460px]',
+  hideHeader = false,
 }: DutyRolesPanelProps) {
   const allDutyRoles = useSettingsStore((s) => s.allDutyRoles)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
   const destinoListId = 'suguan-destinado-name'
 
-  const roles = allDutyRoles().filter(
-    (role) => !roleIds || roleIds.includes(role.id),
-  )
+  const roles = allDutyRoles()
+    .filter((role) => !roleIds || roleIds.includes(role.id))
+    .filter((role) => !HIDDEN_DUTY_ROLE_IDS.has(role.id))
+    .slice()
+    .sort((a, b) => roleRank(a.id) - roleRank(b.id))
 
   const activeMembers = useMemo(
     () =>
@@ -115,16 +140,18 @@ export function DutyRolesPanel({
   }
 
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
-      <header className="flex items-start gap-2.5 border-b border-border/70 px-4 py-3">
-        <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand-navy/70" />
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-            Only members tagged with the matching position appear as candidates.
-          </p>
-        </div>
-      </header>
+    <section className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
+      {!hideHeader && (
+        <header className="flex items-start gap-2.5 border-b border-border/70 px-4 py-3">
+          <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand-navy/70" />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+              Assign officers and special roles for this Suguan.
+            </p>
+          </div>
+        </header>
+      )}
 
       <ScrollArea className={scrollClassName}>
         <div className="flex flex-col gap-3 p-3 xl:gap-4 xl:p-4">

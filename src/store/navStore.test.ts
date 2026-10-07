@@ -20,6 +20,7 @@ function reset(page: Page = 'dashboard') {
     builderSuguanId: null,
     builderReturnPage: null,
     previousPage: null,
+    directoryStart: null,
   })
 }
 
@@ -133,4 +134,40 @@ test('back with no recorded page lands on the dashboard', () => {
   useNavStore.setState({ page: 'settings', previousPage: null })
   useNavStore.getState().goBack()
   assert.equal(useNavStore.getState().page, 'dashboard')
+})
+
+test('back cannot target the screen it is already on', () => {
+  // Settings → builder → dismissing the start dialog swaps the page back to
+  // Settings without updating `previousPage`, which still says "settings".
+  // Without the guard, goBack navigates to Settings and nothing moves.
+  useNavStore.setState({ page: 'settings', previousPage: 'settings' })
+  useNavStore.getState().goBack()
+  assert.equal(useNavStore.getState().page, 'dashboard')
+})
+
+test('dashboard KPI cards carry a one-shot directory view into the Master List', () => {
+  reset('dashboard')
+  useNavStore.getState().navigateToDirectory('active')
+  assert.equal(useNavStore.getState().page, 'master-list')
+  assert.equal(useNavStore.getState().directoryStart, 'active')
+  assert.equal(useNavStore.getState().builderReturnPage, null)
+})
+
+test('MasterListPage forgets the directory view after consuming it', () => {
+  useNavStore.setState({ directoryStart: 'female' })
+  useNavStore.getState().clearDirectoryStart()
+  assert.equal(useNavStore.getState().directoryStart, null)
+})
+
+test('a plain navigation never replays an old directory view', () => {
+  useNavStore.setState({ directoryStart: 'male' })
+  useNavStore.getState().navigate('master-list')
+  assert.equal(useNavStore.getState().page, 'master-list')
+  assert.equal(useNavStore.getState().directoryStart, null)
+})
+
+test('navigateToDirectory records the page left behind for the back button', () => {
+  reset('dashboard')
+  useNavStore.getState().navigateToDirectory('all')
+  assert.equal(useNavStore.getState().previousPage, 'dashboard')
 })

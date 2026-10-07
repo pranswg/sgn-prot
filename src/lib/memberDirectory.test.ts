@@ -16,8 +16,9 @@ import {
   buildMemberReferences,
   computeDirectoryStats,
   countActiveDirectoryFilters,
-  EMPTY_DIRECTORY_FILTERS,
+EMPTY_DIRECTORY_FILTERS,
   filterMembers,
+  filtersForStartView,
   formatMemberName,
   groupMembersByGender,
 hasActiveDirectoryFilters,
@@ -102,6 +103,24 @@ test('quick filters split by status, membership type, and gender', () => {
 test('the status field and the quick filter both apply', () => {
   assert.deepEqual(run(filters({ status: 'inactive' })), ['3'])
   assert.deepEqual(run(filters({ quick: 'active', status: 'inactive' })), [])
+})
+
+test('filtersForStartView maps every dashboard KPI view to its filters', () => {
+  assert.deepEqual(filtersForStartView('all'), EMPTY_DIRECTORY_FILTERS)
+  assert.equal(filtersForStartView('active').status, 'active')
+  assert.equal(filtersForStartView('active').gender, 'all')
+  assert.equal(filtersForStartView('female').gender, 'female')
+  assert.equal(filtersForStartView('male').gender, 'male')
+  assert.equal(filtersForStartView('female').status, 'all')
+})
+
+test('filtersForStartView views match the cohort the KPI counts', () => {
+  const female = MEMBERS.filter((m) => m.gender === 'female').map((m) => m.id)
+  const male = MEMBERS.filter((m) => m.gender === 'male').map((m) => m.id)
+  const active = MEMBERS.filter((m) => m.isActive).map((m) => m.id)
+  assert.deepEqual(run(filtersForStartView('female')).sort(), female.sort())
+  assert.deepEqual(run(filtersForStartView('male')).sort(), male.sort())
+  assert.deepEqual(run(filtersForStartView('active')).sort(), active.sort())
 })
 
 test('voice multi-select matches any selected voice', () => {

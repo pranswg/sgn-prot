@@ -142,6 +142,18 @@ migration function. **UI-only changes must not change a persisted shape.**
 | `sidebarStore.ts` | `sidebarExpanded` | 1 |
 | `navStore.ts` | not persisted | — |
 
+**The repo must stay data-free.** Everything the user types — locale congregation
+name, worship schedules, service types, members, Suguan records, accounts —
+lives only in the browser's `localStorage`; none of it is ever written to a file
+in this repository. Pushing code never ships their input. The only user-account
+artefact that travels is the `fr` seed *logic* in `authStore.ts`, which
+re-creates the default `fr / 12345678` account in each fresh browser — that
+runtime seed is the lone exception and must remain. If a store or feature ever
+needs to persist user input to disk (a data file, an export written into the
+project, a local DB), stop and ask first: it would violate this rule. Drops and
+accidental files from Settings' backup/export belong in `.gitignore`, not in a
+commit.
+
 `settingsStore` holds the three editable reference lists: service types, duty
 roles, and voice positions. Each stored item carries `custom: boolean`; entries
 without it came from constants and are labelled `(standard)` in the UI. If you

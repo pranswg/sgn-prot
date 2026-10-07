@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# User data dropped into the project must never be committed. The app keeps all
+# user input in the browser's localStorage; these catch a Settings backup/export
+# that someone accidentally saves into the repo folder.
+data/
+exports/
+backups/
+*.backup.json
+*.roster.csv
+*.export.xlsx
+*.export.csv
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

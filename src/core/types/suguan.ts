@@ -54,6 +54,7 @@ export interface SuguanScheduleSection {
   scheduleLabel: string
   scheduleDay: string
   scheduleTime: string
+  description?: string
   assignments: SuguanAssignment[]
 }
 

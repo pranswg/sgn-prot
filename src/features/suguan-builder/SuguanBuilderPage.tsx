@@ -9,6 +9,7 @@ import {
   Eye,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   UserRound,
   X,
 } from 'lucide-react'
@@ -165,33 +166,38 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
     <div className="flex flex-col gap-4 pb-24 xl:pb-0">
       {/* Page header */}
       <div className="flex flex-col gap-3.5 rounded-xl border border-border/70 bg-card p-4">
-        {/* Compact mobile header — schedules and assignments steps */}
+{/* Compact mobile header — schedules and assignments steps */}
         {(step === 1 || step === 2) && (
-          <div className="-mx-4 -mt-4 flex items-center gap-3 border-b border-border/70 px-4 py-3 md:hidden">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title="Back"
-              aria-label="Back"
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-            >
-              <ArrowLeft className="size-4.5" />
-            </Button>
-            <div className="min-w-0 flex-1 text-center">
-<p className="truncate text-sm font-semibold text-foreground">
-                Choir Suguan
-              </p>
-              <p className="truncate text-[0.6875rem] text-muted-foreground">
-                Step {step + 1} of {BUILDER_STEPS.length} —{' '}
-                {BUILDER_STEPS[step].title}
-              </p>
+          <div className="-mx-4 -mt-4 border-b border-border/70 md:hidden">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Back"
+                aria-label="Back"
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+              >
+                <ArrowLeft className="size-4.5" />
+              </Button>
+              <div className="min-w-0 flex-1 text-center">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  Choir Suguan
+                </p>
+                <p className="truncate text-[0.6875rem] text-muted-foreground">
+                  Suguan • INC Choir
+                </p>
+              </div>
+              <span
+                aria-hidden
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-navy-soft text-brand-navy ring-1 ring-inset ring-brand-navy/10"
+              >
+                <SlidersHorizontal className="size-4" />
+              </span>
             </div>
-            <span
-              aria-hidden
-              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-navy-soft text-brand-navy ring-1 ring-inset ring-brand-navy/10"
-            >
-              <UserRound className="size-4" />
-            </span>
+            <p className="px-4 pb-3 text-center text-xs font-medium text-muted-foreground">
+              Step {step + 1} of {BUILDER_STEPS.length} —{' '}
+              {BUILDER_STEPS[step].title}
+            </p>
           </div>
         )}
 
@@ -349,16 +355,12 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
       ) : (
         <div className="min-w-0 rounded-xl border border-border/70 bg-card p-4">
           {step === 0 && (
-            <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-              <div className="min-w-0 flex-1">
-                <CoverageStep draft={draft} patch={patch} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <DocumentSetupStep
-                  value={draft.docFormat}
-                  onChange={(docFormat) => patch({ docFormat })}
-                />
-              </div>
+            <div className="flex flex-col gap-6">
+              <CoverageStep draft={draft} patch={patch} />
+              <DocumentSetupStep
+                value={draft.docFormat}
+                onChange={(docFormat) => patch({ docFormat })}
+              />
             </div>
           )}
           {step === 3 && (

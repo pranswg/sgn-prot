@@ -122,9 +122,8 @@ function CardRow<T extends string>({
 }
 
 /**
- * Mobile-only disclosure trigger. The desktop layout keeps every section open
- * in a two-column row, so this button is `lg:hidden` and its content panel is
- * `lg:flex` regardless of the open flag.
+ * Disclosure trigger. The document setup and margins/scaling groups both start
+ * collapsed on every breakpoint, so the page can collapse and expand them.
  */
 function DisclosureButton({
   open,
@@ -142,7 +141,7 @@ function DisclosureButton({
       type="button"
       variant="outline"
       onClick={onToggle}
-      className="w-full justify-between lg:hidden"
+      className="w-full justify-between"
     >
       <span className="flex items-center gap-2">
         <Icon className="size-4 text-muted-foreground" />
@@ -164,9 +163,9 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
   const set = (p: Partial<SuguanDocFormat>) => onChange({ ...value, ...p })
 
   /**
-   * Mobile only: step 1 stacks coverage above the document options, so the
-   * document panel and its margins/scaling group would fill the screen before
-   * anything else is reachable. Both start collapsed on small screens.
+   * Both the document panel and its margins/scaling group start collapsed so
+   * step 1 shows coverage first; the disclosure buttons expand them on every
+   * breakpoint.
    */
   const [docOpen, setDocOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
@@ -188,7 +187,7 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
 
       <div
         className={cn(
-          'flex-col gap-6 lg:flex',
+          'flex-col gap-6',
           docOpen ? 'flex' : 'hidden',
         )}
       >
@@ -276,7 +275,7 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
 
       <div
         className={cn(
-          'flex-col gap-6 lg:flex',
+          'flex-col gap-6',
           layoutOpen ? 'flex' : 'hidden',
         )}
       >

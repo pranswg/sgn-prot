@@ -191,7 +191,7 @@ without asking.
 
 `src/core/types/member.ts` defines four memberships in
 `src/core/constants/memberMembership.ts` (`MEMBERSHIP_OPTIONS` /
-`MEMBERSHIP_LABELS` / `MEMBERSHIP_SHORT_LABELS`): Regular Mang-aawit, Organista,
+`MEMBERSHIP_LABELS` / `MEMBERSHIP_SHORT_LABELS`): Mang-aawit, Organista,
 Tagapagturo ng Awit, and Assistant Tagapagturo ng Awit. **The three
 organist-family memberships are one category**: `isOrganistMembership()` marks
 them, `memberEffectivePositions()` derives the `organista` position from the

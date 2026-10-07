@@ -35,6 +35,7 @@ interface MemberFormDialogProps {
 interface MemberFormState {
   firstName: string
   middleName: string
+  suffix: string
   lastName: string
   gender: 'male' | 'female'
   voicePosition: string
@@ -44,6 +45,7 @@ interface MemberFormState {
 const emptyForm = (): MemberFormState => ({
   firstName: '',
   middleName: '',
+  suffix: '',
   lastName: '',
   gender: 'female',
   voicePosition: 'soprano-1',
@@ -69,6 +71,7 @@ export function MemberFormDialog({
           ? {
               firstName: member.firstName,
               middleName: member.middleName ?? '',
+              suffix: member.suffix ?? '',
               lastName: member.lastName,
               gender: member.gender,
               voicePosition: member.voicePosition,
@@ -106,6 +109,7 @@ export function MemberFormDialog({
       const input: Partial<MemberInput> = {
         firstName: form.firstName.trim(),
         middleName: form.middleName.trim() || undefined,
+        suffix: form.suffix.trim() || undefined,
         lastName: form.lastName.trim(),
         gender: form.gender,
         voicePosition: form.voicePosition,
@@ -119,6 +123,7 @@ export function MemberFormDialog({
       const input: MemberInput = {
         firstName: form.firstName.trim(),
         middleName: form.middleName.trim() || undefined,
+        suffix: form.suffix.trim() || undefined,
         lastName: form.lastName.trim(),
         gender: form.gender,
         voicePosition: form.voicePosition,
@@ -147,7 +152,9 @@ export function MemberFormDialog({
         <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName">
+                First Name <span className="text-muted-foreground">(Required)</span>
+              </Label>
               <Input
                 id="firstName"
                 value={form.firstName}
@@ -156,7 +163,9 @@ export function MemberFormDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName">
+                Last Name <span className="text-muted-foreground">(Required)</span>
+              </Label>
               <Input
                 id="lastName"
                 value={form.lastName}
@@ -168,7 +177,9 @@ export function MemberFormDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="middleName">Middle Name</Label>
+              <Label htmlFor="middleName">
+                Middle Name <span className="text-muted-foreground">(Optional)</span>
+              </Label>
               <Input
                 id="middleName"
                 value={form.middleName}
@@ -176,6 +187,20 @@ export function MemberFormDialog({
                 placeholder="Middle name or initial"
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="suffix">
+                Suffix <span className="text-muted-foreground">(Optional)</span>
+              </Label>
+              <Input
+                id="suffix"
+                value={form.suffix}
+                onChange={(e) => set('suffix', e.target.value)}
+                placeholder="e.g. Jr., Sr., III"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Gender</Label>
               <Select
@@ -191,25 +216,24 @@ export function MemberFormDialog({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Voice Position</Label>
-            <Select
-              value={form.voicePosition}
-              onValueChange={(v) => set('voicePosition', v)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {voicePositionsForGender(form.gender, allVoices()).map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid gap-2">
+              <Label>Voice Position</Label>
+              <Select
+                value={form.voicePosition}
+                onValueChange={(v) => set('voicePosition', v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {voicePositionsForGender(form.gender, allVoices()).map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid gap-2">

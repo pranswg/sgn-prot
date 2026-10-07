@@ -37,6 +37,7 @@ export const MEMBER_EXPORT_HEADERS = [
   'First Name',
   'Last Name',
   'Middle Name',
+  'Suffix',
   'Gender',
   'Voice Position',
   'Positions / Privileges',
@@ -73,6 +74,7 @@ const MIDDLE_NAME_KEYS = [
   'middlenameinitial',
   'mi',
 ]
+const SUFFIX_KEYS = ['suffix', 'name suffix', 'jr', 'jrsuffix']
 const COMBINED_NAME_KEYS = ['name', 'fullname', 'membername']
 const GENDER_KEYS = ['gender', 'sex']
 const VOICE_KEYS = ['voiceposition', 'voice', 'section', 'voicesection']
@@ -373,6 +375,9 @@ export function rowsToCandidates(
       firstName: resolvedFirst,
       middleName: isMemberSheet
         ? pick(row, headers, MIDDLE_NAME_KEYS) || undefined
+        : undefined,
+      suffix: isMemberSheet
+        ? pick(row, headers, SUFFIX_KEYS) || undefined
         : undefined,
       lastName: resolvedLast,
       // A trainee row's Status can be "promoted", which implies male/female is

@@ -137,7 +137,7 @@ export const useMemberStore = create<MemberState>()(
             ...m,
             // Version 4 removed the 'provisional' membership in favour of the
             // four membership categories; former trainee-members fold into
-            // Regular Mang-aawit.
+            // Mang-aawit.
             membershipType: migrateMembership(m.membershipType),
             positions: m.positions ?? [],
           })),

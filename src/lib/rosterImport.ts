@@ -19,6 +19,7 @@ export interface RosterCandidate {
   isTrainee: boolean
   firstName: string
   middleName?: string
+  suffix?: string
   lastName: string
   gender: 'male' | 'female'
   voicePosition: string

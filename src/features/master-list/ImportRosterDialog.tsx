@@ -212,6 +212,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
         addMember({
           firstName,
           middleName: candidate.middleName,
+          suffix: candidate.suffix,
           lastName,
           gender: candidate.gender,
           voicePosition,

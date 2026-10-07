@@ -13,6 +13,7 @@ export interface MemberExportRow {
   'First Name': string
   'Last Name': string
   'Middle Name': string
+  Suffix: string
   Gender: string
   'Voice Position': string
   'Positions / Privileges': string
@@ -27,6 +28,7 @@ export function membersToRows(members: Member[]): MemberExportRow[] {
     'First Name': m.firstName,
     'Last Name': m.lastName,
     'Middle Name': m.middleName ?? '',
+    Suffix: m.suffix ?? '',
     Gender: m.gender,
     'Voice Position': voiceName(m.voicePosition),
     'Positions / Privileges': positionSummary(memberEffectivePositions(m)),

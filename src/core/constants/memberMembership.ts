@@ -6,7 +6,7 @@ import type { ChoirPosition, Member, MembershipType } from '@/core/types/member'
  * training live in their own list, not on the Master List.
  */
 export const MEMBERSHIP_OPTIONS: { value: MembershipType; label: string }[] = [
-  { value: 'regular', label: 'Regular Mang-aawit' },
+  { value: 'regular', label: 'Mang-aawit' },
   { value: 'organista', label: 'Organista' },
   { value: 'tagapagturo', label: 'Tagapagturo ng Awit' },
   { value: 'assistant-tagapagturo', label: 'Assistant Tagapagturo ng Awit' },
@@ -20,7 +20,7 @@ export const MEMBERSHIP_LABELS: Record<MembershipType, string> =
 
 /** Compact names for tight spaces such as the directory table's Membership cell. */
 export const MEMBERSHIP_SHORT_LABELS: Record<MembershipType, string> = {
-  regular: 'Regular',
+  regular: 'Mang-aawit',
   organista: 'Organista',
   tagapagturo: 'Tagapagturo',
   'assistant-tagapagturo': 'Asst. Tagapagturo',

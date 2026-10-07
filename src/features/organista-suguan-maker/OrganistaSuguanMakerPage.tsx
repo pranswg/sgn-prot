@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { nanoid } from 'nanoid'
 import { Check, ChevronDown, Eye, FileDown, Music4, PenLine, Plus, Save, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ import { organistaDateLabel } from './organistaDateLabel'
 type OrganistaService = OrganistaSuguanService
 
 const createService = (heading: string): OrganistaService => ({
-  id: crypto.randomUUID(),
+  id: nanoid(),
   heading,
   organist: '',
   reserve: '',
@@ -550,7 +551,6 @@ export function OrganistaSuguanMakerPage() {
   })
   const [pagsasanayDate, setPagsasanayDate] = useState('')
   const [coverageOpen, setCoverageOpen] = useState(false)
-  const [layoutOpen, setLayoutOpen] = useState(false)
 
   const week = useMemo(
     () => worshipWeekFromRehearsal(pagsasanayDate),
@@ -798,14 +798,17 @@ export function OrganistaSuguanMakerPage() {
             </div>
           </SectionDisclosure>
 
-          <SectionDisclosure
-            title="Paper & layout"
-            description="These document options are applied to the exported PDF."
-            open={layoutOpen}
-            onToggle={() => setLayoutOpen((o) => !o)}
-          >
+          <div className="mt-6 border-t border-border/70 pt-5">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-foreground">
+                Paper &amp; layout
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                These document options are applied to the exported PDF.
+              </p>
+            </div>
             <DocumentSetupStep value={docFormat} onChange={setDocFormat} />
-          </SectionDisclosure>
+          </div>
 
           <div className="mt-5 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-foreground">Schedule rows</h2>

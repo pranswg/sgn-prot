@@ -64,6 +64,7 @@ import type { SuguanAssignment, SuguanScheduleSection } from '@/core/types/sugua
 import { MemberSelector } from './MemberSelector'
 import { DutyRolesPanel } from './DutyRolesPanel'
 import { groupGendersFor, type SuguanDraft } from './builderState'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface AssignmentWorkspaceProps {
   draft: SuguanDraft
@@ -169,6 +170,8 @@ export function AssignmentWorkspace({
   members,
   editingId,
 }: AssignmentWorkspaceProps) {
+  const { can } = usePermissions()
+  const canAssignMembers = can('assign-members')
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
   const presets = useAssignmentPresetStore((s) => s.presets)
@@ -719,6 +722,18 @@ export function AssignmentWorkspace({
             ))}
           </div>
         )}
+      </div>
+    )
+  }
+
+  if (!canAssignMembers) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center">
+        <p className="font-medium">Assignment editing is restricted</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          This role can work with Suguan details but does not have permission to
+          assign members or manage duty roles.
+        </p>
       </div>
     )
   }

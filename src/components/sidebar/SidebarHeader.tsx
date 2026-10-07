@@ -76,10 +76,7 @@ export function SidebarHeader({
         )}
       >
         <p className="truncate text-sm font-semibold text-sidebar-foreground">
-          INC Choir Manager
-        </p>
-        <p className="truncate text-[11px] text-sidebar-secondary">
-          Suguan Scheduling System
+          Choir Manager
         </p>
         {/* Gold is a brand highlight only. It never appears on a nav row. */}
         <span className="mt-1.5 block h-0.5 w-5 rounded-full bg-brand-gold" />

@@ -88,6 +88,7 @@ import {
 } from './mobileFilters'
 import { MemberProfileSheet } from './MemberProfileSheet'
 import { MobileMemberFormSheet } from './MobileMemberFormSheet'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const GENDER_LABEL: Record<string, string> = {
   female: "Women's Choir",
@@ -142,6 +143,12 @@ export function MasterListPage() {
   const navigate = useNavStore((s) => s.navigate)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
   const isMobile = useIsMobile()
+  const { can } = usePermissions()
+  const canAddMembers = can('add-members')
+  const canEditMembers = can('edit-members')
+  const canDeleteMembers = can('delete-members')
+  const canAssignMembers = can('assign-members')
+  const canExportDocuments = can('export-documents')
 
   const voiceMap = useMemo(() => allVoices(), [allVoices])
 
@@ -311,6 +318,9 @@ export function MasterListPage() {
     onEdit: openEditDialog,
     onDelete: setRemoveTarget,
     onImport: () => setImportOpen(true),
+    canEdit: canEditMembers,
+    canDelete: canDeleteMembers,
+    canImport: canAddMembers,
     hasAnyMembers: members.length > 0,
     onClearFilters: clearFilters,
   }
@@ -324,6 +334,9 @@ export function MasterListPage() {
         onAddMember={openAddDialog}
         onImportRoster={() => setImportOpen(true)}
         onExport={handleExport}
+        canAdd={canAddMembers}
+        canImport={canAddMembers}
+        canExport={canExportDocuments}
       />
 
       <PageHeader
@@ -333,7 +346,7 @@ export function MasterListPage() {
         className="hidden md:flex"
         actions={
           <>
-            <DropdownMenu>
+            {canExportDocuments && <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <Download className="size-4" />
@@ -351,15 +364,19 @@ export function MasterListPage() {
                   Excel
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <FileUp className="size-4" />
-              Import Roster
-            </Button>
-            <Button onClick={openAddDialog}>
-              <Plus className="size-4" />
-              Add Member
-            </Button>
+            </DropdownMenu>}
+            {canAddMembers && (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <FileUp className="size-4" />
+                Import Roster
+              </Button>
+            )}
+            {canAddMembers && (
+              <Button onClick={openAddDialog}>
+                <Plus className="size-4" />
+                Add Member
+              </Button>
+            )}
           </>
         }
       />
@@ -763,6 +780,7 @@ export function MasterListPage() {
               <MemberDirectoryEmptyState
                 hasAnyMembers={totalCount > 0}
                 onImport={() => setImportOpen(true)}
+                canImport={canAddMembers}
                 onClearFilters={clearFilters}
               />
             ) : (
@@ -778,6 +796,7 @@ export function MasterListPage() {
                       sort={sort}
                       onOpen={setProfileTarget}
                       onOpenMenu={setActionTarget}
+                      hasActions={canEditMembers || canAssignMembers || canDeleteMembers}
                     />
                   ))}
                 </ul>
@@ -852,6 +871,9 @@ export function MasterListPage() {
           setActionTarget(null)
           setRemoveTarget(member)
         }}
+        canEdit={canEditMembers}
+        canAssign={canAssignMembers}
+        canDelete={canDeleteMembers}
       />
 
       {isMobile ? (
@@ -895,6 +917,7 @@ export function MasterListPage() {
             toast.success(`${name} reactivated.`)
           }
         }}
+        canManage={canEditMembers}
       />
 
       <MemberDetailDialog
@@ -905,6 +928,8 @@ export function MasterListPage() {
         onEdit={() =>
           desktopDetailTarget && openEditDialog(desktopDetailTarget)
         }
+        canEdit={canEditMembers}
+        canDelete={canDeleteMembers}
       />
 
       <AlertDialog

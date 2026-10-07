@@ -40,6 +40,7 @@ interface MemberProfileSheetProps {
   onEdit: (member: Member) => void
   /** Deactivate an active member, or reactivate an inactive one. */
   onToggleStatus: (member: Member) => void
+  canManage: boolean
 }
 
 /**
@@ -54,6 +55,7 @@ export function MemberProfileSheet({
   onOpenChange,
   onEdit,
   onToggleStatus,
+  canManage,
 }: MemberProfileSheetProps) {
   const allVoices = useSettingsStore((s) => s.allVoices)
   const suguanList = useSuguanStore((s) => s.suguan)
@@ -182,7 +184,7 @@ export function MemberProfileSheet({
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-2 border-t border-border/70 bg-background px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        {canManage && <div className="flex shrink-0 gap-2 border-t border-border/70 bg-background px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <Button
             variant="outline"
             className="flex-1"
@@ -213,7 +215,7 @@ export function MemberProfileSheet({
             <Pencil className="size-4" />
             Edit Member
           </Button>
-        </div>
+        </div>}
       </SheetContent>
     </Sheet>
   )

@@ -124,8 +124,10 @@ function CardRow<T extends string>({
 /**
  * Disclosure trigger. The document setup and margins/scaling groups both start
  * collapsed on every breakpoint, so the page can collapse and expand them.
+ * Shared by the Suguan builder step and the Organist Suguan maker, which uses
+ * the same dropdown styling for its Coverage and Paper &amp; layout sections.
  */
-function DisclosureButton({
+export function DisclosureButton({
   open,
   onToggle,
   icon: Icon,

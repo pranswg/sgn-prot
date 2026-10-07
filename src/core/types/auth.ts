@@ -8,7 +8,38 @@
  * Treat this as a way to keep the app's screens honest, not as protection.
  */
 
-export type AccountRole = 'admin' | 'member'
+export type AccountRole =
+  | 'admin'
+  | 'suguan-manager'
+  | 'choir-manager'
+  | 'viewer'
+
+export type AccountStatus =
+  | 'active'
+  | 'disabled'
+  | 'suspended'
+  | 'pending-activation'
+
+export type Permission =
+  | 'view-dashboard'
+  | 'view-master-list'
+  | 'add-members'
+  | 'edit-members'
+  | 'delete-members'
+  | 'manage-trainees'
+  | 'view-suguan'
+  | 'create-suguan'
+  | 'edit-suguan'
+  | 'assign-members'
+  | 'delete-suguan'
+  | 'export-documents'
+  | 'manage-users'
+  | 'manage-roles'
+  | 'view-audit-logs'
+  | 'change-settings'
+  | 'restore-data'
+  | 'view-login-history'
+  | 'manage-sessions'
 
 /**
  * Which KDF produced `passwordHash`. `pbkdf2` needs WebCrypto's `subtle`, which
@@ -32,7 +63,14 @@ export interface Account {
   /** How `passwordHash` was produced; assumed `pbkdf2` when absent. */
   hashAlgo?: PasswordHashAlgo
   role: AccountRole
+  status?: AccountStatus
+  email?: string
+  firstName?: string
+  lastName?: string
+  customPermissions?: Permission[] | null
+  statusReason?: string
   createdAt: string
+  lastLoginAt?: string
 }
 
 /** The shape accepted from a registration form, before it becomes an Account. */

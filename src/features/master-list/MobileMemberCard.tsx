@@ -5,7 +5,7 @@ import {
   VoiceBadge,
 } from '@/components/StatusBadges'
 import { Button } from '@/components/ui/button'
-import { getVoiceName } from '@/core/constants/voicePositions'
+import { memberPositionLabel } from '@/core/constants/memberMembership'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
@@ -21,6 +21,7 @@ interface MobileMemberCardProps {
   /** Tapping the card body opens the member's profile. */
   onOpen: (member: Member) => void
   onOpenMenu: (member: Member) => void
+  hasActions: boolean
 }
 
 /**
@@ -37,6 +38,7 @@ export function MobileMemberCard({
   sort,
   onOpen,
   onOpenMenu,
+  hasActions,
 }: MobileMemberCardProps) {
   const name = formatMemberName(member, sort)
 
@@ -65,20 +67,22 @@ export function MobileMemberCard({
             </span>
             <span className="mt-2 flex flex-wrap items-center gap-1.5">
               <GenderBadge gender={member.gender} />
-              <VoiceBadge name={getVoiceName(member.voicePosition, voices)} />
+              <VoiceBadge name={memberPositionLabel(member, voices)} />
               <MemberStatusBadge active={member.isActive} />
             </span>
           </span>
         </button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="-mr-1 shrink-0 text-muted-foreground"
-          aria-label={`Actions for ${name}`}
-          onClick={() => onOpenMenu(member)}
-        >
-          <MoreVertical className="size-4" />
-        </Button>
+        {hasActions && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="-mr-1 shrink-0 text-muted-foreground"
+            aria-label={`Actions for ${name}`}
+            onClick={() => onOpenMenu(member)}
+          >
+            <MoreVertical className="size-4" />
+          </Button>
+        )}
       </div>
     </li>
   )

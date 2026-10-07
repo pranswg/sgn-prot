@@ -138,7 +138,7 @@ migration function. **UI-only changes must not change a persisted shape.**
 | `suguanStore.ts` | `choir-suguan` | 6 |
 | `settingsStore.ts` | `choir-settings` | 3 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
-| `authStore.ts` | `choir-auth` | 1 |
+| `authStore.ts` | `choir-auth` | 2 |
 | `sidebarStore.ts` | `sidebarExpanded` | 1 |
 | `navStore.ts` | not persisted | — |
 
@@ -146,13 +146,13 @@ migration function. **UI-only changes must not change a persisted shape.**
 name, worship schedules, service types, members, Suguan records, accounts —
 lives only in the browser's `localStorage`; none of it is ever written to a file
 in this repository. Pushing code never ships their input. The only user-account
-artefact that travels is the `fr` seed *logic* in `authStore.ts`, which
-re-creates the default `fr / 12345678` account in each fresh browser — that
-runtime seed is the lone exception and must remain. If a store or feature ever
-needs to persist user input to disk (a data file, an export written into the
-project, a local DB), stop and ask first: it would violate this rule. Drops and
-accidental files from Settings' backup/export belong in `.gitignore`, not in a
-commit.
+artefact that travels is the default-admin seed *logic* in `authStore.ts`, which
+recreates a known Admin login (`admin` / `admin1234`) on startup whenever no
+active Admin exists — that runtime seed is the lone exception and must remain.
+If a store or feature ever needs to persist user input to disk (a data file, an
+export written into the project, a local DB), stop and ask first: it would
+violate this rule. Drops and accidental files from Settings' backup/export
+belong in `.gitignore`, not in a commit.
 
 `settingsStore` holds the three editable reference lists: service types, duty
 roles, and voice positions. Each stored item carries `custom: boolean`; entries
@@ -355,11 +355,15 @@ Rules if you touch it:
 - `roleForNewAccount` grants `admin` to the first registration only because a
   fresh install needs someone to see that an admin exists. It is not an
   authorisation check.
-- `authStore` seeds a default account (`fr` / `12345678`) whenever that
-  username is missing, and signs in as it only when nobody is signed in
-  already. The credentials intentionally fail `validateRegistration`
-  (two-character username, all-digit password) — the seed creates the account
-  directly, so do not route it through the form rules.
+- `authStore` seeds a default Admin (`admin` / `admin1234`) on startup whenever
+  `hasActiveAdmin(accounts)` is false — a fresh browser always has a known
+  login, and a setup whose admins were all disabled recovers automatically. It
+  never signs itself in and never runs while any active Admin exists, so it is
+  not a backdoor into a real multi-account setup. `seedDefaultAdmin` is invoked
+  once from `App.tsx` on mount and memoised at module scope so StrictMode's
+  double mount cannot race two `${hashPassword}` calls into duplicate `admin`
+  accounts. The seed builds the account directly (it bypasses the welcome/
+  registration form), so do not route it through `validateRegistration`.
 
 ## Feature map
 

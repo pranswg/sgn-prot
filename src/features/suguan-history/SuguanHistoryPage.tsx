@@ -71,6 +71,7 @@ import {
 import { SectionPaginator } from '@/features/master-list/SectionPaginator'
 import type { Suguan } from '@/core/types/suguan'
 import type { OrganistaSuguanRecord } from '@/core/types/organistaSuguan'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const ORGANISTA_FILTER = 'organista-suguan'
 
@@ -154,6 +155,11 @@ export function SuguanHistoryPage() {
   const startNewSuguan = useNavStore((state) => state.startNewSuguan)
   const allServiceTypes = useSettingsStore((state) => state.allServiceTypes)
   const members = useMemberStore((state) => state.members)
+  const { can } = usePermissions()
+  const canCreateSuguan = can('create-suguan')
+  const canEditSuguan = can('edit-suguan')
+  const canDeleteSuguan = can('delete-suguan')
+  const canExportDocuments = can('export-documents')
 
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -369,18 +375,22 @@ export function SuguanHistoryPage() {
         description={`${historyItems.length} total suguan records`}
         actions={
           <>
-            <Button
-              variant="outline"
-              onClick={() => setClearOpen(true)}
-              disabled={historyItems.length === 0}
-            >
-              <Trash2 className="size-4" />
-              Clear history
-            </Button>
-            <Button onClick={startNewSuguan}>
-              <CalendarPlus className="size-4" />
-              New Suguan
-            </Button>
+            {canDeleteSuguan && (
+              <Button
+                variant="outline"
+                onClick={() => setClearOpen(true)}
+                disabled={historyItems.length === 0}
+              >
+                <Trash2 className="size-4" />
+                Clear history
+              </Button>
+            )}
+            {canCreateSuguan && (
+              <Button onClick={startNewSuguan}>
+                <CalendarPlus className="size-4" />
+                New Suguan
+              </Button>
+            )}
           </>
         }
       />
@@ -439,7 +449,7 @@ export function SuguanHistoryPage() {
             <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
               Deselect all
             </Button>
-            <Button
+            {canDeleteSuguan && <Button
               variant="destructive"
               size="sm"
               onClick={() => setDeleteTargets(selectedRecords)}
@@ -447,7 +457,7 @@ export function SuguanHistoryPage() {
             >
               <Trash2 className="size-4" />
               Delete selected
-            </Button>
+            </Button>}
           </div>
         </div>
       )}
@@ -504,14 +514,14 @@ export function SuguanHistoryPage() {
                     <div className="flex justify-end gap-1">
                       {item.kind === 'suguan' ? (
                         <>
-                          <Button
+                          {canEditSuguan && <Button
                             variant="ghost"
                             size="icon-sm"
                             aria-label="Edit Suguan"
                             onClick={() => editSuguanInBuilder(item.record.id)}
                           >
                             <Pencil className="size-4" />
-                          </Button>
+                          </Button>}
                           <Button
                             variant="ghost"
                             size="icon-sm"
@@ -520,7 +530,7 @@ export function SuguanHistoryPage() {
                           >
                             <Eye className="size-4" />
                           </Button>
-                          <DropdownMenu>
+                          {(canExportDocuments || canDeleteSuguan) && <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -532,40 +542,44 @@ export function SuguanHistoryPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem
-                                onClick={() => void exportSuguan(item.record, 'excel')}
-                              >
-                                <FileSpreadsheet className="size-4" />
-                                Export Excel (.xlsx)
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void exportSuguan(item.record, 'pdf')}
-                              >
-                                <FileDown className="size-4" />
-                                Export PDF (.pdf)
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
+                              {canExportDocuments && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => void exportSuguan(item.record, 'excel')}
+                                  >
+                                    <FileSpreadsheet className="size-4" />
+                                    Export Excel (.xlsx)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => void exportSuguan(item.record, 'pdf')}
+                                  >
+                                    <FileDown className="size-4" />
+                                    Export PDF (.pdf)
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {canExportDocuments && canDeleteSuguan && <DropdownMenuSeparator />}
+                              {canDeleteSuguan && <DropdownMenuItem
                                 variant="destructive"
                                 onClick={() => setDeleteTargets([item])}
                               >
                                 <Trash2 className="size-4" />
                                 Delete from history
-                              </DropdownMenuItem>
+                              </DropdownMenuItem>}
                             </DropdownMenuContent>
-                          </DropdownMenu>
+                          </DropdownMenu>}
                         </>
                       ) : (
                         <>
-                          <Button
+                          {canExportDocuments && <Button
                             variant="ghost"
                             size="icon-sm"
                             aria-label="View Organist Suguan details"
                             onClick={() => setViewingOrganista(item.record)}
                           >
                             <Eye className="size-4" />
-                          </Button>
-                          <Button
+                          </Button>}
+                          {canDeleteSuguan && <Button
                             variant="ghost"
                             size="icon-sm"
                             aria-label="Export Organist Suguan PDF"
@@ -573,7 +587,7 @@ export function SuguanHistoryPage() {
                             onClick={() => void exportOrganista(item.record)}
                           >
                             <FileDown className="size-4" />
-                          </Button>
+                          </Button>}
                           <Button
                             variant="ghost"
                             size="icon-sm"

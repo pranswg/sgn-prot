@@ -4,6 +4,7 @@ import {
   LogOut,
   Menu,
   Music4,
+  ShieldCheck,
   Settings2,
 } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
@@ -25,6 +26,8 @@ import { AppSidebar } from '@/components/AppSidebar'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
 import { useNavStore, type Page } from '@/store/navStore'
 import { useAuthStore } from '@/store/authStore'
+import { useAdminStore } from '@/store/adminStore'
+import { canAccessPage } from '@/lib/rbac'
 import { useSidebarStore } from '@/store/sidebarStore'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { MasterListPage } from '@/features/master-list/MasterListPage'
@@ -35,11 +38,44 @@ import { SuguanBuilderPage } from '@/features/suguan-builder/SuguanBuilderPage'
 import { SuguanHistoryPage } from '@/features/suguan-history/SuguanHistoryPage'
 import { SuguanDetailPage } from '@/features/suguan-history/SuguanDetailPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
+import { AdministrationPage } from '@/features/settings/AdministrationPage'
 import { formatPHTDateTime } from '@/lib/phDate'
 import { initialsFor } from '@/lib/credentials'
 
 function CurrentPage() {
   const page = useNavStore((s) => s.page)
+  const navigate = useNavStore((s) => s.navigate)
+  const signOut = useAuthStore((s) => s.signOut)
+  const accounts = useAuthStore((s) => s.accounts)
+  const currentAccountId = useAuthStore((s) => s.currentAccountId)
+  const account = accounts.find((item) => item.id === currentAccountId)
+  const rolePermissions = useAdminStore((s) => s.rolePermissions)
+
+  if (
+    !account ||
+    (account.status ?? 'active') !== 'active' ||
+    !canAccessPage(page, account, rolePermissions)
+  ) {
+    return (
+      <div className="mx-auto flex min-h-64 max-w-lg flex-col items-center justify-center gap-3 rounded-xl border bg-card p-6 text-center">
+        <ShieldCheck className="size-9 text-brand-navy" />
+        <h1 className="text-lg font-semibold">Access restricted</h1>
+        <p className="text-sm text-muted-foreground">
+          Your account does not have permission to open this section. Contact an
+          administrator if you need access.
+        </p>
+        <div className="flex gap-2">
+          {canAccessPage('dashboard', account, rolePermissions) && (
+            <Button variant="outline" onClick={() => navigate('dashboard')}>
+              Go to Dashboard
+            </Button>
+          )}
+          <Button onClick={signOut}>Sign out</Button>
+        </div>
+      </div>
+    )
+  }
+
   switch (page) {
     case 'master-list':
       return <MasterListPage />
@@ -57,6 +93,8 @@ function CurrentPage() {
       return <SuguanDetailPage />
     case 'settings':
       return <SettingsPage />
+    case 'administration':
+      return <AdministrationPage />
     case 'dashboard':
     default:
       return <DashboardPage />
@@ -114,6 +152,12 @@ const PAGE_META: Record<
     subtitle:
       'Configure voices, choir positions, duty roles, and service types.',
   },
+  administration: {
+    group: 'System',
+    title: 'Administration',
+    subtitle:
+      'Manage accounts, roles, permissions, and security activity.',
+  },
 }
 
 function Breadcrumb() {
@@ -144,9 +188,10 @@ function Breadcrumb() {
           {meta.title}
         </li>
       </ol>
-      {/* Settings prints this exact sentence as its page-header subtitle, so
-          the breadcrumb copy is dropped there rather than showing it twice. */}
-      {page !== 'settings' && (
+      {/* Settings and Administration print this exact sentence as their page-header
+          subtitle, so the breadcrumb copy is dropped there rather than showing it
+          twice. */}
+      {page !== 'settings' && page !== 'administration' && (
         <p className="hidden truncate text-[0.6875rem] text-muted-foreground md:block">
           {meta.subtitle}
         </p>

@@ -36,6 +36,7 @@ const ALL_PAGES = [
   'suguan-history',
   'suguan-detail',
   'settings',
+  'administration',
 ] as const
 
 test('every navigable page has exactly one sidebar entry', () => {
@@ -77,7 +78,7 @@ test('resolvedNavGroups preserves group order and item order', () => {
       ['Dashboard'],
       ['Master List', 'Trainees', 'Koro Maker'],
       ['Choir Suguan', 'Organist Suguan', 'Suguan History'],
-      ['Settings'],
+      ['Settings', 'Administration'],
     ],
   )
 })

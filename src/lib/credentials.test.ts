@@ -15,6 +15,7 @@ import test from 'node:test'
 import type { Account } from '@/core/types/auth'
 import {
   findAccountByUsername,
+  hasActiveAdmin,
   hashPassword,
   initialsFor,
   isUsernameTaken,
@@ -38,7 +39,7 @@ function account(overrides: Partial<Account> = {}): Account {
     fullName: 'Maria Santos',
     passwordHash: 'deadbeef',
     passwordSalt: 'cafe',
-    role: 'member',
+    role: 'viewer',
     createdAt: '2026-09-30T02:00:00.000Z',
     ...overrides,
   }
@@ -149,9 +150,22 @@ test('findAccountByUsername matches on the normalised key', () => {
   assert.equal(isUsernameTaken(accounts, 'someone'), false)
 })
 
-test('roleForNewAccount makes only the first registration an admin', () => {
+test('roleForNewAccount reserves Admin for initial setup', () => {
   assert.equal(roleForNewAccount([]), 'admin')
-  assert.equal(roleForNewAccount([account()]), 'member')
+  assert.equal(roleForNewAccount([account()]), 'viewer')
+})
+
+test('hasActiveAdmin is true only when an active Admin exists', () => {
+  assert.equal(hasActiveAdmin([]), false)
+  assert.equal(hasActiveAdmin([account({ role: 'viewer' })]), false)
+  // Suspended or disabled admins do not count: the seed must run to recover.
+  assert.equal(hasActiveAdmin([account({ role: 'admin', status: 'disabled' })]), false)
+  assert.equal(hasActiveAdmin([account({ role: 'admin', status: 'suspended' })]), false)
+  assert.equal(hasActiveAdmin([account({ role: 'admin' })]), true)
+  assert.equal(
+    hasActiveAdmin([account({ role: 'admin', status: 'suspended' }), account({ role: 'admin' })]),
+    true,
+  )
 })
 
 test('initialsFor falls back sensibly for short and long names', () => {

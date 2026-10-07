@@ -22,6 +22,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { useAuthStore } from '@/store/authStore'
+import { useAdminStore } from '@/store/adminStore'
+import { canAccessPage } from '@/lib/rbac'
 
 const ITEMS: { label: string; page: Page; icon: typeof Users }[] = [
   { label: 'Dashboard', page: 'dashboard', icon: LayoutDashboard },
@@ -42,7 +45,12 @@ const PRIMARY_BAR_PAGES: Page[] = [
 ]
 
 /** Pages reached only from the More sheet light up the More tab itself. */
-const MORE_PAGES: Page[] = ['organista-suguan-maker', 'suguan-history', 'settings']
+const MORE_PAGES: Page[] = [
+  'organista-suguan-maker',
+  'suguan-history',
+  'settings',
+  'administration',
+]
 
 /** The sidebar groups, minus the tabs already on the bar. */
 function moreNavGroups(): { label: string; items: NavItem[] }[] {
@@ -59,6 +67,10 @@ function moreNavGroups(): { label: string; items: NavItem[] }[] {
 export function MobileBottomNav() {
   const page = useNavStore((s) => s.page)
   const navigate = useNavStore((s) => s.navigate)
+  const accounts = useAuthStore((state) => state.accounts)
+  const currentAccountId = useAuthStore((state) => state.currentAccountId)
+  const account = accounts.find((item) => item.id === currentAccountId)
+  const rolePermissions = useAdminStore((state) => state.rolePermissions)
   const [moreOpen, setMoreOpen] = useState(false)
 
   // The builder has its own fixed Back/Next bar on the same edge and the same
@@ -66,7 +78,16 @@ export function MobileBottomNav() {
   // and hid Next completely. The focused step flow replaces the tab bar.
   if (page === 'suguan-builder') return null
 
+  const allowed = (target: Page) => canAccessPage(target, account, rolePermissions)
+  const visibleItems = ITEMS.filter(
+    (item) => item.page === 'settings' || allowed(item.page),
+  )
   const groups = moreNavGroups()
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => allowed(item.page)),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <>
@@ -74,9 +95,16 @@ export function MobileBottomNav() {
         aria-label="Primary"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
-        <ul className="grid grid-cols-6">
-          {ITEMS.map((item) => {
-            const moreActive = item.page === 'settings' && MORE_PAGES.includes(page)
+        <ul
+          className="grid"
+          style={{
+            gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {visibleItems.map((item) => {
+            const moreActive =
+              item.page === 'settings' &&
+              MORE_PAGES.some((morePage) => morePage === page && allowed(morePage))
             const isActive =
               page === item.page ||
               moreActive ||

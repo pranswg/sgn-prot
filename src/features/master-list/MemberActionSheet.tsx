@@ -18,6 +18,9 @@ interface MemberActionSheetProps {
   onEdit: (member: Member) => void
   onAssign: (member: Member) => void
   onRemove: (member: Member) => void
+  canEdit: boolean
+  canAssign: boolean
+  canDelete: boolean
 }
 
 /** Mobile three-dot menu. Each row is a full-width, thumb-sized tap target. */
@@ -29,6 +32,9 @@ export function MemberActionSheet({
   onEdit,
   onAssign,
   onRemove,
+  canEdit,
+  canAssign,
+  canDelete,
 }: MemberActionSheetProps) {
   const name = member ? formatMemberName(member, sort) : ''
 
@@ -50,22 +56,28 @@ export function MemberActionSheet({
               label="View Profile"
               onClick={() => onView(member)}
             />
-            <ActionRow
-              icon={Pencil}
-              label="Edit Member"
-              onClick={() => onEdit(member)}
-            />
-            <ActionRow
-              icon={CalendarPlus}
-              label="Create Suguan Assignment"
-              onClick={() => onAssign(member)}
-            />
-            <ActionRow
-              icon={Trash2}
-              label="Remove Member"
-              destructive
-              onClick={() => onRemove(member)}
-            />
+            {canEdit && (
+              <ActionRow
+                icon={Pencil}
+                label="Edit Member"
+                onClick={() => onEdit(member)}
+              />
+            )}
+            {canAssign && (
+              <ActionRow
+                icon={CalendarPlus}
+                label="Create Suguan Assignment"
+                onClick={() => onAssign(member)}
+              />
+            )}
+            {canDelete && (
+              <ActionRow
+                icon={Trash2}
+                label="Remove Member"
+                destructive
+                onClick={() => onRemove(member)}
+              />
+            )}
           </ul>
         )}
       </SheetContent>

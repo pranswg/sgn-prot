@@ -19,6 +19,7 @@ import { useNavStore } from '@/store/navStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { Suguan } from '@/core/types/suguan'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/format'
@@ -45,6 +46,7 @@ export type { SuguanDraft } from './builderState'
 const STEP_ICONS = [CalendarDays, CalendarClock, UserRound, Eye]
 
 export function SuguanBuilderPage() {
+  const { can } = usePermissions()
   const navigate = useNavStore((s) => s.navigate)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
@@ -105,6 +107,10 @@ export function SuguanBuilderPage() {
   }
 
   const handleSave = () => {
+    if (existing ? !can('edit-suguan') : !can('create-suguan')) {
+      toast.error('You do not have permission to save this Suguan.')
+      return
+    }
     const blockers = saveBlockers(draft)
     if (blockers.length > 0) {
       toast.error(blockers[0])
@@ -247,7 +253,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
                 ? `${draft.schedules.length} schedule${draft.schedules.length !== 1 ? 's' : ''}`
                 : 'No schedule'}
             </Badge>
-            {!existing && !startOpen && (
+            {can('create-suguan') && !existing && !startOpen && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -263,10 +269,12 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
                 Complete the required fields for this step to continue.
               </p>
             )}
-            <Button variant="outline" size="sm" onClick={() => setStartOpen(true)}>
-              <Plus className="size-4" />
-              Start new / copy
-            </Button>
+            {can('create-suguan') && (
+              <Button variant="outline" size="sm" onClick={() => setStartOpen(true)}>
+                <Plus className="size-4" />
+                Start new / copy
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -376,6 +384,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
 {/* Primary action — bottom right on desktop; mobile uses the fixed bar */}
       <div className="hidden justify-end xl:flex">
         {isLast ? (
+          (existing ? can('edit-suguan') : can('create-suguan')) ? (
           <Button
             size="sm"
             onClick={handleSave}
@@ -384,6 +393,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
             <Check className="size-4" />
             Save Suguan
           </Button>
+          ) : null
         ) : (
           <Button size="sm" onClick={goNext} disabled={!stepComplete}>
             Next
@@ -403,7 +413,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
           <ArrowLeft className="size-4" />
           Back
         </Button>
-        {!existing && !startOpen && (
+        {can('create-suguan') && !existing && !startOpen && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -415,10 +425,12 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
           </Button>
         )}
         {isLast ? (
+          (existing ? can('edit-suguan') : can('create-suguan')) ? (
           <Button className="flex-1" onClick={handleSave}>
             <Check className="size-4" />
             Save
           </Button>
+          ) : null
         ) : (
           <Button className="flex-1" onClick={goNext} disabled={!stepComplete}>
             Next
@@ -460,4 +472,3 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
     </div>
   )
 }
-

@@ -15,8 +15,7 @@ import {
   MembershipBadge,
   VoiceBadge,
 } from '@/components/StatusBadges'
-import { getVoiceName } from '@/core/constants/voicePositions'
-import { memberEffectivePositions } from '@/core/constants/memberMembership'
+import { memberPositionLabel } from '@/core/constants/memberMembership'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { cn } from '@/lib/utils'
@@ -29,7 +28,6 @@ import {
   type MemberSort,
 } from '@/lib/memberDirectory'
 import { MemberInitialsAvatar } from './MemberInitialsAvatar'
-import { MemberPositionsCell } from './MemberPositionsCell'
 import { MemberRowActions } from './MemberRowActions'
 import { PageSizeControl, SectionPaginator } from './SectionPaginator'
 
@@ -42,13 +40,16 @@ interface MemberDirectoryTableProps {
   onEdit: (member: Member) => void
   onDelete: (member: Member) => void
   onImport: () => void
+  canEdit: boolean
+  canDelete: boolean
+  canImport: boolean
   hasAnyMembers: boolean
   onClearFilters: () => void
   pageSize: MemberPageSize
   onPageSizeChange: (size: MemberPageSize) => void
 }
 
-const COLUMN_COUNT = 8
+const COLUMN_COUNT = 7
 
 const headClass =
   'h-11 bg-background text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
@@ -95,10 +96,12 @@ function ChoirSectionHeader({
 export function MemberDirectoryEmptyState({
   hasAnyMembers,
   onImport,
+  canImport,
   onClearFilters,
 }: {
   hasAnyMembers: boolean
   onImport: () => void
+  canImport: boolean
   onClearFilters: () => void
 }) {
   return (
@@ -120,12 +123,12 @@ export function MemberDirectoryEmptyState({
         <Button variant="outline" size="sm" onClick={onClearFilters}>
           Reset filters
         </Button>
-      ) : (
+      ) : canImport ? (
         <Button variant="outline" size="sm" onClick={onImport}>
           <FileUp className="size-4" />
           Import Roster
         </Button>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -139,6 +142,9 @@ export function MemberDirectoryTable({
   onEdit,
   onDelete,
   onImport,
+  canEdit,
+  canDelete,
+  canImport,
   hasAnyMembers,
   onClearFilters,
   pageSize,
@@ -156,6 +162,7 @@ export function MemberDirectoryTable({
       <MemberDirectoryEmptyState
         hasAnyMembers={hasAnyMembers}
         onImport={onImport}
+        canImport={canImport}
         onClearFilters={onClearFilters}
       />
     )
@@ -217,10 +224,7 @@ export function MemberDirectoryTable({
               <TableHead className={`${headClass} hidden lg:table-cell`}>
                 Gender
               </TableHead>
-              <TableHead className={headClass}>Voice Position</TableHead>
-              <TableHead className={`${headClass} hidden xl:table-cell`}>
-                Positions / Privileges
-              </TableHead>
+              <TableHead className={headClass}>Position</TableHead>
               <TableHead className={headClass}>Membership</TableHead>
               <TableHead className={headClass}>Status</TableHead>
               <TableHead className={`${headClass} w-24 text-right`}>
@@ -242,6 +246,8 @@ export function MemberDirectoryTable({
                 onView={onView}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                canEdit={canEdit}
+                canDelete={canDelete}
                 onPageChange={(page) => setSectionPage(section.key, page)}
               />
             ))}
@@ -264,6 +270,8 @@ interface ChoirSectionProps {
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onDelete: (member: Member) => void
+  canEdit: boolean
+  canDelete: boolean
   onPageChange: (page: number) => void
 }
 
@@ -278,6 +286,8 @@ function ChoirSection({
   onView,
   onEdit,
   onDelete,
+  canEdit,
+  canDelete,
   onPageChange,
 }: ChoirSectionProps) {
   return (
@@ -320,10 +330,7 @@ function ChoirSection({
             <GenderBadge gender={member.gender} />
           </TableCell>
           <TableCell>
-            <VoiceBadge name={getVoiceName(member.voicePosition, voices)} />
-          </TableCell>
-          <TableCell className="hidden xl:table-cell">
-            <MemberPositionsCell positions={memberEffectivePositions(member)} max={2} />
+            <VoiceBadge name={memberPositionLabel(member, voices)} />
           </TableCell>
           <TableCell>
             <MembershipBadge type={member.membershipType} />
@@ -338,6 +345,8 @@ function ChoirSection({
               onView={onView}
               onEdit={onEdit}
               onDelete={onDelete}
+              canEdit={canEdit}
+              canDelete={canDelete}
             />
           </TableCell>
         </TableRow>

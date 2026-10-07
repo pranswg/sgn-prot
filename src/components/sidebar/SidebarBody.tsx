@@ -3,6 +3,9 @@ import { SidebarSection } from '@/components/sidebar/SidebarSection'
 import { SidebarItem } from '@/components/sidebar/SidebarItem'
 import { SidebarFooter } from '@/components/sidebar/SidebarFooter'
 import { resolvedNavGroups } from '@/lib/sidebarNav'
+import { useAuthStore } from '@/store/authStore'
+import { useAdminStore } from '@/store/adminStore'
+import { canAccessPage } from '@/lib/rbac'
 
 export interface SidebarBodyProps {
   /** Whether the outer container is the icon rail. */
@@ -29,7 +32,18 @@ export function SidebarBody({
   onNavigate,
   showCollapseButton = true,
 }: SidebarBodyProps) {
+  const accounts = useAuthStore((state) => state.accounts)
+  const currentAccountId = useAuthStore((state) => state.currentAccountId)
+  const account = accounts.find((item) => item.id === currentAccountId)
+  const rolePermissions = useAdminStore((state) => state.rolePermissions)
   const groups = resolvedNavGroups()
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        canAccessPage(item.page, account, rolePermissions),
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <div className="flex h-full min-h-0 flex-col">

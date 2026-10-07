@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { Layout } from '@/app/Layout'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -9,6 +10,13 @@ function App() {
   // Reading the id rather than the account object keeps this component from
   // re-rendering when an unrelated field of the signed-in account changes.
   const currentAccountId = useAuthStore((s) => s.currentAccountId)
+
+  // Guarantee a known Admin login on a fresh browser (or one whose admins were
+  // all disabled). Idempotent: a store that already has an active Admin is
+  // untouched. Never signs the visitor in.
+  useEffect(() => {
+    void useAuthStore.getState().seedDefaultAdmin()
+  }, [])
 
   // The auth screen replaces the whole shell rather than rendering inside it,
   // so an unauthenticated visitor never sees the sidebar or page chrome.

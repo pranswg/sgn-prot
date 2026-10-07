@@ -30,6 +30,8 @@ import { phtInstantISO, phtStampForFilename } from '@/lib/phDate'
 import { MobileSettingsHeader } from './MobileSettingsHeader'
 import { SettingsList } from './SettingsList'
 import { deriveAbbreviation } from './referenceList'
+import { useAuthStore } from '@/store/authStore'
+import { useAdminStore } from '@/store/adminStore'
 
 interface BackupFile {
   app: string
@@ -44,9 +46,14 @@ interface BackupFile {
 }
 
 export function SettingsPage() {
+  const account = useAuthStore((state) =>
+    state.accounts.find((item) => item.id === state.currentAccountId),
+  )
+  const isAdmin = account?.role === 'admin' && (account.status ?? 'active') === 'active'
   const memberStore = useMemberStore()
   const suguanStore = useSuguanStore()
   const settingsStore = useSettingsStore()
+  const addAuditLog = useAdminStore((state) => state.addAuditLog)
 
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
@@ -55,6 +62,17 @@ export function SettingsPage() {
   const serviceTypes = settingsStore.allServiceTypes()
   const dutyRoles = settingsStore.allDutyRoles()
   const voices = settingsStore.allVoices()
+  const logAdminAction = (action: string, details: string) => {
+    if (!isAdmin || !account) return
+    addAuditLog({
+      actorId: account.id,
+      actorName: account.fullName,
+      actorUsername: account.username,
+      action,
+      module: 'System Configuration',
+      details,
+    })
+  }
 
   const handleExport = () => {
     const backup: BackupFile = {
@@ -79,6 +97,7 @@ export function SettingsPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    logAdminAction('Exported System Backup', 'Downloaded a browser backup file.')
     toast.success('Backup exported.')
   }
 
@@ -101,6 +120,7 @@ export function SettingsPage() {
           data.dutyRoles as never,
           data.voices as never,
         )
+        logAdminAction('Restored System Backup', 'Imported a browser backup file.')
         toast.success('Backup imported successfully.')
       } catch {
         toast.error('Could not read this file. Please select a JSON backup.')
@@ -125,7 +145,7 @@ export function SettingsPage() {
             value="general"
             className="data-[state=active]:bg-muted! data-[state=active]:text-brand-navy! after:hidden!"
           >
-            General Settings
+            System Configuration
           </TabsTrigger>
           <TabsTrigger
             value="data"
@@ -150,14 +170,22 @@ export function SettingsPage() {
         },
       ]}
       getLabel={(t) => t.name}
-      onCreate={(v) => settingsStore.addServiceType(v.name.trim())}
-      onUpdate={(id, v) =>
+      onCreate={(v) => {
+        settingsStore.addServiceType(v.name.trim())
+        logAdminAction('Created Service Type', v.name.trim())
+      }}
+      onUpdate={(id, v) => {
         settingsStore.updateServiceType(id, { name: v.name.trim() })
-      }
-      onDelete={(id) => settingsStore.removeServiceType(id)}
-      onMove={(id, toIndex) =>
+        logAdminAction('Updated Service Type', v.name.trim())
+      }}
+      onDelete={(id) => {
+        settingsStore.removeServiceType(id)
+        logAdminAction('Deleted Service Type', id)
+      }}
+      onMove={(id, toIndex) => {
         settingsStore.moveServiceType(id, toIndex)
-      }
+        logAdminAction('Reordered Service Types', `${id} moved to position ${toIndex + 1}`)
+      }}
     />
 
     <SettingsList
@@ -185,6 +213,7 @@ export function SettingsPage() {
           name,
           v.abbreviation.trim() || deriveAbbreviation(name),
         )
+        logAdminAction('Created Duty Role', name)
       }}
       onUpdate={(id, v) => {
         const name = v.name.trim()
@@ -193,9 +222,16 @@ export function SettingsPage() {
           abbreviation:
             v.abbreviation.trim() || deriveAbbreviation(name),
         })
+        logAdminAction('Updated Duty Role', name)
       }}
-      onDelete={(id) => settingsStore.removeDutyRole(id)}
-      onMove={(id, toIndex) => settingsStore.moveDutyRole(id, toIndex)}
+      onDelete={(id) => {
+        settingsStore.removeDutyRole(id)
+        logAdminAction('Deleted Duty Role', id)
+      }}
+      onMove={(id, toIndex) => {
+        settingsStore.moveDutyRole(id, toIndex)
+        logAdminAction('Reordered Duty Roles', `${id} moved to position ${toIndex + 1}`)
+      }}
     />
 
     <SettingsList
@@ -220,20 +256,28 @@ export function SettingsPage() {
       ]}
       getLabel={(v) => v.name}
       extraBadges={(v) => <GenderBadge gender={v.gender} />}
-      onCreate={(v) =>
+      onCreate={(v) => {
         settingsStore.addVoice(
           v.name.trim(),
           v.gender === 'male' ? 'male' : 'female',
         )
-      }
-      onUpdate={(id, v) =>
+        logAdminAction('Created Voice Position', v.name.trim())
+      }}
+      onUpdate={(id, v) => {
         settingsStore.updateVoice(id, {
           name: v.name.trim(),
           gender: v.gender === 'male' ? 'male' : 'female',
         })
-      }
-      onDelete={(id) => settingsStore.removeVoice(id)}
-      onMove={(id, toIndex) => settingsStore.moveVoice(id, toIndex)}
+        logAdminAction('Updated Voice Position', v.name.trim())
+      }}
+      onDelete={(id) => {
+        settingsStore.removeVoice(id)
+        logAdminAction('Deleted Voice Position', id)
+      }}
+      onMove={(id, toIndex) => {
+        settingsStore.moveVoice(id, toIndex)
+        logAdminAction('Reordered Voice Positions', `${id} moved to position ${toIndex + 1}`)
+      }}
     />
   </div>
 </TabsContent>
@@ -327,6 +371,7 @@ export function SettingsPage() {
                     memberStore.clear()
                     suguanStore.clear()
                     settingsStore.clear()
+                    logAdminAction('Cleared System Data', 'Cleared members, trainees, Suguan records, and settings.')
                     toast.success('All data cleared.')
                   }}
                 >
@@ -354,6 +399,7 @@ export function SettingsPage() {
                   className="bg-destructive text-white"
                   onClick={() => {
                     memberStore.clear()
+                    logAdminAction('Cleared Master List', 'Cleared all choir members and trainees.')
                     toast.success('Master List cleared.')
                   }}
                 >

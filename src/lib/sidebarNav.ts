@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Music4,
   Settings,
+  ShieldCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -76,13 +77,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Choir Suguan', page: 'suguan-builder', icon: CalendarPlus },
   { label: 'Suguan History', page: 'suguan-history', icon: History },
   { label: 'Settings', page: 'settings', icon: Settings },
+  { label: 'Administration', page: 'administration', icon: ShieldCheck },
 ]
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   { label: 'Overview', pages: ['dashboard'] },
   { label: 'Choir Management', pages: ['master-list', 'trainees', 'koro-maker'] },
   { label: 'Suguan', pages: ['suguan-builder', 'organista-suguan-maker', 'suguan-history'] },
-  { label: 'System', pages: ['settings'] },
+  { label: 'System', pages: ['settings', 'administration'] },
 ]
 
 /**

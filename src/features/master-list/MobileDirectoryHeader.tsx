@@ -15,6 +15,9 @@ interface MobileDirectoryHeaderProps {
   onAddMember: () => void
   onImportRoster: () => void
   onExport: (format: 'csv' | 'excel') => void
+  canAdd?: boolean
+  canImport?: boolean
+  canExport?: boolean
 }
 
 /**
@@ -34,6 +37,9 @@ export function MobileDirectoryHeader({
   onAddMember,
   onImportRoster,
   onExport,
+  canAdd = true,
+  canImport = true,
+  canExport = true,
 }: MobileDirectoryHeaderProps) {
   return (
     <header className="sticky top-0 z-30 -mx-4 -mt-5 flex h-14 shrink-0 items-center gap-1.5 border-b border-border/70 bg-background px-3 md:hidden">
@@ -55,7 +61,7 @@ export function MobileDirectoryHeader({
         </p>
       </div>
 
-      <DropdownMenu>
+      {(canImport || canExport) && <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="More actions">
             <MoreVertical className="size-4" />
@@ -63,25 +69,33 @@ export function MobileDirectoryHeader({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel>Roster</DropdownMenuLabel>
-          <DropdownMenuItem onClick={onImportRoster}>
-            <FileUp className="size-4" />
-            Import Roster
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onExport('csv')}>
-            <Download className="size-4" />
-            Export as CSV
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onExport('excel')}>
-            <Download className="size-4" />
-            Export as Excel
-          </DropdownMenuItem>
+          {canImport && (
+            <DropdownMenuItem onClick={onImportRoster}>
+              <FileUp className="size-4" />
+              Import Roster
+            </DropdownMenuItem>
+          )}
+          {canExport && (
+            <>
+              <DropdownMenuItem onClick={() => onExport('csv')}>
+                <Download className="size-4" />
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onExport('excel')}>
+                <Download className="size-4" />
+                Export as Excel
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu>}
 
-      <Button size="default" onClick={onAddMember}>
-        <Plus className="size-4" />
-        Add Member
-      </Button>
+      {canAdd && (
+        <Button size="default" onClick={onAddMember}>
+          <Plus className="size-4" />
+          Add Member
+        </Button>
+      )}
     </header>
   )
 }

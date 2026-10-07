@@ -9,8 +9,6 @@ import type { NewAccountInput } from '@/core/types/auth'
 import { passwordStrengthProblems, type FieldProblem } from '@/lib/credentials'
 import { useAuthStore } from '@/store/authStore'
 
-type AuthMode = 'sign-in' | 'register'
-
 const EMPTY_FORM: NewAccountInput = {
   username: '',
   fullName: '',
@@ -19,8 +17,7 @@ const EMPTY_FORM: NewAccountInput = {
 }
 
 /**
- * Login and registration on one screen. There is no router in this app, so the
- * mode is local state rather than a route. `App.tsx` renders this bare, outside
+ * Login and first-Admin setup on one screen. `App.tsx` renders this bare, outside
  * the `Layout` shell, because an unauthenticated visitor should not see the
  * sidebar or the page chrome.
  *
@@ -32,9 +29,7 @@ export function AuthPage() {
   const signIn = useAuthStore((s) => s.signIn)
   const accountCount = useAuthStore((s) => s.accounts.length)
 
-  // A fresh install has no accounts, so signing in is impossible. Start on
-  // registration there and tell the user why.
-  const [mode, setMode] = useState<AuthMode>(accountCount === 0 ? 'register' : 'sign-in')
+  // A fresh install can initialize one Admin. Later accounts are Admin-managed.
   const [form, setForm] = useState<NewAccountInput>(EMPTY_FORM)
   const [showPassword, setShowPassword] = useState(false)
   const [pending, setPending] = useState(false)
@@ -42,7 +37,8 @@ export function AuthPage() {
   // so every bad field is explained at once instead of one per attempt.
   const [problems, setProblems] = useState<FieldProblem[]>([])
 
-  const isRegister = mode === 'register'
+  const isRegister = accountCount === 0
+  const isFirstAdminSetup = isRegister
   const fieldId = useId()
 
   const messageFor = (field: FieldProblem['field']) =>
@@ -53,13 +49,6 @@ export function AuthPage() {
     // Clear just this field's error as soon as it is edited, so the message
     // never contradicts what is on screen.
     setProblems((list) => list.filter((p) => p.field !== field))
-  }
-
-  const switchMode = () => {
-    setMode(isRegister ? 'sign-in' : 'register')
-    setForm(EMPTY_FORM)
-    setProblems([])
-    setShowPassword(false)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -110,10 +99,10 @@ export function AuthPage() {
             </span>
             <div className="grid gap-1">
               <h1 className="text-xl font-semibold tracking-tight">
-                {isRegister ? 'Create your account' : 'Sign in'}
+                {isFirstAdminSetup ? 'Set up administrator account' : 'Sign in'}
               </h1>
               <p className="text-sm text-muted-foreground">
-                INC Choir Manager &middot; Sta. Monica
+                Choir Manager &middot; Sta. Monica
               </p>
             </div>
           </div>
@@ -122,7 +111,7 @@ export function AuthPage() {
             onSubmit={handleSubmit}
             className="grid gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm"
           >
-            {isRegister && (
+            {isFirstAdminSetup && (
               <div className="grid gap-2">
                 <Label htmlFor={`${fieldId}-name`}>Full name</Label>
                 <Input
@@ -174,13 +163,13 @@ export function AuthPage() {
                   id={`${fieldId}-password`}
                   name="password"
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  autoComplete={isFirstAdminSetup ? 'new-password' : 'current-password'}
                   aria-invalid={messageFor('password') ? true : undefined}
                   aria-describedby={
                     messageFor('password') ? `${fieldId}-password-error` : undefined
                   }
                   className="h-10 pr-10"
-                  placeholder={isRegister ? 'At least 8 characters' : ''}
+                  placeholder={isFirstAdminSetup ? 'At least 8 characters' : ''}
                   value={form.password}
                   onChange={(e) => set('password', e.target.value)}
                 />
@@ -243,19 +232,19 @@ export function AuthPage() {
 
             <Button type="submit" size="lg" className="h-10 w-full" disabled={pending}>
               {pending && <Loader2 className="size-4 animate-spin" />}
-              {isRegister ? 'Create account' : 'Sign in'}
+              {isFirstAdminSetup ? 'Create Admin Account' : 'Sign in'}
             </Button>
 
-            <p className="text-center text-sm text-muted-foreground">
-              {isRegister ? 'Already have an account?' : 'No account yet?'}{' '}
-              <button
-                type="button"
-                onClick={switchMode}
-                className="font-medium text-brand-teal underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                {isRegister ? 'Sign in' : 'Create one'}
-              </button>
-            </p>
+            {accountCount === 0 ? (
+              <p className="text-center text-xs text-muted-foreground">
+                This creates the first Admin account for this browser. After
+                setup, system accounts can only be created by an Admin.
+              </p>
+            ) : (
+              <p className="text-center text-xs text-muted-foreground">
+                Need access? Contact an administrator to create your account.
+              </p>
+            )}
           </form>
 
           <p className="mt-4 flex items-start gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">

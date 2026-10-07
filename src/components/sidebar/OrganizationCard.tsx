@@ -1,6 +1,7 @@
 import { Music4 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
+import { ACCOUNT_ROLES } from '@/lib/rbac'
 import { useMemberStore } from '@/store/memberStore'
 
 /**
@@ -50,7 +51,8 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
               {account?.fullName ?? 'Signed in'}
             </p>
             <p className="truncate text-[11px] text-sidebar-secondary">
-              {account?.role === 'admin' ? 'Administrator' : 'Member'}
+              {ACCOUNT_ROLES.find((role) => role.id === account?.role)?.label ??
+                'Staff account'}
             </p>
           </div>
         </div>

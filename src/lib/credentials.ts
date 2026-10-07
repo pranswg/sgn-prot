@@ -373,14 +373,26 @@ export function isUsernameTaken(
 }
 
 /**
- * The first account to register becomes the admin, so a fresh install has
- * someone who can see that an admin exists rather than an all-`member` roster.
- * This only means "registered first", not a real authorisation check.
+ * Whether any active Admin exists. The default-admin seed in `authStore` runs
+ * whenever this is false, so a fresh browser (or one whose admins were all
+ * disabled) always has a known login, while a real multi-account setup never
+ * gets a surprise seed.
+ */
+export function hasActiveAdmin(accounts: Account[]): boolean {
+  return accounts.some(
+    (account) =>
+      account.role === 'admin' && (account.status ?? 'active') === 'active',
+  )
+}
+
+/**
+ * Only the initial setup account is an Admin; later users must be created by
+ * an administrator and cannot be granted access through public registration.
  */
 export function roleForNewAccount(
   existingAccounts: Account[],
 ): AccountRole {
-  return existingAccounts.length === 0 ? 'admin' : 'member'
+  return existingAccounts.length === 0 ? 'admin' : 'viewer'
 }
 
 /** Two-letter fallback used by the header avatar. */

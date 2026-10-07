@@ -11,6 +11,7 @@ export type Page =
   | 'suguan-history'
   | 'suguan-detail'
   | 'settings'
+  | 'administration'
 
 interface NavState {
   page: Page

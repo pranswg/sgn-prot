@@ -23,6 +23,8 @@ interface MemberDetailDialogProps {
   member: Member | null
   onOpenChange: (open: boolean) => void
   onEdit: () => void
+  canEdit: boolean
+  canDelete: boolean
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -38,6 +40,8 @@ export function MemberDetailDialog({
   member,
   onOpenChange,
   onEdit,
+  canEdit,
+  canDelete,
 }: MemberDetailDialogProps) {
   const deactivateMember = useMemberStore((s) => s.deactivateMember)
   const reactivateMember = useMemberStore((s) => s.reactivateMember)
@@ -82,37 +86,43 @@ export function MemberDetailDialog({
           />
           <Row label="Status" value={member.isActive ? 'Active' : 'Inactive'} />
         </div>
-        <DialogFooter className="flex !justify-between sm:justify-between">
+        {(canEdit || canDelete) && <DialogFooter className="flex !justify-between sm:justify-between">
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleToggleActive}
-              className={member.isActive ? 'text-red-600' : 'text-emerald-600'}
-            >
-              {member.isActive ? 'Deactivate' : 'Reactivate'}
-            </Button>
-            <Button
-              variant="outline"
-              className="text-red-600 hover:text-red-600"
-              onClick={handleRemove}
-            >
-              Remove
-            </Button>
+            {canEdit && (
+              <Button
+                variant="outline"
+                onClick={handleToggleActive}
+                className={member.isActive ? 'text-red-600' : 'text-emerald-600'}
+              >
+                {member.isActive ? 'Deactivate' : 'Reactivate'}
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="text-red-600 hover:text-red-600"
+                onClick={handleRemove}
+              >
+                Remove
+              </Button>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>
-            <Button
-              onClick={() => {
-                onOpenChange(false)
-                onEdit()
-              }}
-            >
-              Edit
-            </Button>
+            {canEdit && (
+              <Button
+                onClick={() => {
+                  onOpenChange(false)
+                  onEdit()
+                }}
+              >
+                Edit
+              </Button>
+            )}
           </div>
-        </DialogFooter>
+        </DialogFooter>}
       </DialogContent>
     </Dialog>
   )

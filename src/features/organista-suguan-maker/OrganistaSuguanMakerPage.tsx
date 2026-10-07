@@ -1,13 +1,14 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
-import { Check, ChevronDown, Eye, FileDown, Music4, PenLine, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarDays, Check, ChevronDown, Eye, FileDown, GripVertical, Music4, PenLine, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { reorderList } from '@/lib/reorderList'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { toast } from 'sonner'
-import { DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
+import { DisclosureButton, DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import type { SuguanDocFormat } from '@/core/types/suguan'
 import {
   DEFAULT_DOC_FORMAT,
@@ -62,44 +63,6 @@ const WEEKDAY_LABELS: Record<number, string> = {
   3: 'MIYERKULES',
   4: 'HUWEBES',
   6: 'SABADO',
-}
-
-/** Collapsible section header so the page stays short until a group is needed. */
-function SectionDisclosure({
-  title,
-  description,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string
-  description: string
-  open: boolean
-  onToggle: () => void
-  children: ReactNode
-}) {
-  return (
-    <section className="mt-6 border-t border-border/70 pt-5">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-start justify-between gap-2 text-left"
-      >
-        <span className="min-w-0">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-        </span>
-        <ChevronDown
-          className={cn(
-            'mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && <div className="mt-4 space-y-4">{children}</div>}
-    </section>
-  )
 }
 
 /**
@@ -551,6 +514,20 @@ export function OrganistaSuguanMakerPage() {
   })
   const [pagsasanayDate, setPagsasanayDate] = useState('')
   const [coverageOpen, setCoverageOpen] = useState(false)
+  const [paperLayoutOpen, setPaperLayoutOpen] = useState(false)
+  const [dragServiceId, setDragServiceId] = useState<string | null>(null)
+  const [overServiceId, setOverServiceId] = useState<string | null>(null)
+  const [newServiceId, setNewServiceId] = useState<string | null>(null)
+  const newServiceCardRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!newServiceId) return
+    newServiceCardRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+    newServiceCardRef.current?.querySelector('input')?.focus()
+  }, [newServiceId])
 
   const week = useMemo(
     () => worshipWeekFromRehearsal(pagsasanayDate),
@@ -587,13 +564,27 @@ export function OrganistaSuguanMakerPage() {
   }
 
   const addService = () => {
-    setServices((current) => [...current, createService(`Service ${current.length + 1}`)])
+    const service = createService(`Service ${services.length + 1}`)
+    setServices((current) => [...current, service])
+    setNewServiceId(service.id)
   }
 
   const removeService = (id: string) => {
     setServices((current) =>
       current.length > 1 ? current.filter((item) => item.id !== id) : current,
     )
+  }
+
+  const moveService = (id: string, direction: -1 | 1) => {
+    const from = services.findIndex((service) => service.id === id)
+    const toIndex = from + direction
+    if (from === -1 || toIndex < 0 || toIndex >= services.length) return
+    setServices(reorderList(services, id, toIndex))
+  }
+
+  const moveServiceTo = (id: string, toIndex: number) => {
+    if (!services.some((service) => service.id === id)) return
+    setServices(reorderList(services, id, toIndex))
   }
 
   const exportPdf = async () => {
@@ -739,75 +730,94 @@ export function OrganistaSuguanMakerPage() {
               id="church-name"
               value={churchName}
               onChange={(event) => setChurchName(event.target.value)}
+              placeholder="e.g. Templo Central"
             />
           </div>
 
-          <SectionDisclosure
-            title="Coverage"
-            description="Pick the Pagsasanay date — the Wednesday, Thursday, Saturday, and Sunday services of that week are derived automatically."
-            open={coverageOpen}
-            onToggle={() => setCoverageOpen((o) => !o)}
-          >
-            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,260px)_1fr] md:items-start">
-              <div className="space-y-1.5">
-                <Label htmlFor="organista-coverage-rehearsal-date">
-                  Petsa ng Pagsasanay
-                </Label>
-                <Input
-                  id="organista-coverage-rehearsal-date"
-                  type="date"
-                  value={pagsasanayDate}
-                  onChange={(event) => updatePagsasanayDate(event.target.value)}
-                />
-              </div>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label>PDF date heading</Label>
-                  <p
-                    aria-live="polite"
-                    className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground"
-                  >
-                    {dateHeading || 'Select a Pagsasanay date to set the heading.'}
-                  </p>
-                </div>
-                {weekDates.length > 0 && week && (
-                  <div className="flex flex-wrap gap-2">
-                    {weekDates.map((date) => (
-                      <div
-                        key={date}
-                        className={`rounded-md border px-3 py-2 text-xs ${
-                          weekdayOf(date) === 6 || weekdayOf(date) === 0
-                            ? 'border-emerald-300/60 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30'
-                            : 'border-amber-300/60 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30'
-                        }`}
-                      >
-                        <span className="font-bold uppercase">
-                          {WEEKDAY_LABELS[weekdayOf(date)]}
-                        </span>
-                        <span className="ml-2 text-muted-foreground">
-                          {formatDateKeyNumeric(date)}
-                        </span>
-                      </div>
-                    ))}
-                    <p className="w-full text-xs text-muted-foreground">
-                      The PDF heading shows the date ranges as midweek and weekend.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </SectionDisclosure>
+          <div className="mt-6">
+            <DisclosureButton
+              open={coverageOpen}
+              onToggle={() => setCoverageOpen((o) => !o)}
+              icon={CalendarDays}
+            >
+              Coverage
+            </DisclosureButton>
 
-          <div className="mt-6 border-t border-border/70 pt-5">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-foreground">
-                Paper &amp; layout
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                These document options are applied to the exported PDF.
-              </p>
-            </div>
-            <DocumentSetupStep value={docFormat} onChange={setDocFormat} />
+            {coverageOpen && (
+              <div className="mt-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Pick the Pagsasanay date — the Wednesday, Thursday, Saturday, and
+                  Sunday services of that week are derived automatically.
+                </p>
+                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,260px)_1fr] md:items-start">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="organista-coverage-rehearsal-date">
+                      Petsa ng Pagsasanay
+                    </Label>
+                    <Input
+                      id="organista-coverage-rehearsal-date"
+                      type="date"
+                      value={pagsasanayDate}
+                      onChange={(event) => updatePagsasanayDate(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label>PDF date heading</Label>
+                      <p
+                        aria-live="polite"
+                        className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground"
+                      >
+                        {dateHeading || 'Select a Pagsasanay date to set the heading.'}
+                      </p>
+                    </div>
+                    {weekDates.length > 0 && week && (
+                      <div className="flex flex-wrap gap-2">
+                        {weekDates.map((date) => (
+                          <div
+                            key={date}
+                            className={`rounded-md border px-3 py-2 text-xs ${
+                              weekdayOf(date) === 6 || weekdayOf(date) === 0
+                                ? 'border-emerald-300/60 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30'
+                                : 'border-amber-300/60 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30'
+                            }`}
+                          >
+                            <span className="font-bold uppercase">
+                              {WEEKDAY_LABELS[weekdayOf(date)]}
+                            </span>
+                            <span className="ml-2 text-muted-foreground">
+                              {formatDateKeyNumeric(date)}
+                            </span>
+                          </div>
+                        ))}
+                        <p className="w-full text-xs text-muted-foreground">
+                          The PDF heading shows the date ranges as midweek and weekend.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <DisclosureButton
+              open={paperLayoutOpen}
+              onToggle={() => setPaperLayoutOpen((o) => !o)}
+              icon={SlidersHorizontal}
+            >
+              Paper &amp; layout
+            </DisclosureButton>
+
+            {paperLayoutOpen && (
+              <div className="mt-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  These document options are applied to the exported PDF.
+                </p>
+                <DocumentSetupStep value={docFormat} onChange={setDocFormat} />
+              </div>
+            )}
           </div>
 
           <div className="mt-5 flex items-center justify-between gap-3">
@@ -822,22 +832,88 @@ export function OrganistaSuguanMakerPage() {
             {services.map((service, index) => (
               <div
                 key={service.id}
-                className="rounded-lg border border-border/70 bg-background/80 p-3"
+                ref={service.id === newServiceId ? newServiceCardRef : undefined}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                  if (dragServiceId && dragServiceId !== service.id) {
+                    setOverServiceId(service.id)
+                  }
+                }}
+                onDragLeave={() => {
+                  if (overServiceId === service.id) setOverServiceId(null)
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  if (dragServiceId && dragServiceId !== service.id) {
+                    moveServiceTo(dragServiceId, index)
+                  }
+                  setDragServiceId(null)
+                  setOverServiceId(null)
+                }}
+                className={cn(
+                  'rounded-lg border border-border/70 bg-background/80 p-3 transition-colors',
+                  overServiceId === service.id &&
+                    'border-primary ring-1 ring-primary',
+                )}
               >
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                     Service {index + 1}
                   </p>
                   {services.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Remove ${service.heading}`}
-                      onClick={() => removeService(service.id)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Move up"
+                        aria-label={`Move ${service.heading || `Service ${index + 1}`} up`}
+                        disabled={index === 0}
+                        onClick={() => moveService(service.id, -1)}
+                      >
+                        <ArrowUp className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Move down"
+                        aria-label={`Move ${service.heading || `Service ${index + 1}`} down`}
+                        disabled={index === services.length - 1}
+                        onClick={() => moveService(service.id, 1)}
+                      >
+                        <ArrowDown className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Drag to reorder"
+                        aria-label={`Drag ${service.heading || `Service ${index + 1}`} to reorder`}
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.setData('text/plain', service.id)
+                          setDragServiceId(service.id)
+                        }}
+                        onDragEnd={() => {
+                          setDragServiceId(null)
+                          setOverServiceId(null)
+                        }}
+                      >
+                        <GripVertical className="size-4 cursor-grab text-muted-foreground" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Remove ${service.heading}`}
+                        onClick={() => removeService(service.id)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   )}
                 </div>
 

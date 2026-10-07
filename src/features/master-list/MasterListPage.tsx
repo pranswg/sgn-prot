@@ -45,10 +45,7 @@ import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
 import type { ChoirPosition, Member } from '@/core/types/member'
 import { CHOIR_POSITIONS, POSITION_LABELS } from '@/core/constants/choirPositions'
-import {
-  MEMBERSHIP_LABELS,
-  MEMBERSHIP_OPTIONS,
-} from '@/core/constants/memberMembership'
+import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { exportCSV, exportExcel, membersToRows } from '@/lib/export'
 import {
   EMPTY_DIRECTORY_FILTERS,
@@ -63,6 +60,7 @@ import {
   formatMemberName,
   hasActiveDirectoryFilters,
   paginate,
+  quickFilterLabel,
   toggleInList,
   type MemberDirectoryFilters,
   type MemberPageSize,
@@ -73,13 +71,12 @@ import { todayPHT } from '@/lib/phDate'
 import { MemberFormDialog } from './MemberFormDialog'
 import { MemberDetailDialog } from './MemberDetailDialog'
 import { ImportRosterDialog } from './ImportRosterDialog'
-import { DirectorySummaryCards } from './DirectorySummaryCards'
 import {
   MemberDirectoryTable,
   MemberDirectoryEmptyState,
 } from './MemberDirectoryTable'
 import { PageSizeControl, SectionPaginator } from './SectionPaginator'
-import { MobileStatCards, type MobileStatAction } from './MobileStatCards'
+import { StatCards, type StatAction } from './StatCards'
 import { MobileDirectoryHeader } from './MobileDirectoryHeader'
 import { MobileMemberCard } from './MobileMemberCard'
 import { MemberActionSheet } from './MemberActionSheet'
@@ -160,6 +157,11 @@ export function MasterListPage() {
     useNavStore.getState().clearDirectoryStart()
   }, [])
   const [sort, setSort] = useState<MemberSort>('last-name')
+  // The "Recently Added" quick filter owns the ordering too: turning it on
+  // flips the directory to newest-first, and the sort control shows that
+  // choice instead of a stale label while the rows are date-ordered.
+  const effectiveSort: MemberSort =
+    filters.quick === 'recent' ? 'recently-added' : sort
   const [pageSize, setPageSize] =
     useState<MemberPageSize>(DEFAULT_MEMBER_PAGE_SIZE)
   // The mobile card list is a single flat list rather than two choir sections,
@@ -194,8 +196,8 @@ export function MasterListPage() {
   )
 
   const filteredMembers = useMemo(
-    () => filterMembers(members, filters, voices, references, sort),
-    [members, filters, voices, references, sort],
+    () => filterMembers(members, filters, voices, references, effectiveSort),
+    [members, filters, voices, references, effectiveSort],
   )
 
   // The profile sheet stays open across a deactivate, so it reads the member
@@ -207,14 +209,14 @@ export function MasterListPage() {
   // Match count for the filter sheet's Apply button, evaluated against the
   // in-progress edits rather than the filters that are already applied.
   const previewCount = (candidate: MemberDirectoryFilters) =>
-    filterMembers(members, candidate, voices, references, sort).length
+    filterMembers(members, candidate, voices, references, effectiveSort).length
 
   const filtersActive = hasActiveDirectoryFilters(filters)
   const activeFilterCount = countActiveDirectoryFilters(filters)
   // Which KPI card the directory currently reflects: the wide-open view maps
   // to Total, otherwise the status filter's card. Null when narrowed by a
   // filter no card owns (voice, position, query).
-  const selectedStat: MobileStatAction | null = !filtersActive
+  const selectedStat: StatAction | null = !filtersActive
     ? 'all'
     : filters.status === 'active'
       ? 'active'
@@ -241,7 +243,7 @@ export function MasterListPage() {
   // Tapping a KPI card either narrows the directory to that cohort or jumps to
   // the Trainees tab. The filters reset first so the listed members are exactly
   // the cohort the card counts.
-  const selectStat = (action: MobileStatAction) => {
+  const selectStat = (action: StatAction) => {
     if (action === 'trainees') {
       navigate('trainees')
       return
@@ -362,12 +364,7 @@ export function MasterListPage() {
         }
       />
 
-      <MobileStatCards
-        stats={stats}
-        selected={selectedStat}
-        onSelect={selectStat}
-      />
-      <DirectorySummaryCards stats={stats} />
+      <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
 
       {/* Search & filter toolbar. Every directory filter lives here (choir
           segment, membership, status, voices, positions, sort). Sticky under
@@ -510,6 +507,21 @@ export function MasterListPage() {
                 <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   Membership
                 </DropdownMenuLabel>
+                <DropdownMenuCheckboxItem
+                  checked={filters.quick === 'recent'}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={() =>
+                    setFilter(
+                      'quick',
+                      filters.quick === 'recent' ? 'all' : 'recent',
+                    )
+                  }
+                >
+                  <span className="flex-1">Recently Added</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {stats.total}
+                  </span>
+                </DropdownMenuCheckboxItem>
                 {MEMBERSHIP_OPTIONS.map((option) => (
                   <DropdownMenuCheckboxItem
                     key={option.value}
@@ -554,7 +566,13 @@ export function MasterListPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Select value={sort} onValueChange={(v) => setSort(v as MemberSort)}>
+            <Select
+              value={effectiveSort}
+              onValueChange={(v) => {
+                setSort(v as MemberSort)
+                if (filters.quick === 'recent') setFilter('quick', 'all')
+              }}
+            >
               <SelectTrigger
                 aria-label="Sort members"
                 className="h-9 w-[11.5rem] bg-background text-[0.8125rem]"
@@ -674,7 +692,7 @@ export function MasterListPage() {
             ))}
             {filters.quick !== 'all' && (
               <FilterChip
-                label={(MEMBERSHIP_LABELS as Record<string, string>)[filters.quick] ?? filters.quick}
+                label={quickFilterLabel(filters.quick)}
                 onClear={() => setFilter('quick', 'all')}
               />
             )}
@@ -715,8 +733,11 @@ export function MasterListPage() {
             the toolbar's scrolling chip row instead. */}
         <div className="flex flex-col gap-2 md:hidden">
           <Select
-            value={sort}
-            onValueChange={(v) => setSort(v as MemberSort)}
+            value={effectiveSort}
+            onValueChange={(v) => {
+              setSort(v as MemberSort)
+              if (filters.quick === 'recent') setFilter('quick', 'all')
+            }}
           >
             <SelectTrigger
               aria-label="Sort members"

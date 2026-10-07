@@ -11,7 +11,11 @@ import {
 import { getVoiceName } from '@/core/constants/voicePositions'
 
 export type DirectoryQuickFilter =
-  'all' | MembershipType | 'active' | 'inactive'
+  | 'all'
+  | MembershipType
+  | 'active'
+  | 'inactive'
+  | 'recent'
 
 /**
  * Directory ordering, which also decides how a name is written out. The two
@@ -218,6 +222,10 @@ function matchesQuickFilter(
   switch (quick) {
     case 'all':
       return true
+    case 'recent':
+      // Recency is an ordering, not a membership: the filter matches everyone
+      // and the sort below drives the newest-first reading of the list.
+      return true
     case 'active':
       return member.isActive
     case 'inactive':
@@ -225,6 +233,15 @@ function matchesQuickFilter(
     default:
       return member.membershipType === quick
   }
+}
+
+/** Display label for a quick filter, including the recency category. */
+export function quickFilterLabel(quick: DirectoryQuickFilter): string {
+  if (quick === 'recent') return 'Recently Added'
+  if (quick === 'active') return 'Active'
+  if (quick === 'inactive') return 'Inactive'
+  if (quick === 'all') return 'All Members'
+  return MEMBERSHIP_LABELS[quick]
 }
 
 export function filterMembers(
@@ -273,7 +290,7 @@ export function filterMembers(
       return true
     })
     .sort((a, b) => {
-      if (sort === 'recently-added') {
+      if (filters.quick === 'recent' || sort === 'recently-added') {
         // `dateAdded` is a `YYYY-MM-DD` string, so a plain comparison is a
         // calendar comparison and needs no `Date` round trip.
         const byDate = b.dateAdded.localeCompare(a.dateAdded)

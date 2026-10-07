@@ -2,30 +2,27 @@ import { GraduationCap, UserCheck, UserMinus, Users } from 'lucide-react'
 import type { DirectoryStats } from '@/lib/memberDirectory'
 import { cn } from '@/lib/utils'
 
-export type MobileStatAction = 'all' | 'active' | 'inactive' | 'trainees'
+export type StatAction = 'all' | 'active' | 'inactive' | 'trainees'
 
-interface MobileStatCardsProps {
+interface StatCardsProps {
   stats: DirectoryStats
   /**
    * The action the directory currently reflects, or `null` when it is
    * narrowed by a filter no card owns (voice, position, query).
    */
-  selected: MobileStatAction | null
-  onSelect: (action: MobileStatAction) => void
+  selected: StatAction | null
+  onSelect: (action: StatAction) => void
 }
 
 /**
- * The mobile Master List KPI block: a 2x2 grid of tap targets rather than a
- * scrolling rail, so each metric doubles as a shortcut. The member counts
- * apply their directory filter, and Trainees jumps to the Trainees tab.
+ * The Master List KPI block: tap targets rather than a static rail, so each
+ * metric doubles as a shortcut. The member counts apply their directory
+ * filter, and Trainees jumps to the Trainees tab. Two-up on mobile, one row
+ * of four on desktop.
  */
-export function MobileStatCards({
-  stats,
-  selected,
-  onSelect,
-}: MobileStatCardsProps) {
+export function StatCards({ stats, selected, onSelect }: StatCardsProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:hidden">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <StatTile
         icon={Users}
         value={stats.total}
@@ -33,13 +30,6 @@ export function MobileStatCards({
         sub="In the registry"
         selected={selected === 'all'}
         onClick={() => onSelect('all')}
-      />
-      <StatTile
-        icon={GraduationCap}
-        value={stats.trainees}
-        label="Trainees"
-        sub="In training"
-        onClick={() => onSelect('trainees')}
       />
       <StatTile
         icon={UserCheck}
@@ -56,6 +46,13 @@ export function MobileStatCards({
         sub="Not scheduled"
         selected={selected === 'inactive'}
         onClick={() => onSelect('inactive')}
+      />
+      <StatTile
+        icon={GraduationCap}
+        value={stats.trainees}
+        label="Trainees"
+        sub="In training"
+        onClick={() => onSelect('trainees')}
       />
     </div>
   )

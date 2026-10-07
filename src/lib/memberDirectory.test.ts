@@ -28,6 +28,7 @@ hasActiveDirectoryFilters,
   MEMBER_PAGE_SIZES,
   normalizeMemberPageSize,
   paginate,
+  quickFilterLabel,
   toggleInList,
   type MemberDirectoryFilters,
 } from './memberDirectory.ts'
@@ -232,6 +233,32 @@ test('recently-added orders newest first and breaks date ties by surname', () =>
   ).map((m) => m.id)
   // A surname sort would have put "Bard" second, so this pins the date order.
   assert.deepEqual(sorted, ['early', 'late', 'old'])
+})
+
+test('the recent quick filter matches everyone and orders newest first', () => {
+  const roster: Member[] = [
+    { ...MEMBERS[0], id: 'early', lastName: 'Aldrete', dateAdded: '2026-03-01' },
+    { ...MEMBERS[1], id: 'late', lastName: 'Zuniga', dateAdded: '2026-03-01' },
+    { ...MEMBERS[2], id: 'old', lastName: 'Bard', dateAdded: '2025-12-31' },
+  ]
+  // The default last-name sort is overridden by the recency filter, so the
+  // rows read newest-first even though the sort argument never changed.
+  const order = filterMembers(
+    roster,
+    filters({ quick: 'recent' }),
+    VOICES,
+    buildMemberReferences(roster),
+  ).map((m) => m.id)
+  assert.deepEqual(order, ['early', 'late', 'old'])
+  assert.equal(hasActiveDirectoryFilters(filters({ quick: 'recent' })), true)
+  assert.equal(countActiveDirectoryFilters(filters({ quick: 'recent' })), 1)
+})
+
+test('quickFilterLabel names the recency category', () => {
+  assert.equal(quickFilterLabel('recent'), 'Recently Added')
+  assert.equal(quickFilterLabel('active'), 'Active')
+  assert.equal(quickFilterLabel('inactive'), 'Inactive')
+  assert.equal(quickFilterLabel('regular'), 'Mang-aawit')
 })
 
 test('field sorts still write names in surname order', () => {

@@ -244,6 +244,17 @@ export function MobileFilterSheet({
         return (
           <SheetSection icon={SECTION_ICON.roles} title={MOBILE_FILTER_LABEL.roles}>
             <ul className="flex flex-col gap-2">
+              <CheckRow
+                label="Recently Added"
+                count={stats.total}
+                active={draft.quick === 'recent'}
+                onToggle={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    quick: d.quick === 'recent' ? 'all' : 'recent',
+                  }))
+                }
+              />
               {MEMBERSHIP_OPTIONS.map((option) => (
                 <CheckRow
                   key={option.value}

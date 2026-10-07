@@ -27,6 +27,7 @@ import { MemberInitialsAvatar } from './MemberInitialsAvatar'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { formatDate } from '@/lib/format'
 import type { Member } from '@/core/types/member'
+import { memberEffectivePositions } from '@/core/constants/memberMembership'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -122,18 +123,6 @@ export function MemberProfileSheet({
               <InfoRow label="Membership">
                 <MembershipBadge type={member.membershipType} />
               </InfoRow>
-              <InfoRow label="Date Added">
-                <span className="text-sm font-medium">
-                  {formatDate(member.dateAdded)}
-                </span>
-              </InfoRow>
-              {member.notes && (
-                <InfoRow label="Notes">
-                  <span className="max-w-[14rem] text-right text-xs font-normal text-muted-foreground">
-                    {member.notes}
-                  </span>
-                </InfoRow>
-              )}
             </ProfileCard>
 
             <ProfileCard title="Voice Assignment" icon={Music2}>
@@ -144,14 +133,14 @@ export function MemberProfileSheet({
               </InfoRow>
             </ProfileCard>
 
-            <ProfileCard title="Choir Privileges" icon={ShieldCheck}>
-              {member.positions.length === 0 ? (
+            <ProfileCard title="Roles" icon={ShieldCheck}>
+              {memberEffectivePositions(member).length === 0 ? (
                 <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                  No choir privileges assigned.
+                  No choir roles assigned.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {member.positions.map((position) => (
+                  {memberEffectivePositions(member).map((position) => (
                     <PositionBadge key={position} position={position} />
                   ))}
                 </div>

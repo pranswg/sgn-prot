@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { ChoirPosition, MembershipType } from '@/core/types/member'
 import { POSITION_SHORT_LABELS } from '@/core/constants/choirPositions'
+import { MEMBERSHIP_SHORT_LABELS } from '@/core/constants/memberMembership'
 
 const badgeBase =
   'h-5 rounded-md border-transparent px-1.5 text-[0.6875rem] font-medium tracking-tight'
@@ -92,8 +93,11 @@ export function VoiceBadge({ name }: { name: string }) {
 const MEMBERSHIP_BADGE_STYLES: Record<MembershipType, string> = {
   regular:
     'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
-  provisional:
-    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  organista: 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300',
+  tagapagturo:
+    'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
+  'assistant-tagapagturo':
+    'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
 }
 
 export function MembershipBadge({ type }: { type: MembershipType }) {
@@ -102,7 +106,7 @@ export function MembershipBadge({ type }: { type: MembershipType }) {
       variant="outline"
       className={cn(badgeBase, MEMBERSHIP_BADGE_STYLES[type])}
     >
-      {type === 'regular' ? 'Regular' : 'Provisional'}
+      {MEMBERSHIP_SHORT_LABELS[type]}
     </Badge>
   )
 }

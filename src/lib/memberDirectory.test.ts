@@ -52,13 +52,13 @@ const MEMBERS: Member[] = [
     dateAdded: '2026-01-05',
     positions: ['pangulong-mang-aawit'],
   },
-  {
+{
     id: '2',
     firstName: 'Bruno',
     lastName: 'Cruz',
     gender: 'male',
     voicePosition: 'bass',
-    membershipType: 'provisional',
+    membershipType: 'organista',
     isActive: true,
     dateAdded: '2026-02-10',
     positions: [],
@@ -95,8 +95,8 @@ test('an empty filter set returns everyone', () => {
 test('quick filters split by status, membership type, and gender', () => {
   assert.deepEqual(run(filters({ quick: 'active' })), ['2', '1'])
   assert.deepEqual(run(filters({ quick: 'inactive' })), ['3'])
-  assert.deepEqual(run(filters({ quick: 'regular' })), ['1', '3'])
-  assert.deepEqual(run(filters({ quick: 'provisional' })), ['2'])
+assert.deepEqual(run(filters({ quick: 'regular' })), ['1', '3'])
+  assert.deepEqual(run(filters({ quick: 'organista' })), ['2'])
   assert.deepEqual(run(filters({ gender: 'male' })), ['2'])
 })
 
@@ -132,6 +132,10 @@ test('a position filter matches members holding any selected position', () => {
   assert.deepEqual(run(filters({ positions: ['oic', 'pangulong-mang-aawit'] })), ['1', '3'])
 })
 
+test('an organist-category member matches the organista position filter', () => {
+  assert.deepEqual(run(filters({ positions: ['organista'] })), ['2'])
+})
+
 test('filters compose as AND across every dimension', () => {
   assert.deepEqual(
     run(filters({ quick: 'active', gender: 'female', positions: ['pangulong-mang-aawit'] })),
@@ -143,8 +147,13 @@ test('the text query matches first name, last name, voice, position label, and r
   assert.deepEqual(run(filters({ query: 'bruno' })), ['2'])
   assert.deepEqual(run(filters({ query: 'reyes' })), ['1'])
   assert.deepEqual(run(filters({ query: 'bass' })), ['2'])
-  assert.deepEqual(run(filters({ query: 'Pangulong' })), ['1'])
+assert.deepEqual(run(filters({ query: 'Pangulong' })), ['1'])
   assert.deepEqual(run(filters({ query: 'M-002' })), ['2'])
+})
+
+test('the text query also matches the membership label', () => {
+  assert.deepEqual(run(filters({ query: 'organista' })), ['2'])
+  assert.deepEqual(run(filters({ query: 'mang-aawit' })), ['1', '3'])
 })
 
 test('the text query is case-insensitive and ignores surrounding whitespace', () => {
@@ -282,9 +291,16 @@ test('computeDirectoryStats counts active, membership types, and privileges', ()
   assert.equal(stats.active, 2)
   assert.equal(stats.inactive, 1)
   assert.equal(stats.regular, 2)
-  assert.equal(stats.provisional, 1)
-  assert.equal(stats.withPrivileges, 2)
+  assert.equal(stats.organistCategory, 1)
+  assert.equal(stats.withPrivileges, 3)
   assert.equal(stats.trainees, 1)
+  assert.deepEqual(
+    [...stats.membershipCounts.entries()],
+    [
+      ['regular', 2],
+      ['organista', 1],
+    ],
+  )
 })
 
 test('voiceCounts follow configured voice order, not size', () => {
@@ -303,7 +319,9 @@ test('positionCounts includes every configured position, even at zero', () => {
   const stats = computeDirectoryStats(MEMBERS, [], VOICES)
   assert.equal(stats.positionCounts.get('pangulong-mang-aawit'), 1)
   assert.equal(stats.positionCounts.get('oic'), 1)
-assert.equal(stats.positionCounts.get('organista'), 0)
+  // The organist category derives into the organista position, with no
+  // position stored on the member.
+  assert.equal(stats.positionCounts.get('organista'), 1)
 })
 
 test('paginate offers exactly 5/10/15/20/25 and defaults to 10', () => {

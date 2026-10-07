@@ -17,6 +17,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
+import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
 import { extractRosterFromPdf, type RosterCandidate } from '@/lib/rosterImport'
 import {
   extractRosterFromSpreadsheet,
@@ -210,6 +211,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       } else {
         addMember({
           firstName,
+          middleName: candidate.middleName,
           lastName,
           gender: candidate.gender,
           voicePosition,
@@ -393,8 +395,11 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
                           {!candidate.isActive && (
                             <Badge variant="outline">Inactive</Badge>
                           )}
-                          {candidate.membershipType === 'provisional' && (
-                            <Badge variant="outline">Provisional</Badge>
+                          {candidate.membershipType &&
+                            candidate.membershipType !== 'regular' && (
+                            <Badge variant="outline">
+                              {MEMBERSHIP_LABELS[candidate.membershipType]}
+                            </Badge>
                           )}
                           {candidate.positions && candidate.positions.length > 0 && (
                             <Badge variant="secondary">

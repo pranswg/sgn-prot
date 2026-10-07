@@ -13,6 +13,7 @@ import {
   CHOIR_POSITIONS,
   POSITION_LABELS,
 } from '@/core/constants/choirPositions'
+import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import type { VoicePosition } from '@/core/types/suguan'
 import {
   countActiveDirectoryFilters,
@@ -52,15 +53,11 @@ const SECTION_ICON: Record<MobileFilterSection, typeof Users> = {
 
 function countFor(
   stats: DirectoryStats,
-  value: 'all' | 'regular' | 'provisional' | 'active' | 'inactive',
+  value: 'all' | 'active' | 'inactive',
 ): number {
   switch (value) {
     case 'all':
       return stats.total
-    case 'regular':
-      return stats.regular
-    case 'provisional':
-      return stats.provisional
     case 'active':
       return stats.active
     case 'inactive':
@@ -79,7 +76,7 @@ function countSection(
     case 'status':
       return filters.status === 'all' ? 0 : 1
     case 'roles':
-      return filters.positions.length + (filters.quick === 'regular' ? 1 : 0)
+      return filters.positions.length + (filters.quick !== 'all' ? 1 : 0)
   }
 }
 
@@ -247,17 +244,20 @@ export function MobileFilterSheet({
         return (
           <SheetSection icon={SECTION_ICON.roles} title={MOBILE_FILTER_LABEL.roles}>
             <ul className="flex flex-col gap-2">
-              <CheckRow
-                label="Regular"
-                count={stats.regular}
-                active={draft.quick === 'regular'}
-                onToggle={() =>
-                  setDraft((d) => ({
-                    ...d,
-                    quick: d.quick === 'regular' ? 'all' : 'regular',
-                  }))
-                }
-              />
+              {MEMBERSHIP_OPTIONS.map((option) => (
+                <CheckRow
+                  key={option.value}
+                  label={option.label}
+                  count={stats.membershipCounts.get(option.value) ?? 0}
+                  active={draft.quick === option.value}
+                  onToggle={() =>
+                    setDraft((d) => ({
+                      ...d,
+                      quick: d.quick === option.value ? 'all' : option.value,
+                    }))
+                  }
+                />
+              ))}
               {CHOIR_POSITIONS.map((position) => (
                 <CheckRow
                   key={position.id}

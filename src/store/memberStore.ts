@@ -1,7 +1,16 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import type { Member, MemberInput, Trainee, TraineeInput } from '@/core/types/member'
+import type { Member, MemberInput, MembershipType, Trainee, TraineeInput } from '@/core/types/member'
+
+/** (as of v4) Membership types are the four categories; anything else is legacy. */
+function migrateMembership(value: unknown): MembershipType {
+  return value === 'organista' ||
+    value === 'tagapagturo' ||
+    value === 'assistant-tagapagturo'
+    ? value
+    : 'regular'
+}
 
 interface MemberState {
   members: Member[]
@@ -116,7 +125,7 @@ export const useMemberStore = create<MemberState>()(
     }),
     {
       name: 'choir-members',
-      version: 3,
+      version: 4,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as {
           members?: Member[]
@@ -126,6 +135,10 @@ export const useMemberStore = create<MemberState>()(
           ...state,
           members: (state.members ?? []).map((m) => ({
             ...m,
+            // Version 4 removed the 'provisional' membership in favour of the
+            // four membership categories; former trainee-members fold into
+            // Regular Mang-aawit.
+            membershipType: migrateMembership(m.membershipType),
             positions: m.positions ?? [],
           })),
           trainees: state.trainees ?? [],

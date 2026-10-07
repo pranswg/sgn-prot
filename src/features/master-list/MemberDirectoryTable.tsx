@@ -16,6 +16,7 @@ import {
   VoiceBadge,
 } from '@/components/StatusBadges'
 import { getVoiceName } from '@/core/constants/voicePositions'
+import { memberEffectivePositions } from '@/core/constants/memberMembership'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { cn } from '@/lib/utils'
@@ -322,7 +323,7 @@ function ChoirSection({
             <VoiceBadge name={getVoiceName(member.voicePosition, voices)} />
           </TableCell>
           <TableCell className="hidden xl:table-cell">
-            <MemberPositionsCell positions={member.positions} max={2} />
+            <MemberPositionsCell positions={memberEffectivePositions(member)} max={2} />
           </TableCell>
           <TableCell>
             <MembershipBadge type={member.membershipType} />

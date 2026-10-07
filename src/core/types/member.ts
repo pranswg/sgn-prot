@@ -1,6 +1,17 @@
 export type Gender = 'male' | 'female'
 
-export type MembershipType = 'regular' | 'provisional'
+/**
+ * A member's category in the choir. The three organist-family categories —
+ * `organista`, `tagapagturo`, and `assistant-tagapagturo` — are one category:
+ * all of them count as Organists for the Organist Suguan and the Choir
+ * Suguan's organista duty role. The legacy `provisional` value was migrated to
+ * `regular` in store version 4.
+ */
+export type MembershipType =
+  | 'regular'
+  | 'organista'
+  | 'tagapagturo'
+  | 'assistant-tagapagturo'
 
 export type ChoirPosition =
   | 'oic'
@@ -12,6 +23,7 @@ export type ChoirPosition =
 export interface Member {
   id: string
   firstName: string
+  middleName?: string
   lastName: string
   gender: Gender
   voicePosition: string
@@ -36,6 +48,7 @@ export interface Trainee {
 
 export interface MemberInput {
   firstName: string
+  middleName?: string
   lastName: string
   gender: Gender
   voicePosition: string

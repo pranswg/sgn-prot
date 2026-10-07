@@ -134,7 +134,7 @@ migration function. **UI-only changes must not change a persisted shape.**
 
 | Store | localStorage key | version |
 | --- | --- | --- |
-| `memberStore.ts` | `choir-members` | 3 |
+| `memberStore.ts` | `choir-members` | 4 |
 | `suguanStore.ts` | `choir-suguan` | 6 |
 | `settingsStore.ts` | `choir-settings` | 3 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
@@ -187,7 +187,26 @@ from the backup file, because restoring a JSON file should never install someone
 else's password hashes on this machine. Do not add `importData` to it later
 without asking.
 
-## The sidebar is a floating card, split across `components/sidebar/`
+### Membership model
+
+`src/core/types/member.ts` defines four memberships in
+`src/core/constants/memberMembership.ts` (`MEMBERSHIP_OPTIONS` /
+`MEMBERSHIP_LABELS` / `MEMBERSHIP_SHORT_LABELS`): Regular Mang-aawit, Organista,
+Tagapagturo ng Awit, and Assistant Tagapagturo ng Awit. **The three
+organist-family memberships are one category**: `isOrganistMembership()` marks
+them, `memberEffectivePositions()` derives the `organista` position from the
+category (the store's `positions` array still holds only the legacy
+privileges), and `memberIsOrganist()` gates the Organist Suguan member picker.
+The old `provisional` membership was removed in store version 4 and migrates to
+`regular`; anything that still reads `membershipType === 'provisional'` is
+working on dead data.
+
+The member forms deliberately have no UI for Status (active), privileges,
+Date Added, or Notes. `isActive` is only toggled from the profile, `dateAdded`
+is auto-set on add to a PHT timestamp (`phtInstantISO`), and `positions` /
+`notes` are preserved untouched on edit.
+
+## Sidebar
 
 `src/components/ui/sidebar.tsx` was deleted. Its state model (`collapsible =
 "offcanvas" | "icon" | "none"`, a `document.cookie` flag, a hover rail, an

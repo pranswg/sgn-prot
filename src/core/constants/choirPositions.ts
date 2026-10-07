@@ -1,4 +1,5 @@
 import type { Member, ChoirPosition } from '@/core/types/member'
+import { isOrganistMembership } from '@/core/constants/memberMembership'
 
 export const CHOIR_POSITIONS: { id: ChoirPosition; label: string }[] = [
   { id: 'oic', label: 'OIC' },
@@ -29,11 +30,21 @@ export const DUTY_ROLE_REQUIRED_POSITIONS: Record<string, ChoirPosition[]> = {
 }
 
 export function memberCanHoldDutyRole(
-  member: Pick<Member, 'positions'>,
+  member: Pick<Member, 'positions' | 'membershipType'>,
   roleId: string,
 ): boolean {
   const required = DUTY_ROLE_REQUIRED_POSITIONS[roleId]
   if (!required) return true
+  // The Organista and Assistant Tagapagturo memberships (plus the 
+  // Tagapagturo, which the form folds into the same category) are treated as
+  // holding the organista position, so they may be assigned the organista
+  // duty role without a separately stored privilege.
+  if (
+    (roleId === 'organista' || roleId === 'organista-reserve') &&
+    isOrganistMembership(member.membershipType)
+  ) {
+    return true
+  }
   return (member.positions ?? []).some((p) => required.includes(p))
 }
 

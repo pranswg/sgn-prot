@@ -18,14 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
-import type { Member, MemberInput, ChoirPosition } from '@/core/types/member'
+import type { Member, MemberInput, MembershipType } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
-import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
-import { todayPHT } from '@/lib/phDate'
+import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
+import { phtInstantISO } from '@/lib/phDate'
 
 interface MemberFormDialogProps {
   open: boolean
@@ -33,6 +31,24 @@ interface MemberFormDialogProps {
   member?: Member | null
   onSaved?: () => void
 }
+
+interface MemberFormState {
+  firstName: string
+  middleName: string
+  lastName: string
+  gender: 'male' | 'female'
+  voicePosition: string
+  membershipType: MembershipType
+}
+
+const emptyForm = (): MemberFormState => ({
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  gender: 'female',
+  voicePosition: 'soprano-1',
+  membershipType: 'regular',
+})
 
 export function MemberFormDialog({
   open,
@@ -44,17 +60,7 @@ export function MemberFormDialog({
   const updateMember = useMemberStore((s) => s.updateMember)
   const allVoices = useSettingsStore((s) => s.allVoices)
 
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    gender: 'female' as 'male' | 'female',
-    voicePosition: 'soprano-1',
-    membershipType: 'regular' as 'regular' | 'provisional',
-    isActive: true,
-              dateAdded: todayPHT(),
-    positions: [] as ChoirPosition[],
-    notes: '',
-  })
+  const [form, setForm] = useState<MemberFormState>(emptyForm)
 
   useEffect(() => {
     if (open) {
@@ -62,74 +68,64 @@ export function MemberFormDialog({
         member
           ? {
               firstName: member.firstName,
+              middleName: member.middleName ?? '',
               lastName: member.lastName,
               gender: member.gender,
               voicePosition: member.voicePosition,
               membershipType: member.membershipType,
-              isActive: member.isActive,
-              dateAdded: member.dateAdded,
-              positions: member.positions ?? [],
-              notes: member.notes ?? '',
             }
-          : {
-              firstName: '',
-              lastName: '',
-              gender: 'female',
-              voicePosition: 'soprano-1',
-              membershipType: 'regular',
-              isActive: true,
-    dateAdded: todayPHT(),
-              positions: [],
-              notes: '',
-            },
+          : emptyForm(),
       )
     }
   }, [open, member])
 
-  const set = (field: string, value: string | boolean | ChoirPosition[]) => {
+  const set = <K extends keyof MemberFormState>(
+    field: K,
+    value: MemberFormState[K],
+  ) => {
     setForm((f) => ({ ...f, [field]: value }))
-  }
-
-  const togglePosition = (position: ChoirPosition) => {
-    setForm((f) => ({
-      ...f,
-      positions: f.positions.includes(position)
-        ? f.positions.filter((p) => p !== position)
-        : [...f.positions, position],
-    }))
   }
 
   const handleGenderChange = (gender: 'male' | 'female') => {
     const voices = voicePositionsForGender(gender, allVoices())
     const fallback = voices.length > 0 ? voices[0].id : ''
+    set('gender', gender)
     setForm((f) => ({
       ...f,
       gender,
-      voicePosition:
-        voices.find((v) => v.id === f.voicePosition)?.id ?? fallback,
+      voicePosition: voices.find((v) => v.id === f.voicePosition)?.id ?? fallback,
     }))
   }
 
   const handleSave = () => {
     if (!form.firstName.trim() || !form.lastName.trim()) {
-      toast.error('Please provide the member\'s full name.')
+      toast.error("Please provide the member's full name.")
       return
     }
-    const input: MemberInput = {
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      gender: form.gender,
-      voicePosition: form.voicePosition,
-      membershipType: form.membershipType,
-      isActive: form.isActive,
-      dateAdded: form.dateAdded || todayPHT(),
-      positions: form.positions,
-      notes: form.notes.trim() || undefined,
-    }
     if (member) {
+      const input: Partial<MemberInput> = {
+        firstName: form.firstName.trim(),
+        middleName: form.middleName.trim() || undefined,
+        lastName: form.lastName.trim(),
+        gender: form.gender,
+        voicePosition: form.voicePosition,
+        membershipType: form.membershipType,
+      }
+      // isActive, positions, and notes are intentionally left untouched: the
+      // editor has no UI for them, so editing a member must never clear them.
       updateMember(member.id, input)
       toast.success('Member updated.')
     } else {
+      const input: MemberInput = {
+        firstName: form.firstName.trim(),
+        middleName: form.middleName.trim() || undefined,
+        lastName: form.lastName.trim(),
+        gender: form.gender,
+        voicePosition: form.voicePosition,
+        membershipType: form.membershipType,
+        isActive: true,
+        dateAdded: phtInstantISO(),
+      }
       addMember(input)
       toast.success('Member added.')
     }
@@ -172,6 +168,15 @@ export function MemberFormDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
+              <Label htmlFor="middleName">Middle Name</Label>
+              <Input
+                id="middleName"
+                value={form.middleName}
+                onChange={(e) => set('middleName', e.target.value)}
+                placeholder="Middle name or initial"
+              />
+            </div>
+            <div className="grid gap-2">
               <Label>Gender</Label>
               <Select
                 value={form.gender}
@@ -186,97 +191,48 @@ export function MemberFormDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label>Voice Position</Label>
-              <Select
-                value={form.voicePosition}
-                onValueChange={(v) => set('voicePosition', v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {voicePositionsForGender(form.gender, allVoices()).map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="grid gap-2">
-            <Label>Choir Position / Privileges</Label>
-            <div className="grid grid-cols-2 gap-2 rounded-md border p-3">
-              {CHOIR_POSITIONS.map((position) => (
-                <label
-                  key={position.id}
-                  className="flex cursor-pointer items-center gap-2 text-sm"
-                >
-                  <Checkbox
-                    checked={form.positions.includes(position.id)}
-                    onCheckedChange={() => togglePosition(position.id)}
-                  />
-                  <span>{position.label}</span>
-                </label>
-              ))}
-            </div>
+            <Label>Voice Position</Label>
+            <Select
+              value={form.voicePosition}
+              onValueChange={(v) => set('voicePosition', v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {voicePositionsForGender(form.gender, allVoices()).map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Membership</Label>
+            <Select
+              value={form.membershipType}
+              onValueChange={(v) => set('membershipType', v as MembershipType)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MEMBERSHIP_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
-              Positions control which duty roles a member may be assigned in the
-              Choir Suguan. Organista and Assistant Tagapagturo are treated
-              as equivalent.
+              Organista, Tagapagturo, and Assistant Tagapagturo all count as
+              Organists for the Organist Suguan.
             </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Membership Type</Label>
-              <Select
-                value={form.membershipType}
-                onValueChange={(v) => set('membershipType', v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="regular">Regular</SelectItem>
-                  <SelectItem value="provisional">Provisional</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="dateAdded">Date Added</Label>
-              <Input
-                id="dateAdded"
-                type="date"
-                value={form.dateAdded}
-                onChange={(e) => set('dateAdded', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Input
-              id="notes"
-              value={form.notes}
-              onChange={(e) => set('notes', e.target.value)}
-              placeholder="Optional notes"
-            />
-          </div>
-
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div>
-              <Label className="text-sm font-medium">Active member</Label>
-              <p className="text-xs text-muted-foreground">
-                Inactive members cannot be scheduled for Suguan.
-              </p>
-            </div>
-            <Switch
-              checked={form.isActive}
-              onCheckedChange={(v) => set('isActive', v)}
-            />
           </div>
         </div>
         <DialogFooter>

@@ -52,13 +52,14 @@ test('a member CSV export round-trips back into the same members', () => {
     {
       id: 'a',
       firstName: 'Ana',
+      middleName: 'Marie',
       lastName: 'Reyes',
       gender: 'female',
       voicePosition: 'alto',
-      membershipType: 'provisional',
+      membershipType: 'organista',
       isActive: true,
       dateAdded: '2024-03-04',
-      positions: ['organista', 'kalihim-ng-mang-aawit'],
+      positions: ['kalihim-ng-mang-aawit'],
       notes: 'Plays the piano',
     },
     {
@@ -87,13 +88,14 @@ test('a member CSV export round-trips back into the same members', () => {
 
   const ana = candidates[0]
   assert.equal(ana.firstName, 'Ana')
+  assert.equal(ana.middleName, 'Marie')
   assert.equal(ana.lastName, 'Reyes')
   assert.equal(ana.gender, 'female')
   assert.equal(ana.voicePosition, 'alto')
-  assert.equal(ana.membershipType, 'provisional')
+  assert.equal(ana.membershipType, 'organista')
   assert.equal(ana.isActive, true)
   assert.equal(ana.dateAdded, '2024-03-04')
-  assert.deepEqual(ana.positions, ['organista', 'kalihim-ng-mang-aawit'])
+  assert.deepEqual(ana.positions, ['kalihim-ng-mang-aawit', 'organista'])
   assert.equal(ana.notes, 'Plays the piano')
   assert.equal(ana.isTrainee, false)
 
@@ -144,12 +146,26 @@ test('re-importing the same file marks every row as already in the list', () => 
   assert.equal(candidates[0].selected, false)
 })
 
+test('a legacy provisional membership folds into regular on import', () => {
+  const { candidates } = rowsToCandidates(
+    [
+      [...MEMBER_EXPORT_HEADERS],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Provisional', 'Active', '', ''],
+    ],
+    VOICES,
+    [],
+    [],
+  )
+
+  assert.equal(candidates[0].membershipType, 'regular')
+})
+
 test('duplicate rows within the same file are flagged after the first', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['Ana', 'Reyes', 'Female', 'Alto', '—', 'Regular', 'Active', '2024-01-01', ''],
-      ['Ana', 'Reyes', 'Female', 'Soprano 1', '—', 'Regular', 'Active', '2024-01-01', ''],
+      ['Ana', 'Reyes', '', 'Female', 'Alto', '—', 'Regular', 'Active', '2024-01-01', ''],
+      ['Ana', 'Reyes', '', 'Female', 'Soprano 1', '—', 'Regular', 'Active', '2024-01-01', ''],
     ],
     VOICES,
     [],
@@ -165,7 +181,7 @@ test('names are matched ignoring case, accents, and surrounding space', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['  juán ', '  dela cruz  ', 'Male', 'Tenor', '—', 'Regular', 'Active', '', ''],
+      ['  juán ', '  dela cruz  ', '', 'Male', 'Tenor', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     EXISTING,
@@ -179,10 +195,10 @@ test('voice sections resolve by id, full name, and short name', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'soprano-1', '—', 'Regular', 'Active', '', ''],
-      ['B', 'Two', 'Female', 'Soprano 1', '—', 'Regular', 'Active', '', ''],
-      ['C', 'Three', 'Female', 'S1', '—', 'Regular', 'Active', '', ''],
-      ['D', 'Four', 'Male', 'Bass', '—', 'Regular', 'Active', '', ''],
+      ['A', 'One', '', 'Female', 'soprano-1', '—', 'Regular', 'Active', '', ''],
+      ['B', 'Two', '', 'Female', 'Soprano 1', '—', 'Regular', 'Active', '', ''],
+      ['C', 'Three', '', 'Female', 'S1', '—', 'Regular', 'Active', '', ''],
+      ['D', 'Four', '', 'Male', 'Bass', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],
@@ -199,7 +215,7 @@ test('an unknown voice section falls back to the first section of that gender', 
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Male', 'Baritone', '—', 'Regular', 'Active', '', ''],
+      ['A', 'One', '', 'Male', 'Baritone', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],
@@ -213,8 +229,8 @@ test('gender accepts M and F as well as the full words', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'M', 'Tenor', '—', 'Regular', 'Active', '', ''],
-      ['B', 'Two', 'f', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['A', 'One', '', 'M', 'Tenor', '—', 'Regular', 'Active', '', ''],
+      ['B', 'Two', '', 'f', 'Alto', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],
@@ -231,9 +247,9 @@ test('inactive and removed statuses both mark the row inactive', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', '—', 'Regular', 'Inactive', '', ''],
-      ['B', 'Two', 'Female', 'Alto', '—', 'Regular', 'Removed', '', ''],
-      ['C', 'Three', 'Female', 'Alto', '—', 'Regular', '', '', ''],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Inactive', '', ''],
+      ['B', 'Two', '', 'Female', 'Alto', '—', 'Regular', 'Removed', '', ''],
+      ['C', 'Three', '', 'Female', 'Alto', '—', 'Regular', '', '', ''],
     ],
     VOICES,
     [],
@@ -250,8 +266,8 @@ test('a missing date leaves dateAdded undefined so the caller can default to tod
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
-      ['B', 'Two', 'Female', 'Alto', '—', 'Regular', 'Active', 'not a date', ''],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['B', 'Two', '', 'Female', 'Alto', '—', 'Regular', 'Active', 'not a date', ''],
     ],
     VOICES,
     [],
@@ -266,7 +282,7 @@ test('an ISO timestamp is trimmed to its calendar date', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', '—', 'Regular', 'Active', '2024-05-06T12:30:00.000Z', ''],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Active', '2024-05-06T12:30:00.000Z', ''],
     ],
     VOICES,
     [],
@@ -280,7 +296,7 @@ test('the em dash used for empty positions means no positions', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],
@@ -294,7 +310,7 @@ test('short position labels reverse back to their ids', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', 'OIC, Kalihim', 'Regular', 'Active', '', ''],
+      ['A', 'One', '', 'Female', 'Alto', 'OIC, Kalihim', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],
@@ -327,7 +343,7 @@ test('a title row above the headers is skipped', () => {
       ['Exported 2024-06-01'],
       [],
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', '—', 'Regular', 'Active', '2024-01-01', ''],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Active', '2024-01-01', ''],
     ],
     VOICES,
     [],
@@ -370,9 +386,9 @@ test('blank rows are skipped and not counted', () => {
   const { candidates, rowCount } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['A', 'One', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
-      ['', '', '', '', '', '', '', '', ''],
-      ['B', 'Two', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['A', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['', '', '', '', '', '', '', '', '', ''],
+      ['B', 'Two', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],
@@ -387,9 +403,9 @@ test('a row missing a name is skipped entirely', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
-      ['', 'One', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
-      ['B', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
-      ['C', 'Three', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['', 'One', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['B', '', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
+      ['C', 'Three', '', 'Female', 'Alto', '—', 'Regular', 'Active', '', ''],
     ],
     VOICES,
     [],

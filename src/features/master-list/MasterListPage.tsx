@@ -45,6 +45,10 @@ import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
 import type { ChoirPosition, Member } from '@/core/types/member'
 import { CHOIR_POSITIONS, POSITION_LABELS } from '@/core/constants/choirPositions'
+import {
+  MEMBERSHIP_LABELS,
+  MEMBERSHIP_OPTIONS,
+} from '@/core/constants/memberMembership'
 import { exportCSV, exportExcel, membersToRows } from '@/lib/export'
 import {
   EMPTY_DIRECTORY_FILTERS,
@@ -123,7 +127,7 @@ function filterChipValue(
         : undefined
     case 'roles': {
       const count =
-        filters.positions.length + (filters.quick === 'regular' ? 1 : 0)
+        filters.positions.length + (filters.quick !== 'all' ? 1 : 0)
       return count > 0 ? `${count} selected` : undefined
     }
   }
@@ -489,39 +493,44 @@ export function MasterListPage() {
                   className={cn(
                     'h-9 gap-1.5 px-3 text-[0.8125rem] font-normal',
                     (filters.positions.length > 0 ||
-                      filters.quick === 'regular') &&
+                      filters.quick !== 'all') &&
                       'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
                   )}
                 >
-                  {filters.positions.length === 0 &&
-                  filters.quick !== 'regular'
-                    ? 'Choir Positions'
+                  {filters.positions.length === 0 && filters.quick === 'all'
+                    ? 'Membership & Roles'
                     : `${
                         filters.positions.length +
-                        (filters.quick === 'regular' ? 1 : 0)
+                        (filters.quick !== 'all' ? 1 : 0)
                       } Selected`}
                   <ChevronDown className="size-3.5 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-60">
                 <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  Membership
+                </DropdownMenuLabel>
+                {MEMBERSHIP_OPTIONS.map((option) => (
+                  <DropdownMenuCheckboxItem
+                    key={option.value}
+                    checked={filters.quick === option.value}
+                    onSelect={(event) => event.preventDefault()}
+                    onCheckedChange={() =>
+                      setFilter(
+                        'quick',
+                        filters.quick === option.value ? 'all' : option.value,
+                      )
+                    }
+                  >
+                    <span className="flex-1">{option.label}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {stats.membershipCounts.get(option.value) ?? 0}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   Choir Positions
                 </DropdownMenuLabel>
-                <DropdownMenuCheckboxItem
-                  checked={filters.quick === 'regular'}
-                  onSelect={(event) => event.preventDefault()}
-                  onCheckedChange={() =>
-                    setFilter(
-                      'quick',
-                      filters.quick === 'regular' ? 'all' : 'regular',
-                    )
-                  }
-                >
-                  <span className="flex-1">Regular</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {stats.regular}
-                  </span>
-                </DropdownMenuCheckboxItem>
                 {CHOIR_POSITIONS.map((position) => (
                   <DropdownMenuCheckboxItem
                     key={position.id}
@@ -665,7 +674,7 @@ export function MasterListPage() {
             ))}
             {filters.quick !== 'all' && (
               <FilterChip
-                label="Regular"
+                label={(MEMBERSHIP_LABELS as Record<string, string>)[filters.quick] ?? filters.quick}
                 onClear={() => setFilter('quick', 'all')}
               />
             )}

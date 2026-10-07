@@ -17,7 +17,7 @@ export const MOBILE_FILTER_LABEL: Record<MobileFilterSection, string> = {
  * is opened without a particular chip. Both read this so the two can never
  * disagree about which filter comes first. Gender is deliberately absent: the
  * All/Women/Men choir segment owns that filter now. Membership is absent for
- * the same reason: the Regular option lives inside the Roles section.
+ * the same reason: the membership categories live inside the Roles section.
  */
 export const MOBILE_FILTER_SECTIONS: MobileFilterSection[] = [
   'voices',

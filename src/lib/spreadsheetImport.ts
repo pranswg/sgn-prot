@@ -28,6 +28,7 @@ import {
   POSITION_LABELS,
   POSITION_SHORT_LABELS,
 } from '@/core/constants/choirPositions'
+import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { normalizeNameKey, type RosterCandidate } from './rosterImport'
 import { isDateKey } from './phDate'
 
@@ -35,6 +36,7 @@ import { isDateKey } from './phDate'
 export const MEMBER_EXPORT_HEADERS = [
   'First Name',
   'Last Name',
+  'Middle Name',
   'Gender',
   'Voice Position',
   'Positions / Privileges',
@@ -64,6 +66,13 @@ export interface SpreadsheetParseResult {
 /** Header aliases, so hand-edited or older exports still map cleanly. */
 const FIRST_NAME_KEYS = ['firstname', 'first', 'givenname', 'given']
 const LAST_NAME_KEYS = ['lastname', 'last', 'surname', 'familyname', 'family']
+const MIDDLE_NAME_KEYS = [
+  'middlename',
+  'middle',
+  'middleinitial',
+  'middlenameinitial',
+  'mi',
+]
 const COMBINED_NAME_KEYS = ['name', 'fullname', 'membername']
 const GENDER_KEYS = ['gender', 'sex']
 const VOICE_KEYS = ['voiceposition', 'voice', 'section', 'voicesection']
@@ -223,8 +232,24 @@ function resolvePositions(value: string): ChoirPosition[] {
   return found
 }
 
+/**
+ * Reverses the `Membership Type` export column, which writes the full label
+ * ("Organista", "Tagapagturo ng Awit", ...). Legacy exports wrote the raw
+ * `provisional` value; that and anything unrecognised fold into Regular since
+ * the store no longer has a provisional membership.
+ */
 function resolveMembershipType(value: string): MembershipType {
-  return value.toLowerCase().startsWith('prov') ? 'provisional' : 'regular'
+  const key = value.toLowerCase().replace(/[^a-z]/g, '')
+  if (!key) return 'regular'
+  const exact = MEMBERSHIP_OPTIONS.find(
+    (o) => o.value.replace(/-/g, '') === key,
+  )
+  if (exact) return exact.value
+  const byLabel = MEMBERSHIP_OPTIONS.find((o) =>
+    o.label.toLowerCase().replace(/[^a-z]/g, '').startsWith(key),
+  )
+  if (byLabel) return byLabel.value
+  return 'regular'
 }
 
 /**
@@ -346,6 +371,9 @@ export function rowsToCandidates(
       section: sectionLabelFor(!isMemberSheet, voices, voicePosition),
       isTrainee: !isMemberSheet,
       firstName: resolvedFirst,
+      middleName: isMemberSheet
+        ? pick(row, headers, MIDDLE_NAME_KEYS) || undefined
+        : undefined,
       lastName: resolvedLast,
       // A trainee row's Status can be "promoted", which implies male/female is
       // unknown; default to female as the roster PDF path already does.

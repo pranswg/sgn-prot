@@ -18,6 +18,7 @@ import {
 } from '@/lib/suguanUtils'
 import { formatDateKeyNumeric, weekdayOf } from '@/lib/phDate'
 import { fullName } from '@/lib/format'
+import { memberIsOrganist } from '@/core/constants/memberMembership'
 import { useMemberStore } from '@/store/memberStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
 import type { OrganistaSuguanService } from '@/core/types/organistaSuguan'
@@ -156,10 +157,7 @@ function MemberCombobox({
       .filter(
         (member) =>
           member.isActive &&
-          member.positions.some(
-            (position) =>
-              position === 'organista' || position === 'assistant-tagapagturo',
-          ),
+          memberIsOrganist(member),
       )
       .map((member) => fullName(member.firstName, member.lastName))
       .filter((name) => name.trim().toLowerCase() !== query)

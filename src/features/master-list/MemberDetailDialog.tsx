@@ -9,13 +9,15 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import type { Member } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { positionSummary } from '@/core/constants/choirPositions'
 import { useSettingsStore } from '@/store/settingsStore'
-import { formatDate } from '@/lib/format'
+import {
+  MEMBERSHIP_LABELS,
+  memberEffectivePositions,
+} from '@/core/constants/memberMembership'
 
 interface MemberDetailDialogProps {
   member: Member | null
@@ -73,19 +75,12 @@ export function MemberDetailDialog({
         <div className="grid gap-3 py-2">
           <Row label="Gender" value={member.gender[0].toUpperCase() + member.gender.slice(1)} />
           <Row label="Voice Position" value={getVoiceName(member.voicePosition, voices)} />
+          <Row label="Membership" value={MEMBERSHIP_LABELS[member.membershipType]} />
           <Row
-            label="Membership Type"
-            value={member.membershipType[0].toUpperCase() + member.membershipType.slice(1)}
+            label="Roles"
+            value={positionSummary(memberEffectivePositions(member))}
           />
-          <Row label="Positions / Privileges" value={positionSummary(member.positions)} />
           <Row label="Status" value={member.isActive ? 'Active' : 'Inactive'} />
-          <Row label="Date Added" value={formatDate(member.dateAdded)} />
-          {member.notes && (
-            <>
-              <Separator />
-              <p className="text-sm text-muted-foreground">{member.notes}</p>
-            </>
-          )}
         </div>
         <DialogFooter className="flex !justify-between sm:justify-between">
           <div className="flex gap-2">

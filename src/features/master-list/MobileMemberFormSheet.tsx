@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Check, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -18,13 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
-import type { ChoirPosition, Member, MemberInput } from '@/core/types/member'
+import type { Member, MemberInput, MembershipType } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { cn } from '@/lib/utils'
-import { todayPHT } from '@/lib/phDate'
+import { phtInstantISO } from '@/lib/phDate'
 
 interface MobileMemberFormSheetProps {
   open: boolean
@@ -35,33 +35,29 @@ interface MobileMemberFormSheetProps {
 
 interface FormState {
   firstName: string
+  middleName: string
   lastName: string
   gender: 'male' | 'female'
   voicePosition: string
-  membershipType: 'regular' | 'provisional'
-  isActive: boolean
-  dateAdded: string
-  positions: ChoirPosition[]
-  notes: string
+  membershipType: MembershipType
 }
 
 function blankForm(): FormState {
   return {
     firstName: '',
+    middleName: '',
     lastName: '',
     gender: 'female',
     voicePosition: 'soprano-1',
     membershipType: 'regular',
-    isActive: true,
-    dateAdded: todayPHT(),
-    positions: [],
-    notes: '',
   }
 }
 
 /**
- * Mobile-first member form: stacked sections, large touch targets, checkbox
- * cards for choir positions, and a sticky Save bar above the safe area.
+ * Mobile-first member form: stacked sections, large touch targets, a
+ * membership card list, and a sticky Save bar above the safe area. Every grid
+ * child is `min-w-0` and full-width so long strings cannot push the sheet past
+ * the phone screen's edge.
  */
 export function MobileMemberFormSheet({
   open,
@@ -84,14 +80,11 @@ export function MobileMemberFormSheet({
         member
           ? {
               firstName: member.firstName,
+              middleName: member.middleName ?? '',
               lastName: member.lastName,
               gender: member.gender,
               voicePosition: member.voicePosition,
               membershipType: member.membershipType,
-              isActive: member.isActive,
-              dateAdded: member.dateAdded,
-              positions: member.positions ?? [],
-              notes: member.notes ?? '',
             }
           : blankForm(),
       )
@@ -100,14 +93,6 @@ export function MobileMemberFormSheet({
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
-
-  const togglePosition = (position: ChoirPosition) =>
-    setForm((f) => ({
-      ...f,
-      positions: f.positions.includes(position)
-        ? f.positions.filter((p) => p !== position)
-        : [...f.positions, position],
-    }))
 
   const handleGenderChange = (gender: 'male' | 'female') => {
     const options = voicePositionsForGender(gender, allVoices())
@@ -125,21 +110,30 @@ export function MobileMemberFormSheet({
       toast.error("Please provide the member's full name.")
       return
     }
-    const input: MemberInput = {
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      gender: form.gender,
-      voicePosition: form.voicePosition,
-      membershipType: form.membershipType,
-      isActive: form.isActive,
-      dateAdded: form.dateAdded || todayPHT(),
-      positions: form.positions,
-      notes: form.notes.trim() || undefined,
-    }
     if (member) {
+      const input: Partial<MemberInput> = {
+        firstName: form.firstName.trim(),
+        middleName: form.middleName.trim() || undefined,
+        lastName: form.lastName.trim(),
+        gender: form.gender,
+        voicePosition: form.voicePosition,
+        membershipType: form.membershipType,
+      }
+      // isActive, positions, and notes are intentionally left untouched: the
+      // editor has no UI for them, so editing a member must never clear them.
       updateMember(member.id, input)
       toast.success('Member updated.')
     } else {
+      const input: MemberInput = {
+        firstName: form.firstName.trim(),
+        middleName: form.middleName.trim() || undefined,
+        lastName: form.lastName.trim(),
+        gender: form.gender,
+        voicePosition: form.voicePosition,
+        membershipType: form.membershipType,
+        isActive: true,
+        dateAdded: phtInstantISO(),
+      }
       addMember(input)
       toast.success('Member added.')
     }
@@ -175,32 +169,42 @@ export function MobileMemberFormSheet({
           </Button>
         </SheetHeader>
 
-        <div className="-mx-4 flex-1 overflow-y-auto px-4 py-4">
-          <div className="flex flex-col gap-5">
+        <div className="-mx-4 min-w-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="flex min-w-0 flex-col gap-5">
             <FormSection title="Basic Information">
-              <div className="flex flex-col gap-3">
-                <div className="grid gap-1.5">
+              <div className="flex min-w-0 flex-col gap-3">
+                <div className="grid w-full gap-1.5">
                   <Label htmlFor="m-first">First Name</Label>
                   <Input
                     id="m-first"
                     value={form.firstName}
                     onChange={(e) => set('firstName', e.target.value)}
                     placeholder="First name"
-                    className="h-11"
+                    className="h-11 w-full"
                   />
                 </div>
-                <div className="grid gap-1.5">
+                <div className="grid w-full gap-1.5">
                   <Label htmlFor="m-last">Last Name</Label>
                   <Input
                     id="m-last"
                     value={form.lastName}
                     onChange={(e) => set('lastName', e.target.value)}
                     placeholder="Last name"
-                    className="h-11"
+                    className="h-11 w-full"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
+                <div className="grid w-full gap-1.5">
+                  <Label htmlFor="m-middle">Middle Name</Label>
+                  <Input
+                    id="m-middle"
+                    value={form.middleName}
+                    onChange={(e) => set('middleName', e.target.value)}
+                    placeholder="Middle name or initial"
+                    className="h-11 w-full"
+                  />
+                </div>
+                <div className="grid w-full grid-cols-2 gap-3">
+                  <div className="grid min-w-0 gap-1.5">
                     <Label>Gender</Label>
                     <Select
                       value={form.gender}
@@ -217,7 +221,7 @@ export function MobileMemberFormSheet({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid min-w-0 gap-1.5">
                     <Label>Voice Position</Label>
                     <Select
                       value={form.voicePosition}
@@ -242,14 +246,9 @@ export function MobileMemberFormSheet({
             </FormSection>
 
             <FormSection title="Membership">
-              <ul className="flex flex-col gap-2">
-                {(
-                  [
-                    { value: 'regular', label: 'Regular Member' },
-                    { value: 'provisional', label: 'Trainee' },
-                  ] as const
-                ).map((option) => (
-                  <li key={option.value}>
+              <ul className="flex min-w-0 flex-col gap-2">
+                {MEMBERSHIP_OPTIONS.map((option) => (
+                  <li key={option.value} className="min-w-0">
                     <button
                       type="button"
                       role="radio"
@@ -264,7 +263,7 @@ export function MobileMemberFormSheet({
                     >
                       <span
                         className={cn(
-                          'flex size-[1.125rem] shrink-0 items-center justify-center-full rounded-full border-2',
+                          'flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border-2',
                           form.membershipType === option.value
                             ? 'border-white bg-white'
                             : 'border-border',
@@ -274,120 +273,15 @@ export function MobileMemberFormSheet({
                           <span className="size-1.5 rounded-full bg-brand-navy" />
                         )}
                       </span>
-                      {option.label}
+                      <span className="min-w-0 flex-1">{option.label}</span>
                     </button>
                   </li>
                 ))}
               </ul>
-            </FormSection>
-
-            <FormSection title="Status">
-              <div
-                role="radiogroup"
-                aria-label="Member status"
-                className="grid grid-cols-2 gap-2"
-              >
-                {(
-                  [
-                    { value: true, label: 'Active' },
-                    { value: false, label: 'Inactive' },
-                  ] as const
-                ).map((option) => (
-                  <button
-                    key={String(option.value)}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.isActive === option.value}
-                    onClick={() => set('isActive', option.value)}
-                    className={cn(
-                      'flex min-h-12 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors',
-                      form.isActive === option.value
-                        ? option.value
-                          ? 'border-emerald-600/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                          : 'border-red-600/40 bg-red-500/10 text-red-700 dark:text-red-300'
-                        : 'border-border/70 bg-background text-foreground active:bg-muted',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        option.value ? 'bg-emerald-500' : 'bg-red-500',
-                      )}
-                    />
-                    {option.label}
-                  </button>
-                ))}
-              </div>
               <p className="text-xs text-muted-foreground">
-                Inactive members cannot be scheduled.
+                Organista, Tagapagturo, and Assistant Tagapagturo all count as
+                Organists for the Organist Suguan.
               </p>
-            </FormSection>
-
-            <FormSection title="Privileges">
-              <ul className="flex flex-col gap-2">
-                {CHOIR_POSITIONS.map((position) => {
-                  const checked = form.positions.includes(position.id)
-                  return (
-                    <li key={position.id}>
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={checked}
-                        onClick={() => togglePosition(position.id)}
-                        className={cn(
-                          'flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 text-left text-sm transition-colors',
-                          checked
-                            ? 'border-brand-teal/40 bg-brand-teal-soft text-brand-teal'
-                            : 'border-border/70 bg-background active:bg-muted',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'flex size-[1.125rem] shrink-0 items-center justify-center rounded-[0.3125rem] border transition-colors',
-                            checked
-                              ? 'border-brand-teal bg-brand-teal text-white'
-                              : 'border-border bg-background',
-                          )}
-                        >
-                          {checked && (
-                            <Check className="size-3" strokeWidth={3} />
-                          )}
-                        </span>
-                        {position.label}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Positions control which duty roles a member may be assigned in
-                the Choir Suguan.
-              </p>
-            </FormSection>
-
-            <FormSection title="Additional">
-              <div className="flex flex-col gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="m-date">Date Added</Label>
-                  <Input
-                    id="m-date"
-                    type="date"
-                    value={form.dateAdded}
-                    onChange={(e) => set('dateAdded', e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="m-notes">Notes</Label>
-                  <Input
-                    id="m-notes"
-                    value={form.notes}
-                    onChange={(e) => set('notes', e.target.value)}
-                    placeholder="Optional notes"
-                    className="h-11"
-                  />
-                </div>
-              </div>
             </FormSection>
           </div>
         </div>
@@ -417,7 +311,7 @@ function FormSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-2.5">
+    <section className="flex min-w-0 flex-col gap-2.5">
       <h3 className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {title}
       </h3>

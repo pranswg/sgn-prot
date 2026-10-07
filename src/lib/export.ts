@@ -2,6 +2,7 @@ import Papa from 'papaparse'
 import type { Member, Trainee } from '@/core/types/member'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { positionSummary } from '@/core/constants/choirPositions'
+import { MEMBERSHIP_LABELS, memberEffectivePositions } from '@/core/constants/memberMembership'
 import { useSettingsStore } from '@/store/settingsStore'
 
 function voiceName(id: string): string {
@@ -11,6 +12,7 @@ function voiceName(id: string): string {
 export interface MemberExportRow {
   'First Name': string
   'Last Name': string
+  'Middle Name': string
   Gender: string
   'Voice Position': string
   'Positions / Privileges': string
@@ -24,10 +26,11 @@ export function membersToRows(members: Member[]): MemberExportRow[] {
   return members.map((m) => ({
     'First Name': m.firstName,
     'Last Name': m.lastName,
+    'Middle Name': m.middleName ?? '',
     Gender: m.gender,
     'Voice Position': voiceName(m.voicePosition),
-    'Positions / Privileges': positionSummary(m.positions),
-    'Membership Type': m.membershipType,
+    'Positions / Privileges': positionSummary(memberEffectivePositions(m)),
+    'Membership Type': MEMBERSHIP_LABELS[m.membershipType],
     Status: m.isActive ? 'Active' : 'Inactive',
     'Date Added': m.dateAdded,
     Notes: m.notes ?? '',

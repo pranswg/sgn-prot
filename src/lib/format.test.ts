@@ -9,10 +9,20 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { formatDate, formatDateLong, formatTime, fullName } from './format.ts'
+import { formatAddedDate, formatDate, formatDateLong, formatTime, fullName } from './format.ts'
 
 test('formatDate renders a valid key as a short date', () => {
   assert.equal(formatDate('2026-09-30'), 'Sep 30, 2026')
+})
+
+test('formatAddedDate renders a PHT instant or a plain key as a short date', () => {
+  assert.equal(formatAddedDate('2026-09-30T19:04:00+08:00'), 'Sep 30, 2026')
+  assert.equal(formatAddedDate('2026-09-30'), 'Sep 30, 2026')
+})
+
+test('formatAddedDate passes through an unusable value', () => {
+  assert.equal(formatAddedDate(''), '—')
+  assert.equal(formatAddedDate('garbage'), 'garbage')
 })
 
 test('formatDate passes through a value that is not a date key', () => {

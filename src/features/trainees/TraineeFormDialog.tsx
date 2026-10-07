@@ -25,7 +25,7 @@ import {
   UNASSIGNED_VOICE_ID,
 } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
-import { todayPHT } from '@/lib/phDate'
+import { phtInstantISO } from '@/lib/phDate'
 
 interface TraineeFormDialogProps {
   open: boolean
@@ -48,7 +48,6 @@ export function TraineeFormDialog({
     gender: 'female' as 'male' | 'female',
     voicePosition: 'soprano-1',
     status: 'active' as 'active' | 'inactive',
-    dateAdded: todayPHT(),
     notes: '',
   })
 
@@ -62,7 +61,6 @@ export function TraineeFormDialog({
               gender: trainee.gender,
               voicePosition: trainee.voicePosition,
               status: trainee.status === 'active' ? 'active' : 'inactive',
-              dateAdded: trainee.dateAdded,
               notes: trainee.notes ?? '',
             }
           : {
@@ -71,7 +69,6 @@ export function TraineeFormDialog({
               gender: 'female',
               voicePosition: 'soprano-1',
               status: 'active',
-              dateAdded: todayPHT(),
               notes: '',
             },
       )
@@ -102,7 +99,9 @@ export function TraineeFormDialog({
       gender: form.gender,
       voicePosition: form.voicePosition,
       status: form.status,
-      dateAdded: form.dateAdded || todayPHT(),
+      // Matches members: dateAdded is auto-stamped (a PHT instant with time)
+      // on add and preserved untouched on edit, never entered by the user.
+      dateAdded: trainee ? trainee.dateAdded : phtInstantISO(),
       notes: form.notes.trim() || undefined,
     }
     if (trainee) {
@@ -183,32 +182,22 @@ export function TraineeFormDialog({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid min-w-0 gap-2">
-              <Label>Status</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) =>
-                  setForm((f) => ({ ...f, status: v as 'active' | 'inactive' }))
-                }
-              >
-                <SelectTrigger className="w-full min-w-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid min-w-0 gap-2">
-              <Label>Date Added</Label>
-              <Input
-                type="date"
-                value={form.dateAdded}
-                onChange={(e) => setForm((f) => ({ ...f, dateAdded: e.target.value }))}
-              />
-            </div>
+          <div className="grid min-w-0 gap-2">
+            <Label>Status</Label>
+            <Select
+              value={form.status}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, status: v as 'active' | 'inactive' }))
+              }
+            >
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid min-w-0 gap-2">
             <Label>Notes</Label>

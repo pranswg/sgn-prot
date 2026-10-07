@@ -44,7 +44,7 @@ import { useMemberStore } from '@/store/memberStore'
 import type { Trainee } from '@/core/types/member'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
-import { formatDate } from '@/lib/format'
+import { formatAddedDate } from '@/lib/format'
 import {
   GenderBadge,
   TraineeStatusBadge,
@@ -425,7 +425,7 @@ export function TraineePage() {
                           <TraineeStatusBadge status={t.status} />
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          {formatDate(t.dateAdded)}
+                          {formatAddedDate(t.dateAdded)}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">

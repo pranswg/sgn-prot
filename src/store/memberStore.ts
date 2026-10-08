@@ -125,6 +125,8 @@ export const useMemberStore = create<MemberState>()(
         const member: Member = {
           id: nanoid(),
           firstName: trainee.firstName,
+          middleName: trainee.middleName,
+          suffix: trainee.suffix,
           lastName: trainee.lastName,
           gender: trainee.gender,
           voicePosition: trainee.voicePosition,

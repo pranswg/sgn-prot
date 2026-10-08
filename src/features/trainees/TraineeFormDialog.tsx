@@ -20,17 +20,44 @@ import {
 } from '@/components/ui/select'
 import type { Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
-import {
-  voicePositionsForGender,
-  UNASSIGNED_VOICE_ID,
-} from '@/core/constants/voicePositions'
+import { voicePositionsForGender, UNASSIGNED_VOICE_ID } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
-import { phtInstantISO } from '@/lib/phDate'
+import { isDateKey, toDateKeyFromInstant, todayPHT } from '@/lib/phDate'
 
 interface TraineeFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   trainee?: Trainee | null
+}
+
+interface TraineeFormState {
+  firstName: string
+  middleName: string
+  suffix: string
+  lastName: string
+  gender: 'male' | 'female'
+  voicePosition: string
+  trainingStartDate: string
+  status: 'active' | 'inactive'
+}
+
+const emptyForm = (): TraineeFormState => ({
+  firstName: '',
+  middleName: '',
+  suffix: '',
+  lastName: '',
+  gender: 'female',
+  voicePosition: UNASSIGNED_VOICE_ID,
+  trainingStartDate: todayPHT(),
+  status: 'active',
+})
+
+/** A stored `dateAdded` (a PHT instant or a plain date key) back to a date key. */
+function storedDateKey(raw: string): string {
+  if (!raw) return todayPHT()
+  if (isDateKey(raw)) return raw
+  const key = toDateKeyFromInstant(raw)
+  return isDateKey(key) ? key : todayPHT()
 }
 
 export function TraineeFormDialog({
@@ -42,14 +69,7 @@ export function TraineeFormDialog({
   const updateTrainee = useMemberStore((s) => s.updateTrainee)
   const allVoices = useSettingsStore((s) => s.allVoices)
 
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    gender: 'female' as 'male' | 'female',
-    voicePosition: 'soprano-1',
-    status: 'active' as 'active' | 'inactive',
-    notes: '',
-  })
+  const [form, setForm] = useState<TraineeFormState>(emptyForm)
 
   useEffect(() => {
     if (open) {
@@ -57,27 +77,30 @@ export function TraineeFormDialog({
         trainee
           ? {
               firstName: trainee.firstName,
+              middleName: trainee.middleName ?? '',
+              suffix: trainee.suffix ?? '',
               lastName: trainee.lastName,
               gender: trainee.gender,
               voicePosition: trainee.voicePosition,
+              trainingStartDate: storedDateKey(trainee.dateAdded),
               status: trainee.status === 'active' ? 'active' : 'inactive',
-              notes: trainee.notes ?? '',
             }
-          : {
-              firstName: '',
-              lastName: '',
-              gender: 'female',
-              voicePosition: 'soprano-1',
-              status: 'active',
-              notes: '',
-            },
+          : emptyForm(),
       )
     }
   }, [open, trainee])
 
+  const set = <K extends keyof TraineeFormState>(
+    field: K,
+    value: TraineeFormState[K],
+  ) => {
+    setForm((f) => ({ ...f, [field]: value }))
+  }
+
   const handleGenderChange = (gender: 'male' | 'female') => {
     const voices = voicePositionsForGender(gender, allVoices())
     const fallback = voices.length > 0 ? voices[0].id : ''
+    set('gender', gender)
     setForm((f) => ({
       ...f,
       gender,
@@ -90,19 +113,24 @@ export function TraineeFormDialog({
 
   const handleSave = () => {
     if (!form.firstName.trim() || !form.lastName.trim()) {
-      toast.error('Please provide the trainee\'s full name.')
+      toast.error("Please provide the trainee's full name.")
+      return
+    }
+    if (!form.trainingStartDate) {
+      toast.error("Please provide the trainee's training start date.")
       return
     }
     const input: TraineeInput = {
       firstName: form.firstName.trim(),
+      middleName: form.middleName.trim() || undefined,
+      suffix: form.suffix.trim() || undefined,
       lastName: form.lastName.trim(),
       gender: form.gender,
       voicePosition: form.voicePosition,
       status: form.status,
-      // Matches members: dateAdded is auto-stamped (a PHT instant with time)
-      // on add and preserved untouched on edit, never entered by the user.
-      dateAdded: trainee ? trainee.dateAdded : phtInstantISO(),
-      notes: form.notes.trim() || undefined,
+      dateAdded: form.trainingStartDate,
+      // Notes are preserved untouched by this editor; a trainee has no notes UI.
+      ...(trainee?.notes ? { notes: trainee.notes } : {}),
     }
     if (trainee) {
       updateTrainee(trainee.id, input)
@@ -120,56 +148,90 @@ export function TraineeFormDialog({
         <DialogHeader>
           <DialogTitle>{trainee ? 'Edit Trainee' : 'Add Trainee'}</DialogTitle>
           <DialogDescription>
-            Manage a prospective choir member's record.
+            {trainee
+              ? `Update the information for ${trainee.firstName} ${trainee.lastName}.`
+              : 'Add a new trainee member for choir training.'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
+          <p className="text-sm font-medium text-foreground">Basic Information</p>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid min-w-0 gap-2">
-              <Label htmlFor="firstName">First Name</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="t-firstName">
+                First Name <span className="text-muted-foreground">(Required)</span>
+              </Label>
               <Input
-                id="firstName"
+                id="t-firstName"
                 value={form.firstName}
-                onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+                onChange={(e) => set('firstName', e.target.value)}
                 placeholder="First name"
               />
             </div>
-            <div className="grid min-w-0 gap-2">
-              <Label htmlFor="lastName">Last Name</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="t-lastName">
+                Last Name <span className="text-muted-foreground">(Required)</span>
+              </Label>
               <Input
-                id="lastName"
+                id="t-lastName"
                 value={form.lastName}
-                onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+                onChange={(e) => set('lastName', e.target.value)}
                 placeholder="Last name"
               />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid min-w-0 gap-2">
+            <div className="grid gap-2">
+              <Label htmlFor="t-middleName">
+                Middle Name <span className="text-muted-foreground">(Optional)</span>
+              </Label>
+              <Input
+                id="t-middleName"
+                value={form.middleName}
+                onChange={(e) => set('middleName', e.target.value)}
+                placeholder="Middle name or initial"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="t-suffix">
+                Suffix <span className="text-muted-foreground">(Optional)</span>
+              </Label>
+              <Input
+                id="t-suffix"
+                value={form.suffix}
+                onChange={(e) => set('suffix', e.target.value)}
+                placeholder="e.g. Jr., Sr., III"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
               <Label>Gender</Label>
               <Select
                 value={form.gender}
                 onValueChange={(v) => handleGenderChange(v as 'male' | 'female')}
               >
-                <SelectTrigger className="w-full min-w-0">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
+                <SelectContent>
                   <SelectItem value="female">Female</SelectItem>
                   <SelectItem value="male">Male</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid min-w-0 gap-2">
-              <Label>Target Voice Position</Label>
+            <div className="grid gap-2">
+              <Label>Voice Position</Label>
               <Select
                 value={form.voicePosition}
-                onValueChange={(v) => setForm((f) => ({ ...f, voicePosition: v }))}
+                onValueChange={(v) => set('voicePosition', v)}
               >
-                <SelectTrigger className="w-full min-w-0">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
+                <SelectContent>
                   <SelectItem value={UNASSIGNED_VOICE_ID}>
                     No voice assigned yet
                   </SelectItem>
@@ -182,30 +244,40 @@ export function TraineeFormDialog({
               </Select>
             </div>
           </div>
-          <div className="grid min-w-0 gap-2">
-            <Label>Status</Label>
-            <Select
-              value={form.status}
-              onValueChange={(v) =>
-                setForm((f) => ({ ...f, status: v as 'active' | 'inactive' }))
-              }
-            >
-              <SelectTrigger className="w-full min-w-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="start" className="max-w-[min(calc(100vw-3rem),16rem)]">
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid min-w-0 gap-2">
-            <Label>Notes</Label>
-            <Input
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              placeholder="Optional notes"
-            />
+
+          <p className="mt-1 text-sm font-medium text-foreground">
+            Training Information
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="t-trainingStartDate">Training Start Date</Label>
+              <Input
+                id="t-trainingStartDate"
+                type="date"
+                value={form.trainingStartDate}
+                onChange={(e) => set('trainingStartDate', e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Status</Label>
+              <Select
+                value={form.status}
+                onValueChange={(v) => set('status', v as 'active' | 'inactive')}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Active is currently undergoing training; Inactive is no longer
+                participating.
+              </p>
+            </div>
           </div>
         </div>
         <DialogFooter>

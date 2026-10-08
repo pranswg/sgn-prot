@@ -197,6 +197,13 @@ export async function exportMasterListPdf(
         didParseCell: (data) => {
           if (data.section === 'head' && data.row.index === 0) {
             data.cell.styles.fontSize = 11
+            data.cell.styles.fillColor = [242, 242, 242]
+          }
+          if (data.section === 'body' && data.column.index === 3) {
+            data.cell.styles.textColor =
+              data.cell.text[0] === 'Active'
+                ? [22, 101, 52]
+                : [185, 28, 28]
           }
         },
         didDrawPage: (data) => {

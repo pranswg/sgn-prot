@@ -51,11 +51,17 @@ import {
   VoiceBadge,
 } from '@/components/StatusBadges'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { TraineeFormDialog } from './TraineeFormDialog'
+import { TraineeFormSheet } from './TraineeFormSheet'
 
 /** Matches the Master List table header styling. */
 const headClass =
   'h-11 bg-background text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
+
+/** Full display name including optional middle name and suffix. */
+const traineeName = (t: Trainee) =>
+  [t.firstName, t.middleName, t.lastName, t.suffix].filter(Boolean).join(' ')
 
 /** Same choir segment the Master List uses, on both breakpoints. */
 const CHOIR_SEGMENTS = [
@@ -65,6 +71,7 @@ const CHOIR_SEGMENTS = [
 ] as const
 
 export function TraineePage() {
+  const isMobile = useIsMobile()
   const trainees = useMemberStore((s) => s.trainees)
   const promoteTrainee = useMemberStore((s) => s.promoteTrainee)
   const removeTrainee = useMemberStore((s) => s.removeTrainee)
@@ -146,7 +153,10 @@ export function TraineePage() {
         description="Manage prospective choir members. Active trainees are not eligible for Suguan assignments."
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-5">
+      {/* Heading + Add Trainee, to the right of the list title. Rendered
+          under the filter cards on mobile (order-2), above them on desktop. */}
+      <div className="order-2 flex items-center justify-between gap-3 md:order-1">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-foreground">
             Trainee List
@@ -160,7 +170,7 @@ export function TraineePage() {
           </p>
         </div>
         <Button
-          className="w-full sm:w-auto"
+          className="shrink-0"
           onClick={() => {
             setEditing(null)
             setFormOpen(true)
@@ -176,7 +186,7 @@ export function TraineePage() {
           matches the h-14 mobile bar Layout renders on this page. */}
       <div
         className={cn(
-          'sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5',
+          'order-1 md:order-2 sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5',
           'md:top-14 md:mx-0 md:gap-3 md:rounded-xl md:border md:px-3 md:py-3 md:bg-card',
         )}
       >
@@ -277,6 +287,7 @@ export function TraineePage() {
           ))}
         </div>
       </div>
+      </div>
 
       {/* Trainee table, matching the Master List layout. */}
       <section className="flex flex-col gap-3">
@@ -300,7 +311,7 @@ export function TraineePage() {
                         {index + 1}
                       </span>
                       <span className="truncate text-sm font-semibold tracking-tight text-foreground">
-                        {t.firstName} {t.lastName}
+                        {traineeName(t)}
                       </span>
                     </p>
                     <p className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -412,7 +423,7 @@ export function TraineePage() {
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">
-                            {t.firstName} {t.lastName}
+                            {traineeName(t)}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -475,11 +486,19 @@ export function TraineePage() {
         </p>
       )}
 
-      <TraineeFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        trainee={editing}
-      />
+      {isMobile ? (
+        <TraineeFormSheet
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          trainee={editing}
+        />
+      ) : (
+        <TraineeFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          trainee={editing}
+        />
+      )}
 
       <AlertDialog open={!!promoteTarget} onOpenChange={(o) => !o && setPromoteTarget(null)}>
         <AlertDialogContent>

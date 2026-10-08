@@ -39,6 +39,8 @@ export interface Member {
 export interface Trainee {
   id: string
   firstName: string
+  middleName?: string
+  suffix?: string
   lastName: string
   gender: Gender
   voicePosition: string
@@ -65,6 +67,8 @@ export interface MemberInput {
 
 export interface TraineeInput {
   firstName: string
+  middleName?: string
+  suffix?: string
   lastName: string
   gender: Gender
   voicePosition: string

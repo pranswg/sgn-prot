@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
-import { ArrowDown, ArrowUp, CalendarDays, Check, ChevronDown, Eye, FileDown, GripVertical, Music4, PenLine, Plus, Save, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarDays, Copy, Eye, FileDown, FileText, GripVertical, Music4, Pencil, Piano, Plus, Save, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { reorderList } from '@/lib/reorderList'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { toast } from 'sonner'
 import { DisclosureButton, DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import type { SuguanDocFormat } from '@/core/types/suguan'
@@ -20,10 +19,19 @@ import {
 } from '@/lib/suguanUtils'
 import { formatDateKeyNumeric, weekdayOf } from '@/lib/phDate'
 import { fullName } from '@/lib/format'
-import { memberIsOrganist } from '@/core/constants/memberMembership'
 import { useMemberStore } from '@/store/memberStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
+import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import type { OrganistaSuguanService } from '@/core/types/organistaSuguan'
+import { MemberPicker } from './memberPicker'
+import {
+  SchedulePicker,
+  type SelectedWorshipSchedule,
+} from './schedulePicker'
+import {
+  createServiceFromSchedule,
+  servicesFromCategories,
+} from './organistaSuguanService'
 import segoeScriptUrl from '@/assets/fonts/SegoeScript.ttf'
 
 let segoeScriptBase64: string | null = null
@@ -41,198 +49,11 @@ import { organistaDateLabel } from './organistaDateLabel'
 
 type OrganistaService = OrganistaSuguanService
 
-const createService = (heading: string): OrganistaService => ({
-  id: nanoid(),
-  heading,
-  organist: '',
-  reserve: '',
-})
-
-const defaultServices = (): OrganistaService[] => [
-  createService('Wednesday 7:00 pm'),
-  createService('Thursday 6:00 am'),
-  createService('Thursday 7:00 pm'),
-  createService('Saturday 6:00 pm'),
-  createService('Sunday 6:00 am'),
-  createService('PNK Sunday 8:00 am'),
-  createService('Sunday 10:00 am'),
-]
-
 const WEEKDAY_LABELS: Record<number, string> = {
   0: 'LINGGO',
   3: 'MIYERKULES',
   4: 'HUWEBES',
   6: 'SABADO',
-}
-
-/**
- * A name field that stays free-text but offers a dropdown that looks exactly
- * like the Special Duties member `Select` in step 3 of the Suguan maker, with
- * these additions: only Master List members holding the Organista (or ATPA
- * / Assistant Tagapagturo) position are offered, the list filters as the user
- * types, the pinned N/A entry stores the literal "N/A" so it shows in the
- * field and on the printed sheet (it no longer clears), and names in
- * `exclude` are hidden so the same person cannot be picked for both halves of
- * a service at once.
- *
- * The popover is driven manually (`PopoverAnchor` + `open` state) instead of
- * through `PopoverTrigger`, because a trigger toggles closed on the very click
- * that focuses the input, making the hybrid box feel read-only. The dropdown
- * only opens below the field, never above.
- */
-function MemberCombobox({
-  id,
-  value,
-  onChange,
-  exclude,
-  placeholder = 'Type a name or pick an Organista / ATPA member',
-}: {
-  id: string
-  value: string
-  onChange: (name: string) => void
-  exclude: string[]
-  placeholder?: string
-}) {
-  const members = useMemberStore((state) => state.members)
-  const [open, setOpen] = useState(false)
-  const [contentWidth, setContentWidth] = useState(0)
-  const anchorRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const openCombobox = () => {
-    setContentWidth(anchorRef.current?.offsetWidth ?? 0)
-    setOpen(true)
-  }
-
-  // Focuses the field so a name outside the Master List can be typed, with the
-  // existing text highlighted so typing replaces it rather than appending.
-  const focusTyping = () => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }
-
-  const currentKey = value.trim().toLowerCase()
-  const isNA = currentKey === 'n/a'
-
-  const options = useMemo(() => {
-    const query = isNA ? '' : currentKey
-    const taken = new Set(exclude.map((name) => name.trim().toLowerCase()))
-    return members
-      .filter(
-        (member) =>
-          member.isActive &&
-          memberIsOrganist(member),
-      )
-      .map((member) => fullName(member.firstName, member.lastName))
-      .filter((name) => name.trim().toLowerCase() !== query)
-      .filter((name) => !taken.has(name.trim().toLowerCase()))
-      .filter((name) => (query ? name.toLowerCase().includes(query) : true))
-      .sort((a, b) => a.localeCompare(b))
-  }, [members, currentKey, isNA, exclude])
-
-  // Mirrors the `SelectItem` styling in the Special Duties panel (step 3).
-  const itemClasses =
-    'relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm select-none hover:bg-accent hover:text-accent-foreground'
-
-  const selectName = (name: string) => {
-    onChange(name)
-    setOpen(false)
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverAnchor asChild>
-          <div
-            ref={anchorRef}
-            onClick={openCombobox}
-            className="relative"
-          >
-            <Input
-              id={id}
-              ref={inputRef}
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              onFocus={openCombobox}
-              onBlur={() => setOpen(false)}
-              placeholder={placeholder}
-              autoComplete="off"
-              role="combobox"
-              aria-expanded={open}
-              aria-haspopup="listbox"
-              className="pr-9"
-            />
-            <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
-        </PopoverAnchor>
-        <PopoverContent
-          align="end"
-          side="bottom"
-          avoidCollisions={false}
-          className="max-h-72 min-w-36 gap-0 overflow-y-auto rounded-lg p-1"
-          style={contentWidth > 0 ? { width: contentWidth } : undefined}
-          onMouseDown={(event) => event.preventDefault()}
-        >
-            <button
-              type="button"
-              onClick={focusTyping}
-              className={itemClasses}
-            >
-              <PenLine className="size-4 shrink-0 text-muted-foreground" />
-              Type a name…
-            </button>
-            <div className="pointer-events-none mx-1 my-1 h-px bg-border" />
-            <button
-              type="button"
-              onClick={() => selectName('N/A')}
-              className={cn(
-                itemClasses,
-                isNA && 'bg-accent text-accent-foreground',
-              )}
-            >
-              N/A
-              {isNA && (
-                <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
-                  <Check className="size-4" />
-                </span>
-              )}
-            </button>
-            <div className="pointer-events-none mx-1 my-1 h-px bg-border" />
-            {options.length === 0 ? (
-              <div className="py-1 pr-8 pl-1.5 text-sm text-muted-foreground">
-                {isNA
-                  ? 'No Organista or ATPA members in the Master List'
-                  : currentKey
-                    ? `No members match "${value.trim()}"`
-                    : 'No Organista or ATPA members in the Master List'}
-              </div>
-            ) : (
-              options.map((name) => {
-                const isCurrent = name.toLowerCase() === currentKey
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => selectName(name)}
-                    className={cn(
-                      itemClasses,
-                      isCurrent && 'bg-accent text-accent-foreground',
-                    )}
-                  >
-                    {name}
-                    {isCurrent && (
-                      <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
-                        <Check className="size-4" />
-                      </span>
-                    )}
-                  </button>
-                )
-              })
-            )}
-          </PopoverContent>
-        </Popover>
-    </div>
-  )
 }
 
 export async function buildOrganistaSuguanPdf(
@@ -495,7 +316,13 @@ export async function buildOrganistaSuguanPdf(
 export function OrganistaSuguanMakerPage() {
   const [churchName, setChurchName] = useState('')
   const [destinadoName, setDestinadoName] = useState('')
-  const [services, setServices] = useState<OrganistaService[]>(() => defaultServices())
+  const [services, setServices] = useState<OrganistaService[]>(() => {
+    const { midweek, weekend } = useWorshipScheduleStore.getState()
+    return servicesFromCategories({
+      midweek: midweek.filter((s) => !s.disabled),
+      weekend: weekend.filter((s) => !s.disabled),
+    })
+  })
   const createRecord = useOrganistaSuguanStore((state) => state.createRecord)
   const members = useMemberStore((state) => state.members)
   const pmMember = members.find(
@@ -514,11 +341,31 @@ export function OrganistaSuguanMakerPage() {
   })
   const [pagsasanayDate, setPagsasanayDate] = useState('')
   const [coverageOpen, setCoverageOpen] = useState(false)
-  const [paperLayoutOpen, setPaperLayoutOpen] = useState(false)
+  const [documentSetupOpen, setDocumentSetupOpen] = useState(false)
   const [dragServiceId, setDragServiceId] = useState<string | null>(null)
   const [overServiceId, setOverServiceId] = useState<string | null>(null)
   const [newServiceId, setNewServiceId] = useState<string | null>(null)
+  const [schedulePicker, setSchedulePicker] = useState<
+    | { mode: 'add' }
+    | { mode: 'replace'; serviceId: string }
+    | null
+  >(null)
   const newServiceCardRef = useRef<HTMLDivElement>(null)
+
+  const takenScheduleIds = useMemo(
+    () =>
+      new Set(
+        services
+          .map((service) => service.scheduleId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [services],
+  )
+  const currentPickedScheduleId =
+    schedulePicker?.mode === 'replace'
+      ? services.find((service) => service.id === schedulePicker.serviceId)
+          ?.scheduleId
+      : undefined
 
   useEffect(() => {
     if (!newServiceId) return
@@ -553,7 +400,7 @@ export function OrganistaSuguanMakerPage() {
 
   const updateService = (
     id: string,
-    field: 'heading' | 'organist' | 'reserve',
+    field: 'organist' | 'reserve',
     value: string,
   ) => {
     setServices((current) =>
@@ -563,10 +410,47 @@ export function OrganistaSuguanMakerPage() {
     )
   }
 
-  const addService = () => {
-    const service = createService(`Service ${services.length + 1}`)
-    setServices((current) => [...current, service])
-    setNewServiceId(service.id)
+  const confirmSchedulePick = (selection: SelectedWorshipSchedule) => {
+    if (!schedulePicker) return
+    if (schedulePicker.mode === 'add') {
+      const service = createServiceFromSchedule(
+        selection.schedule,
+        selection.category,
+      )
+      setServices((current) => [...current, service])
+      setNewServiceId(service.id)
+      setSchedulePicker(null)
+      toast.success(`Added ${selection.schedule.scheduleTime} service.`)
+      return
+    }
+    setServices((current) =>
+      current.map((service) =>
+        service.id === schedulePicker.serviceId
+          ? {
+              ...createServiceFromSchedule(
+                selection.schedule,
+                selection.category,
+              ),
+              id: service.id,
+              organist: service.organist,
+              reserve: service.reserve,
+            }
+          : service,
+      ),
+    )
+    setSchedulePicker(null)
+    toast.success('Worship schedule updated.')
+  }
+
+  const duplicateService = (id: string) => {
+    setServices((current) => {
+      const index = current.findIndex((service) => service.id === id)
+      if (index === -1) return current
+      const copy = { ...current[index], id: nanoid() }
+      const next = [...current]
+      next.splice(index + 1, 0, copy)
+      return next
+    })
   }
 
   const removeService = (id: string) => {
@@ -696,7 +580,7 @@ export function OrganistaSuguanMakerPage() {
       <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex size-10 items-center justify-center rounded-lg bg-brand-navy text-white">
-            <Music4 className="size-5" />
+            <Piano className="size-5" />
           </span>
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">
@@ -803,32 +687,63 @@ export function OrganistaSuguanMakerPage() {
 
           <div className="mt-6">
             <DisclosureButton
-              open={paperLayoutOpen}
-              onToggle={() => setPaperLayoutOpen((o) => !o)}
-              icon={SlidersHorizontal}
+              open={documentSetupOpen}
+              onToggle={() => setDocumentSetupOpen((o) => !o)}
+              icon={FileText}
             >
-              Paper &amp; layout
+              Document setup
             </DisclosureButton>
 
-            {paperLayoutOpen && (
+            {documentSetupOpen && (
               <div className="mt-4 space-y-4">
                 <p className="text-xs text-muted-foreground">
                   These document options are applied to the exported PDF.
                 </p>
-                <DocumentSetupStep value={docFormat} onChange={setDocFormat} />
+                <DocumentSetupStep
+                  value={docFormat}
+                  onChange={setDocFormat}
+                  embedded
+                />
               </div>
             )}
           </div>
 
           <div className="mt-5 flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-foreground">Schedule rows</h2>
-            <Button type="button" variant="outline" size="sm" onClick={addService}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSchedulePicker({ mode: 'add' })}
+            >
               <Plus className="size-4" />
-              Add service
+              Add Worship Schedule
             </Button>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Services come from the Worship Service Schedule Settings. Changing a
+            schedule there affects new picks; saved records keep theirs.
+          </p>
 
           <div className="mt-4 space-y-4">
+            {services.length === 0 && (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/70 px-4 py-8 text-center">
+                <Music4 className="size-6 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  No worship schedules are enabled. Add worship schedules in
+                  Settings, or build a service list from the current settings.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSchedulePicker({ mode: 'add' })}
+                >
+                  <Plus className="size-4" />
+                  Add Worship Schedule
+                </Button>
+              </div>
+            )}
             {services.map((service, index) => (
               <div
                 key={service.id}
@@ -908,6 +823,16 @@ export function OrganistaSuguanMakerPage() {
                         type="button"
                         variant="ghost"
                         size="icon-sm"
+                        title="Duplicate service"
+                        aria-label={`Duplicate ${service.heading || `Service ${index + 1}`}`}
+                        onClick={() => duplicateService(service.id)}
+                      >
+                        <Copy className="size-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         aria-label={`Remove ${service.heading}`}
                         onClick={() => removeService(service.id)}
                       >
@@ -917,38 +842,67 @@ export function OrganistaSuguanMakerPage() {
                   )}
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr]">
-                  <div className="space-y-2 md:col-span-3">
-                    <Label htmlFor={`service-heading-${service.id}`}>Service title</Label>
-                    <Input
-                      id={`service-heading-${service.id}`}
-                      value={service.heading}
-                      onChange={(event) =>
-                        updateService(service.id, 'heading', event.target.value)
+                <div className="mb-4 border-t border-border/70 pt-3">
+                  {service.dayName ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSchedulePicker({
+                          mode: 'replace',
+                          serviceId: service.id,
+                        })
                       }
-                    />
-                  </div>
+                      aria-label={`Change the worship schedule of ${service.heading}`}
+                      className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-foreground">
+                          {service.dayName}
+                        </span>
+                        <span className="block text-lg leading-tight font-semibold text-foreground">
+                          {service.scheduleTime}
+                        </span>
+                        {service.categoryLabel && (
+                          <span className="mt-0.5 block text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                            {service.categoryLabel}
+                          </span>
+                        )}
+                      </span>
+                      <Pencil className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  ) : (
+                    <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+                      {service.heading}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor={`service-organist-${service.id}`}>Organista</Label>
-                    <MemberCombobox
+                    <MemberPicker
                       id={`service-organist-${service.id}`}
+                      label="Organista"
                       value={service.organist}
                       onChange={(name) =>
                         updateService(service.id, 'organist', name)
                       }
                       exclude={[service.reserve]}
+                      placeholder="Select Organista…"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor={`service-reserve-${service.id}`}>Reserba</Label>
-                    <MemberCombobox
+                    <MemberPicker
                       id={`service-reserve-${service.id}`}
+                      label="Backup Organista"
                       value={service.reserve}
                       onChange={(name) =>
                         updateService(service.id, 'reserve', name)
                       }
                       exclude={[service.organist]}
-                      placeholder="Type a name, pick from the Master List, or N/A"
+                      allowNA
+                      placeholder="Select backup Organista…"
                     />
                   </div>
                 </div>
@@ -1000,6 +954,16 @@ export function OrganistaSuguanMakerPage() {
           </section>
         </div>
 
+        <SchedulePicker
+          open={schedulePicker !== null}
+          confirmLabel={
+            schedulePicker?.mode === 'replace' ? 'Change Schedule' : 'Add Schedule'
+          }
+          takenScheduleIds={takenScheduleIds}
+          currentScheduleId={currentPickedScheduleId}
+          onClose={() => setSchedulePicker(null)}
+          onConfirm={confirmSchedulePick}
+        />
         </div>
   )
 }

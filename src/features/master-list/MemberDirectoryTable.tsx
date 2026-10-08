@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileUp, SearchX, Users, Venus, Mars } from 'lucide-react'
+import { SearchX, Users, Venus, Mars } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -39,10 +39,8 @@ interface MemberDirectoryTableProps {
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onDelete: (member: Member) => void
-  onImport: () => void
   canEdit: boolean
   canDelete: boolean
-  canImport: boolean
   hasAnyMembers: boolean
   onClearFilters: () => void
   pageSize: MemberPageSize
@@ -95,13 +93,9 @@ function ChoirSectionHeader({
 
 export function MemberDirectoryEmptyState({
   hasAnyMembers,
-  onImport,
-  canImport,
   onClearFilters,
 }: {
   hasAnyMembers: boolean
-  onImport: () => void
-  canImport: boolean
   onClearFilters: () => void
 }) {
   return (
@@ -116,17 +110,12 @@ export function MemberDirectoryEmptyState({
         <p className="max-w-sm text-xs text-muted-foreground">
           {hasAnyMembers
             ? 'Try widening the search or clearing the active directory filters.'
-            : 'Import the choir roster or add members manually to build the directory.'}
+            : 'Add members manually to build the directory.'}
         </p>
       </div>
       {hasAnyMembers ? (
         <Button variant="outline" size="sm" onClick={onClearFilters}>
           Reset filters
-        </Button>
-      ) : canImport ? (
-        <Button variant="outline" size="sm" onClick={onImport}>
-          <FileUp className="size-4" />
-          Import Data
         </Button>
       ) : null}
     </div>
@@ -141,10 +130,8 @@ export function MemberDirectoryTable({
   onView,
   onEdit,
   onDelete,
-  onImport,
   canEdit,
   canDelete,
-  canImport,
   hasAnyMembers,
   onClearFilters,
   pageSize,
@@ -161,8 +148,6 @@ export function MemberDirectoryTable({
     return (
       <MemberDirectoryEmptyState
         hasAnyMembers={hasAnyMembers}
-        onImport={onImport}
-        canImport={canImport}
         onClearFilters={onClearFilters}
       />
     )

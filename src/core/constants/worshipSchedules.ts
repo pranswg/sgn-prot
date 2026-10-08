@@ -2,7 +2,7 @@ import type { WorshipScheduleKey } from '@/core/types/suguan'
 import type { AssignmentPreset } from '@/store/assignmentPresetStore'
 
 export interface WorshipSchedule {
-  id: WorshipScheduleKey
+  id: string
   scheduleDay: string
   /**
    * Day-of-week index for this schedule, `0` = Sunday ... `6` = Saturday.
@@ -14,6 +14,33 @@ export interface WorshipSchedule {
   scheduleTime: string
   label: string
   presetHint: string
+  /** True when a user added this schedule in Settings, false for a built-in. */
+  custom?: boolean
+}
+
+export const WEEKDAY_OPTIONS = [
+  { weekday: 0, name: 'Linggo', english: 'Sunday' },
+  { weekday: 1, name: 'Lunes', english: 'Monday' },
+  { weekday: 2, name: 'Martes', english: 'Tuesday' },
+  { weekday: 3, name: 'Miyerkules', english: 'Wednesday' },
+  { weekday: 4, name: 'Huwebes', english: 'Thursday' },
+  { weekday: 5, name: 'Biyernes', english: 'Friday' },
+  { weekday: 6, name: 'Sabado', english: 'Saturday' },
+] as const
+
+export function worshipDayName(weekday: number): string {
+  return WEEKDAY_OPTIONS.find((d) => d.weekday === weekday)?.name ?? 'Worship Day'
+}
+
+export interface WorshipScheduleCategories {
+  midweek: readonly WorshipSchedule[]
+  weekend: readonly WorshipSchedule[]
+}
+
+export function allSchedulesOf(
+  categories: WorshipScheduleCategories,
+): readonly WorshipSchedule[] {
+  return [...categories.midweek, ...categories.weekend]
 }
 
 export const WEEKEND_SCHEDULES: WorshipSchedule[] = [
@@ -75,9 +102,14 @@ export const ALL_WORSHIP_SCHEDULES: WorshipSchedule[] = [
   ...MIDWEEK_SCHEDULES,
 ]
 
+export const DEFAULT_SCHEDULE_CATEGORIES: WorshipScheduleCategories = {
+  midweek: MIDWEEK_SCHEDULES,
+  weekend: WEEKEND_SCHEDULES,
+}
+
 export const WORSHIP_SCHEDULE_MAP = Object.fromEntries(
   ALL_WORSHIP_SCHEDULES.map((s) => [s.id, s]),
-) as Record<WorshipScheduleKey, WorshipSchedule>
+) as Record<string, WorshipSchedule>
 
 const DAY_ALIASES: Record<string, string[]> = {
   sabado: ['sabado', 'saturday', 'sat'],

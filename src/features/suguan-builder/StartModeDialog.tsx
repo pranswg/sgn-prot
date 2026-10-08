@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/format'
 import { planEventsFromCoverage } from '@/lib/suguanDates'
@@ -47,6 +48,7 @@ export function StartModeDialog({
   onCopy,
 }: StartModeDialogProps) {
   const isMobile = useIsMobile()
+  const scheduleCategories = useWorshipScheduleCategories()
   const [query, setQuery] = useState('')
   const [mode, setMode] = useState<'new' | 'copy'>('new')
 
@@ -71,7 +73,7 @@ export function StartModeDialog({
 
   const untilLabel = (s: Suguan) => {
     if (!s.coverage) return null
-    const events = planEventsFromCoverage(s.coverage)
+    const events = planEventsFromCoverage(s.coverage, scheduleCategories)
     const last = events[events.length - 1]
     if (!last) return null
     return `until ${formatDate(last.endDate ?? last.date)}`

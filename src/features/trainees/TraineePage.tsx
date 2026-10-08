@@ -144,18 +144,32 @@ export function TraineePage() {
       <PageHeader
         title="Nagsasanay / Trainees"
         description="Manage prospective choir members. Active trainees are not eligible for Suguan assignments."
-        actions={
-          <Button
-            onClick={() => {
-              setEditing(null)
-              setFormOpen(true)
-            }}
-          >
-            <Plus className="size-4" />
-            Add Trainee
-          </Button>
-        }
       />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">
+            Trainee List
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Showing{' '}
+            <span className="font-medium tabular-nums text-foreground/80">
+              {filtered.length}
+            </span>{' '}
+            of {activeTrainees.length} trainees
+          </p>
+        </div>
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => {
+            setEditing(null)
+            setFormOpen(true)
+          }}
+        >
+          <Plus className="size-4" />
+          Add Trainee
+        </Button>
+      </div>
 
       {/* Search & filter toolbar, styled like the Master List toolbar and
           sticky under the screen header while the list scrolls. `top-14`
@@ -189,7 +203,7 @@ export function TraineePage() {
           </div>
 
           {/* Choir segment: promoted to the toolbar on desktop, exactly like
-              the Master List. On mobile it sits under the directory heading. */}
+              the Master List. On mobile it sits under the list heading. */}
           <div
             role="group"
             aria-label="Filter by choir"
@@ -264,22 +278,8 @@ export function TraineePage() {
         </div>
       </div>
 
-      {/* Directory: heading + counts, then the table card, matching the
-          Master List layout. */}
+      {/* Trainee table, matching the Master List layout. */}
       <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-base font-semibold tracking-tight text-foreground">
-            Trainee Directory
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Showing{' '}
-            <span className="font-medium tabular-nums text-foreground/80">
-              {filtered.length}
-            </span>{' '}
-            of {activeTrainees.length} trainees
-          </p>
-        </div>
-
         {/* Mobile card list: name + Promote on top, gender | voice under it,
             then status with the edit/remove actions. */}
         <ul className="flex flex-col gap-2 md:hidden">

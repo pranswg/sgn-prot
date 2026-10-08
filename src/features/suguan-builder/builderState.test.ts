@@ -6,7 +6,27 @@ import type {
   SuguanAssignment,
   VoicePosition,
 } from '@/core/types/suguan'
-import { createCopyDraft } from './builderState.ts'
+import {
+  DEFAULT_SCHEDULE_CATEGORIES,
+  type WorshipScheduleCategories,
+} from '@/core/constants/worshipSchedules'
+import { createCopyDraft, weekScheduleSections } from './builderState.ts'
+
+const customCategories: WorshipScheduleCategories = {
+  midweek: [
+    ...DEFAULT_SCHEDULE_CATEGORIES.midweek,
+    {
+      id: 'miyerkules-8pm',
+      scheduleDay: 'MIYERKULES',
+      weekday: 3,
+      scheduleTime: '8:00 PM',
+      label: 'Miyerkules, 8:00 PM',
+      presetHint: '',
+      custom: true,
+    },
+  ],
+  weekend: DEFAULT_SCHEDULE_CATEGORIES.weekend,
+}
 
 const voices: VoicePosition[] = [
   { id: 'soprano', name: 'Soprano', shortName: 'S', gender: 'female' },
@@ -134,4 +154,77 @@ test('copy snapshots the source, so editing a copy never mutates the saved Sugua
   assert.equal(source.schedules[0].assignments[0].memberName, 'Test Member')
   assert.equal(source.dutyRoles[0].memberId, 'm1')
   assert.equal(source.coverage?.template, 'midweek-2w')
+})
+
+test('weekScheduleSections builds the whole detected week and keeps assignments by key', () => {
+  const sections = weekScheduleSections(
+    {
+      template: 'one-week',
+      startDate: '2026-09-26',
+      oneWeekPagsasanayDate: '2026-09-26',
+    },
+    [
+      {
+        id: 'old-miyerkules',
+        scheduleKey: 'miyerkules-7pm',
+        scheduleLabel: 'Miyerkules',
+        scheduleDay: 'MIYERKULES',
+        scheduleTime: '7:00 PM',
+        assignments: [assignment('m1', 'soprano')],
+      },
+    ],
+  )
+
+  assert.equal(sections.length, 6)
+  const wed = sections.find((s) => s.scheduleKey === 'miyerkules-7pm')
+  const sunAm = sections.find(
+    (s) => s.scheduleKey === 'linggo-6am' && s.scheduleDate === '2026-09-27',
+  )
+  assert.equal(wed?.scheduleDate, '2026-09-23')
+  // The midweek slot survived the date change, carrying its roster and id.
+  assert.equal(wed?.id, 'old-miyerkules')
+  assert.deepEqual(wed?.assignments, [assignment('m1', 'soprano')])
+  // Slots the previous sections did not have start fresh and dated.
+  assert.notEqual(sunAm?.id, 'old-miyerkules')
+  assert.deepEqual(sunAm?.assignments, [])
+})
+
+test('weekScheduleSections honours a custom worship time added in Settings', () => {
+  const sections = weekScheduleSections(
+    {
+      template: 'one-week',
+      startDate: '2026-09-26',
+      oneWeekPagsasanayDate: '2026-09-26',
+    },
+    [],
+    customCategories,
+  )
+  assert.equal(sections.length, 7)
+  const custom = sections.find((s) => s.scheduleKey === 'miyerkules-8pm')
+  assert.equal(custom?.scheduleDate, '2026-09-23')
+  assert.equal(custom?.scheduleTime, '8:00 PM')
+})
+
+test('weekScheduleSections returns nothing until a training date exists', () => {
+  assert.deepEqual(
+    weekScheduleSections({ template: 'one-week', startDate: '' }, []),
+    [],
+  )
+  assert.deepEqual(
+    weekScheduleSections(
+      { template: 'one-week', startDate: '', oneWeekDate: 'garbage' },
+      [],
+    ),
+    [],
+  )
+})
+
+test('weekScheduleSections ignores non-one-week coverage', () => {
+  assert.deepEqual(
+    weekScheduleSections(
+      { template: 'midweek-2w', startDate: '2026-09-26' },
+      [],
+    ),
+    [],
+  )
 })

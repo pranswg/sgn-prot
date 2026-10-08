@@ -8,6 +8,7 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Star,
   Trash2,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +68,10 @@ export interface SettingsListProps<T extends { id: string; custom?: boolean }> {
   getMeta?: (item: T) => string | undefined
   /** Extra badges shown before Standard/Custom, e.g. a voice's gender. */
   extraBadges?: (item: T) => ReactNode
+  /** When provided the list gains a "Set as default" control; the item whose id
+   * matches `defaultId` is marked as the current default. */
+  defaultId?: string | null
+  onSetDefault?: (id: string) => void
   onCreate: (values: ReferenceValues) => void
   onUpdate: (id: string, values: ReferenceValues) => void
   onDelete: (id: string) => void
@@ -92,6 +97,8 @@ export function SettingsList<T extends { id: string; custom?: boolean }>({
   getLabel,
   getMeta,
   extraBadges,
+  defaultId,
+  onSetDefault,
   onCreate,
   onUpdate,
   onDelete,
@@ -303,6 +310,12 @@ export function SettingsList<T extends { id: string; custom?: boolean }>({
                       </>
                     }
                     compact={isMobile}
+                    isDefault={
+                      onSetDefault !== undefined && item.id === defaultId
+                    }
+                    onToggleDefault={
+                      onSetDefault ? () => onSetDefault(item.id) : null
+                    }
                     dragging={dragId === item.id}
                     dropTarget={
                       dragId !== null && overId === item.id && dragId !== item.id
@@ -407,6 +420,8 @@ interface ListRowProps {
   badges: ReactNode
   /** Mobile rows are one tappable line; desktop rows carry drag and actions. */
   compact: boolean
+  isDefault: boolean
+  onToggleDefault: (() => void) | null
   dragging: boolean
   dropTarget: boolean
   onDragStart: () => void
@@ -424,6 +439,8 @@ function ListRow({
   meta,
   badges,
   compact,
+  isDefault,
+  onToggleDefault,
   dragging,
   dropTarget,
   onDragStart,
@@ -436,11 +453,11 @@ function ListRow({
 }: ListRowProps) {
   if (compact) {
     return (
-      <li>
+      <li className="flex w-full items-center gap-1">
         <button
           type="button"
           onClick={onEdit}
-          className="flex w-full items-center gap-3 py-3 text-left transition-colors active:bg-muted/60"
+          className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left transition-colors active:bg-muted/60"
         >
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-foreground">
@@ -453,8 +470,32 @@ function ListRow({
               )}
             </span>
           </span>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
+          {!onToggleDefault && (
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
+          )}
         </button>
+        {onToggleDefault && (
+          <button
+            type="button"
+            onClick={onToggleDefault}
+            aria-label={
+              isDefault
+                ? `Stop using ${label} as the default`
+                : `Use ${label} as the default`
+            }
+            title={
+              isDefault ? 'Default service type' : 'Set as default service type'
+            }
+            className={cn(
+              'shrink-0 rounded-md p-3 text-muted-foreground transition-colors hover:text-foreground active:bg-muted/60',
+              isDefault && 'text-amber-500',
+            )}
+          >
+            <Star
+              className={cn('size-4', isDefault && 'fill-current')}
+            />
+          </button>
+        )}
       </li>
     )
   }
@@ -513,6 +554,25 @@ function ListRow({
       )}
 
       <span className="flex shrink-0 items-center gap-1.5">{badges}</span>
+
+      {onToggleDefault &&
+        (isDefault ? (
+          <Badge
+            variant="secondary"
+            className="shrink-0 gap-1 border-transparent text-amber-700 dark:text-amber-400"
+          >
+            <Star className="size-3 fill-current" /> Default
+          </Badge>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 gap-1 text-muted-foreground hover:text-foreground"
+            onClick={onToggleDefault}
+          >
+            <Star className="size-3.5" /> Set as default
+          </Button>
+        ))}
 
       <span className="flex shrink-0 items-center gap-0.5">
         <Button

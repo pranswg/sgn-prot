@@ -40,13 +40,11 @@ export interface SuguanEvent {
   endDate?: string
 }
 
-export type WorshipScheduleKey =
-  | 'sabado-6pm'
-  | 'linggo-6am'
-  | 'linggo-10am'
-  | 'miyerkules-7pm'
-  | 'huwebes-6am'
-  | 'huwebes-7pm'
+/**
+ * The id of a worship schedule. The built-in times use the fixed keys below,
+ * but users may add their own in Settings, so the type is open.
+ */
+export type WorshipScheduleKey = string
 
 export interface SuguanScheduleSection {
   id: string
@@ -54,6 +52,13 @@ export interface SuguanScheduleSection {
   scheduleLabel: string
   scheduleDay: string
   scheduleTime: string
+  /**
+   * The concrete calendar date this schedule falls on, present when the section
+   * was auto-detected for a one-week coverage (each worship day resolved to the
+   * calendar week around the training date). Recurring two-week sections leave
+   * it unset and derive dates from the coverage events instead.
+   */
+  scheduleDate?: string
   description?: string
   assignments: SuguanAssignment[]
 }

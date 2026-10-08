@@ -32,6 +32,7 @@ export interface Member {
   isActive: boolean
   dateAdded: string
   positions: ChoirPosition[]
+  assignedDutyRoleIds?: string[]
   notes?: string
 }
 
@@ -58,6 +59,7 @@ export interface MemberInput {
   isActive: boolean
   dateAdded: string
   positions?: ChoirPosition[]
+  assignedDutyRoleIds?: string[]
   notes?: string
 }
 

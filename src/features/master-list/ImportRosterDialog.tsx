@@ -15,6 +15,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useAuthStore } from '@/store/authStore'
+import { useAdminStore } from '@/store/adminStore'
+import type { MemberInput, TraineeInput } from '@/core/types/member'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
 import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
@@ -55,9 +58,13 @@ interface CandidateGroup {
 export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogProps) {
   const members = useMemberStore((s) => s.members)
   const trainees = useMemberStore((s) => s.trainees)
-  const addMember = useMemberStore((s) => s.addMember)
-  const addTrainee = useMemberStore((s) => s.addTrainee)
+  const importMasterList = useMemberStore((s) => s.importMasterList)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const account = useAuthStore((state) =>
+    state.accounts.find((item) => item.id === state.currentAccountId),
+  )
+  const addAuditLog = useAdminStore((state) => state.addAuditLog)
+  const canImport = account?.role === 'admin' && (account.status ?? 'active') === 'active'
 
   const voices = allVoices()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,6 +118,10 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return
+    if (!canImport) {
+      toast.error('Only an active Admin can import the Master List.')
+      return
+    }
     const spreadsheet = isSpreadsheetFile(file)
     setFileName(file.name)
     setFileKind(spreadsheet ? 'spreadsheet' : 'pdf')
@@ -176,12 +187,16 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
 
   const runImport = () => {
     if (!candidates) return
+    if (!canImport || !account) {
+      toast.error('Only an active Admin can import the Master List.')
+      return
+    }
     const picked = candidates.filter((c) => c.selected)
     if (picked.length === 0) return
 
     const today = todayPHT()
-    let memberCount = 0
-    let traineeCount = 0
+    const importedMembers: MemberInput[] = []
+    const importedTrainees: TraineeInput[] = []
 
     for (const candidate of picked) {
       const firstName = candidate.firstName.trim()
@@ -198,7 +213,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       const dateAdded = candidate.dateAdded ?? today
 
       if (candidate.isTrainee) {
-        addTrainee({
+        importedTrainees.push({
           firstName,
           lastName,
           gender: candidate.gender,
@@ -207,9 +222,8 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           dateAdded,
           notes: candidate.notes.trim() || undefined,
         })
-        traineeCount += 1
       } else {
-        addMember({
+        importedMembers.push({
           firstName,
           middleName: candidate.middleName,
           suffix: candidate.suffix,
@@ -222,10 +236,28 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           positions: candidate.positions,
           notes: candidate.notes.trim() || undefined,
         })
-        memberCount += 1
       }
     }
 
+    const result = importMasterList(
+      account.id,
+      importedMembers,
+      importedTrainees,
+    )
+    if ('error' in result) {
+      toast.error(result.error)
+      return
+    }
+    addAuditLog({
+      actorId: account.id,
+      actorName: account.fullName,
+      actorUsername: account.username,
+      action: 'Imported Master List',
+      module: 'Data Management',
+      details: `Imported ${result.importedMembers} members and ${result.importedTrainees} trainees from ${fileName ?? 'roster file'}.`,
+    })
+    const { importedMembers: memberCount, importedTrainees: traineeCount } =
+      result
     const message = [
       memberCount > 0 ? `${memberCount} member${memberCount === 1 ? '' : 's'}` : null,
       traineeCount > 0 ? `${traineeCount} trainee${traineeCount === 1 ? '' : 's'}` : null,
@@ -238,6 +270,8 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     onOpenChange(false)
   }
 
+  if (!canImport) return null
+
   return (
     <Dialog
       open={open}
@@ -248,7 +282,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     >
       <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Import Data</DialogTitle>
+          <DialogTitle>Import Master List</DialogTitle>
         <DialogDescription>
           Upload the choir roster PDF, or a CSV or Excel file exported from the
           Master List. Review the detected names before importing them.

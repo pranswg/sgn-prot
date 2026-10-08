@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type {
   Suguan,
   SuguanAssignment,
@@ -10,7 +11,14 @@ import type {
   VoicePosition,
 } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
-import { isDateKey } from '@/lib/phDate'
+import { firstDateKey, isDateKey } from '@/lib/phDate'
+import { worshipWeekSchedules } from '@/lib/suguanDates'
+import { useSettingsStore } from '@/store/settingsStore'
+import {
+  DEFAULT_SCHEDULE_CATEGORIES,
+  allSchedulesOf,
+  type WorshipScheduleCategories,
+} from '@/core/constants/worshipSchedules'
 import {
   DEFAULT_DOC_FORMAT,
   generateEventsFromCoverage,
@@ -98,18 +106,38 @@ export function groupGendersFor(group: SuguanGroup): ('female' | 'male')[] {
   return ['female', 'male']
 }
 
-export function createEmptyDraft(voices: VoicePosition[]): SuguanDraft {
+/**
+ * The service type a brand-new Suguan starts with: the configured default when
+ * it still exists in the list, falling back to the first service type (which is
+ * what a pre-default install used to start with) and then none.
+ */
+export function preferredServiceTypeId(): string {
+  const state = useSettingsStore.getState()
+  const services = state.allServiceTypes()
+  if (
+    state.defaultServiceTypeId &&
+    services.some((t) => t.id === state.defaultServiceTypeId)
+  ) {
+    return state.defaultServiceTypeId
+  }
+  return services[0]?.id ?? ''
+}
+
+export function createEmptyDraft(
+  voices: VoicePosition[],
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
+): SuguanDraft {
   const coverage = defaultCoverage()
   return {
     docFormat: { ...DEFAULT_DOC_FORMAT },
     coverage,
     date: coverage.startDate,
     time: '19:00',
-    serviceTypeId: 'pagsamba',
+    serviceTypeId: preferredServiceTypeId(),
     pagsasanayDate: '',
     pagtupadDate: '',
     group: 'babae',
-    events: generateEventsFromCoverage(coverage),
+    events: generateEventsFromCoverage(coverage, categories),
     voiceCapacities: defaultCapacities(voices),
     assignments: [],
     schedules: [],
@@ -118,15 +146,60 @@ export function createEmptyDraft(voices: VoicePosition[]): SuguanDraft {
   }
 }
 
+/** The auto-detected worship schedules for a one-week coverage: every configured
+ * schedule of the calendar week around the training date, resolved to its
+ * concrete date. Assignments from a previous section with the same schedule key
+ * (e.g. after the training date changed but the midweek slots did not) are
+ * carried over, so retyping a date does not wipe a roster.
+ *
+ * @returns `[]` for any non-one-week coverage, or for one-week with no training
+ * date entered yet — a blank Pagsasanay date is a normal pre-input state.
+ */
+export function weekScheduleSections(
+  coverage: SuguanCoverage | null,
+  previous: SuguanScheduleSection[],
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
+): SuguanScheduleSection[] {
+  if (coverage?.template !== 'one-week') return []
+  const trainingDate = firstDateKey(
+    isDateKey(coverage.startDate) ? coverage.startDate : '',
+    coverage.oneWeekPagsasanayDate,
+    coverage.oneWeekDate,
+  )
+  if (!isDateKey(trainingDate)) return []
+  const previousByKey = new Map<string, SuguanScheduleSection>()
+  for (const section of previous) {
+    if (section.scheduleKey) previousByKey.set(section.scheduleKey, section)
+  }
+
+  return worshipWeekSchedules(trainingDate, allSchedulesOf(categories)).map(
+    ({ schedule, date }) => {
+      const prior = previousByKey.get(schedule.id)
+      return {
+        id: prior?.id ?? nanoid(),
+        scheduleKey: schedule.id,
+        scheduleLabel: schedule.label,
+        scheduleDay: schedule.scheduleDay,
+        scheduleTime: schedule.scheduleTime,
+        scheduleDate: date,
+        assignments: prior?.assignments ?? [],
+      }
+    },
+  )
+}
+
 export function createDraftFromSuguan(
   suguan: Suguan,
   voices: VoicePosition[],
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
 ): SuguanDraft {
   return {
     docFormat: suguan.docFormat
       ? { ...DEFAULT_DOC_FORMAT, ...suguan.docFormat }
       : { ...DEFAULT_DOC_FORMAT },
-    coverage: suguan.coverage ?? inferCoverageFromEvents(suguan.events ?? []),
+    coverage:
+      suguan.coverage ??
+      inferCoverageFromEvents(suguan.events ?? [], categories),
     date: suguan.date || todayPHT(),
     time: suguan.time || '09:00',
     serviceTypeId: suguan.serviceTypeId || 'pagsamba',
@@ -151,8 +224,12 @@ export function createDraftFromSuguan(
  * duty roles, choir, service) and only resets the calendar so the new Suguan
  * can be dated freely.
  */
-export function createCopyDraft(source: Suguan, voices: VoicePosition[]): SuguanDraft {
-  const base = createDraftFromSuguan(source, voices)
+export function createCopyDraft(
+  source: Suguan,
+  voices: VoicePosition[],
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
+): SuguanDraft {
+  const base = createDraftFromSuguan(source, voices, categories)
   // The calendar is cleared rather than reset to today, so the copy starts from
   // the same blank state as a brand-new Suguan and the user chooses its dates.
   const coverage =
@@ -168,7 +245,7 @@ export function createCopyDraft(source: Suguan, voices: VoicePosition[]): Suguan
           oneWeekPagtupadEndDate: undefined,
         }
       : null
-  const events = coverage ? generateEventsFromCoverage(coverage) : []
+  const events = coverage ? generateEventsFromCoverage(coverage, categories) : []
   return {
     ...base,
     coverage,

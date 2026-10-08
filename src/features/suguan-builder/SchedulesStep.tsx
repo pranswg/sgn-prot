@@ -35,12 +35,13 @@ import {
 } from '@/components/ui/sheet'
 import {
   ALL_WORSHIP_SCHEDULES,
-  MIDWEEK_SCHEDULES,
-  WEEKEND_SCHEDULES,
+  allSchedulesOf,
   findPresetByKey,
   type WorshipSchedule,
 } from '@/core/constants/worshipSchedules'
 import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
+import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
+import { formatDateKey } from '@/lib/phDate'
 import { totalAssigned, type SuguanDraft } from './builderState'
 import { cn } from '@/lib/utils'
 
@@ -56,15 +57,23 @@ function scheduleDescription(sched: WorshipSchedule): string {
     : 'Evening Worship Service'
 }
 
-/** Detail line for an included schedule: the template's description or the
- * custom day/time/description, whichever is relevant. */
+/** Detail line for an included schedule: the detected calendar date for a
+ * one-week section, the configured schedule's description, or the custom
+ * day/time/description, whichever is relevant. */
 function includedDetailFor(
   section: SuguanDraft['schedules'][number],
+  knownSchedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
 ): string {
-  const template = ALL_WORSHIP_SCHEDULES.find(
-    (s) => s.id === section.scheduleKey,
-  )
-  if (template) return scheduleDescription(template)
+  if (section.scheduleDate) {
+    const bits = [
+      formatDateKey(section.scheduleDate),
+      section.scheduleTime,
+      section.description,
+    ]
+    return bits.filter(Boolean).join(' · ')
+  }
+  const known = knownSchedules.find((s) => s.id === section.scheduleKey)
+  if (known) return scheduleDescription(known)
   return (
     [section.scheduleDay, section.scheduleTime, section.description]
       .filter(Boolean)
@@ -74,6 +83,7 @@ function includedDetailFor(
 
 export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
   const presets = useAssignmentPresetStore((s) => s.presets)
+  const scheduleCategories = useWorshipScheduleCategories()
   const [customOpen, setCustomOpen] = useState(false)
   const [customSheetOpen, setCustomSheetOpen] = useState(false)
   const [customLabel, setCustomLabel] = useState('')
@@ -93,10 +103,12 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
   const [editDescription, setEditDescription] = useState('')
 
   const suggested = useMemo<WorshipSchedule[]>(() => {
-    if (draft.coverage?.template === 'midweek-2w') return MIDWEEK_SCHEDULES
-    if (draft.coverage?.template === 'weekend-2w') return WEEKEND_SCHEDULES
-    return ALL_WORSHIP_SCHEDULES
-  }, [draft.coverage?.template])
+    if (draft.coverage?.template === 'midweek-2w')
+      return [...scheduleCategories.midweek]
+    if (draft.coverage?.template === 'weekend-2w')
+      return [...scheduleCategories.weekend]
+    return [...allSchedulesOf(scheduleCategories)]
+  }, [draft.coverage?.template, scheduleCategories])
 
   const addedKeys = useMemo(
     () =>
@@ -299,7 +311,7 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
               )}
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                 {draft.schedules.map((section, i) => {
-                  const detail = includedDetailFor(section)
+                  const detail = includedDetailFor(section, allSchedulesOf(scheduleCategories))
                   return (
                     <div
                       key={

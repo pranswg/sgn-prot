@@ -24,6 +24,10 @@ import type {
 interface DocumentSetupStepProps {
   value: SuguanDocFormat
   onChange: (format: SuguanDocFormat) => void
+  /** Render without the outer "Document setup" disclosure trigger. The host
+   *  page owns that trigger instead (the Organist Suguan maker), so the
+   *  section is not shown twice under two different names. */
+  embedded?: boolean
 }
 
 /**
@@ -125,7 +129,7 @@ function CardRow<T extends string>({
  * Disclosure trigger. The document setup and margins/scaling groups both start
  * collapsed on every breakpoint, so the page can collapse and expand them.
  * Shared by the Suguan builder step and the Organist Suguan maker, which uses
- * the same dropdown styling for its Coverage and Paper &amp; layout sections.
+ * the same dropdown styling for its Coverage and Document setup sections.
  */
 export function DisclosureButton({
   open,
@@ -159,7 +163,11 @@ export function DisclosureButton({
   )
 }
 
-export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
+export function DocumentSetupStep({
+  value,
+  onChange,
+  embedded = false,
+}: DocumentSetupStepProps) {
   const dims = useMemo(() => docPaperDimensionsMm(value), [value])
   const margins = useMemo(() => docMarginsMm(value), [value])
   const set = (p: Partial<SuguanDocFormat>) => onChange({ ...value, ...p })
@@ -179,18 +187,20 @@ export function DocumentSetupStep({ value, onChange }: DocumentSetupStepProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <DisclosureButton
-        open={docOpen}
-        onToggle={() => setDocOpen((o) => !o)}
-        icon={FileText}
-      >
-        Document setup
-      </DisclosureButton>
+      {!embedded && (
+        <DisclosureButton
+          open={docOpen}
+          onToggle={() => setDocOpen((o) => !o)}
+          icon={FileText}
+        >
+          Document setup
+        </DisclosureButton>
+      )}
 
       <div
         className={cn(
           'flex-col gap-6',
-          docOpen ? 'flex' : 'hidden',
+          embedded || docOpen ? 'flex' : 'hidden',
         )}
       >
       <CardRow<DocPaperSize>

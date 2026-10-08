@@ -24,6 +24,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { cn } from '@/lib/utils'
 import { phtInstantISO } from '@/lib/phDate'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface MobileMemberFormSheetProps {
   open: boolean
@@ -40,6 +41,7 @@ interface FormState {
   gender: 'male' | 'female'
   voicePosition: string
   membershipType: MembershipType
+  assignedDutyRoleIds: string[]
 }
 
 function blankForm(): FormState {
@@ -51,6 +53,7 @@ function blankForm(): FormState {
     gender: 'female',
     voicePosition: 'soprano-1',
     membershipType: 'regular',
+    assignedDutyRoleIds: [],
   }
 }
 
@@ -69,11 +72,13 @@ export function MobileMemberFormSheet({
   const addMember = useMemberStore((s) => s.addMember)
   const updateMember = useMemberStore((s) => s.updateMember)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const dutyRoles = useSettingsStore((s) => s.dutyRoles)
   const [form, setForm] = useState<FormState>(blankForm)
   const [wasOpen, setWasOpen] = useState(open)
   const [personalOpen, setPersonalOpen] = useState(true)
   const [choirOpen, setChoirOpen] = useState(false)
   const [membershipOpen, setMembershipOpen] = useState(false)
+  const [rankingsOpen, setRankingsOpen] = useState(false)
 
   // Seed the form whenever the sheet opens so it always reflects the member
   // being edited (or a blank slate for a new member) rather than the last edit.
@@ -90,6 +95,7 @@ export function MobileMemberFormSheet({
               gender: member.gender,
               voicePosition: member.voicePosition,
               membershipType: member.membershipType,
+              assignedDutyRoleIds: member.assignedDutyRoleIds ?? [],
             }
           : blankForm(),
       )
@@ -124,9 +130,9 @@ export function MobileMemberFormSheet({
         gender: form.gender,
         voicePosition: form.voicePosition,
         membershipType: form.membershipType,
+        assignedDutyRoleIds: form.assignedDutyRoleIds,
       }
-      // isActive, positions, and notes are intentionally left untouched: the
-      // editor has no UI for them, so editing a member must never clear them.
+      // isActive, legacy positions, and notes remain untouched by this editor.
       updateMember(member.id, input)
       toast.success('Member updated.')
     } else {
@@ -138,6 +144,7 @@ export function MobileMemberFormSheet({
         gender: form.gender,
         voicePosition: form.voicePosition,
         membershipType: form.membershipType,
+        assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: true,
         dateAdded: phtInstantISO(),
       }
@@ -341,6 +348,40 @@ export function MobileMemberFormSheet({
                   Organista, Tagapagturo, and Assistant Tagapagturo all count
                   as Organists for the Organist Suguan.
                 </p>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              icon={<BadgeCheck className="size-4" />}
+              title="Choir Rankings"
+              open={rankingsOpen}
+              onToggle={() => setRankingsOpen((o) => !o)}
+            >
+              <div className="grid gap-2">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Select any configured duty-role rankings held by this member.
+                </p>
+                {dutyRoles.map((role) => (
+                  <label
+                    key={role.id}
+                    className="flex min-h-11 items-center gap-3 rounded-xl border px-3 py-2 text-sm"
+                  >
+                    <Checkbox
+                      checked={form.assignedDutyRoleIds.includes(role.id)}
+                      onCheckedChange={(checked) =>
+                        set(
+                          'assignedDutyRoleIds',
+                          checked
+                            ? [...new Set([...form.assignedDutyRoleIds, role.id])]
+                            : form.assignedDutyRoleIds.filter(
+                                (id) => id !== role.id,
+                              ),
+                        )
+                      }
+                    />
+                    {role.name}
+                  </label>
+                ))}
               </div>
             </SectionCard>
           </div>

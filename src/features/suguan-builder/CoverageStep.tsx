@@ -12,25 +12,32 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { allSchedulesOf } from '@/core/constants/worshipSchedules'
 import {
+  assignmentsFromSchedules,
   formatEventDate,
   generateEventsFromCoverage,
   schedulesForTemplate,
   suggestPagtupadBlock,
+  worshipWeekFromRehearsal,
+  worshipWeekSchedules,
 } from '@/lib/suguanUtils'
 import {
   WEEKDAY_LONG,
+  firstDateKey,
+  formatDateKeyLongDate,
   formatDateKeyNumeric,
   isDateKey,
   laterDateKey,
 } from '@/lib/phDate'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import type {
   SuguanCoverage,
   SuguanCoverageTemplate,
   SuguanGroup,
 } from '@/core/types/suguan'
-import type { SuguanDraft } from './builderState'
+import { weekScheduleSections, type SuguanDraft } from './builderState'
 
 interface CoverageStepProps {
   draft: SuguanDraft
@@ -62,8 +69,9 @@ const DURATIONS: {
     id: 'one-week',
     title: 'One Week',
     duration: '1 week',
-    dates: 'You choose the exact dates',
-    description: 'A single Pagsasanay and Pagtupad for one worship service.',
+    dates: 'The whole detected week around one date',
+    description:
+      'One Pagsasanay date detects the full worship week — Wednesday, Thursday, Saturday and Sunday.',
   },
 ]
 
@@ -123,19 +131,23 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
     [],
   )
   const coverage = draft.coverage ?? fallbackCoverage
+  const scheduleCategories = useWorshipScheduleCategories()
 
   const events = useMemo(
-    () => generateEventsFromCoverage(coverage),
-    [coverage],
+    () => generateEventsFromCoverage(coverage, scheduleCategories),
+    [coverage, scheduleCategories],
   )
 
   /** The auto-suggested Pagtupad date for the currently entered Pagsasanay date. */
   const suggestedService = useMemo(
     () =>
       isDateKey(coverage.startDate)
-        ? suggestPagtupadBlock(coverage.startDate, schedulesForTemplate(coverage.template))
+        ? suggestPagtupadBlock(
+            coverage.startDate,
+            schedulesForTemplate(coverage.template, scheduleCategories),
+          )
         : null,
-    [coverage.startDate, coverage.template],
+    [coverage.startDate, coverage.template, scheduleCategories],
   )
 
   /** The first Pagtupad range actually in effect, including any manual override. */
@@ -149,13 +161,31 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
   const hasPagsasanay = isDateKey(coverage.startDate)
 
   /**
-   * The one-week template plans off its own "Worship date" / "Pagsasanay date"
-   * fields rather than `startDate`, so it gates its Pagtupad inputs on either
-   * of those being set.
+   * The one-week template's training date is shared by all three spellings:
+   * `startDate` (the canonical route) mirrors `oneWeekPagsasanayDate`, and
+   * legacy records may live in `oneWeekDate`.
    */
-  const hasOneWeekRehearsal =
-    isDateKey(coverage.oneWeekPagsasanayDate ?? '') ||
-    isDateKey(coverage.oneWeekDate ?? '')
+  const oneWeekTrainingDate = useMemo(
+    () =>
+      firstDateKey(
+        isDateKey(coverage.startDate) ? coverage.startDate : '',
+        coverage.oneWeekPagsasanayDate,
+        coverage.oneWeekDate,
+      ),
+    [coverage.startDate, coverage.oneWeekPagsasanayDate, coverage.oneWeekDate],
+  )
+
+  /** Every configured worship schedule of the detected week, with concrete dates. */
+  const detectedWeek = useMemo(
+    () =>
+      worshipWeekSchedules(oneWeekTrainingDate, allSchedulesOf(scheduleCategories)),
+    [oneWeekTrainingDate, scheduleCategories],
+  )
+
+  const weekRange = useMemo(
+    () => worshipWeekFromRehearsal(oneWeekTrainingDate),
+    [oneWeekTrainingDate],
+  )
 
   /**
    * Writes the coverage plus the derived `pagsasanayDate` / `pagtupadDate`
@@ -166,7 +196,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
    * service week can still be entered by hand.
    */
   const applyCoverage = (next: SuguanCoverage) => {
-    const nextEvents = generateEventsFromCoverage(next)
+    const nextEvents = generateEventsFromCoverage(next, scheduleCategories)
     const pagsasanay = nextEvents.find((e) => e.type === 'pagsasanay')?.date
     const pagtupad = nextEvents.find((e) => e.type === 'pagtupad')?.date
 
@@ -182,20 +212,73 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
     })
   }
 
+  /**
+   * The one-week training date is stored exactly as entered, mirrored in both
+   * `startDate` (the shared route the sheet, save-blockers, copy and detail all
+   * read) and `oneWeekPagsasanayDate`. Changing it regenerates the whole
+   * detected week's schedules; assignments from a slot that survives the date
+   * change (a midweek stays a midweek) are carried over.
+   */
+  const applyOneWeekTrainingDate = (value: string) => {
+    if (value === oneWeekTrainingDate) return
+    const next: SuguanCoverage = {
+      ...coverage,
+      startDate: value,
+      oneWeekPagsasanayDate: value,
+    }
+    const nextSchedules = weekScheduleSections(
+      next,
+      draft.schedules,
+      scheduleCategories,
+    )
+    const nextEvents = generateEventsFromCoverage(next, scheduleCategories)
+    const pagsasanay = nextEvents.find((e) => e.type === 'pagsasanay')?.date
+    const pagtupad = nextEvents.find((e) => e.type === 'pagtupad')?.date
+    patch({
+      coverage: next,
+      events: nextEvents,
+      date: laterDateKey(pagtupad, pagsasanay, next.startDate),
+      pagsasanayDate: pagsasanay ?? '',
+      pagtupadDate: pagtupad ?? '',
+      schedules: nextSchedules,
+      assignments: assignmentsFromSchedules(nextSchedules),
+    })
+  }
+
   const selectTemplate = (template: SuguanCoverageTemplate) => {
     if (template === 'one-week') {
-      // Blank until the user picks a date, matching the two-week templates.
-      // The one-week template uses every configured worship day, so once a date
-      // is entered the suggested Pagtupad is the full block (midweek Wed+Thu or
-      // Sat+Sun) via `planEventsFromCoverage`.
-      const next: SuguanCoverage = { template, startDate: '' }
+      // A training date entered under Midweek carries over. The whole detected
+      // week is auto-populated into the Schedules step immediately, keeping
+      // any assignments by schedule key; when no date exists yet the week stays
+      // empty until the user picks one.
+      const trainingDate = firstDateKey(
+        isDateKey(coverage.startDate) ? coverage.startDate : '',
+        coverage.oneWeekPagsasanayDate,
+        coverage.oneWeekDate,
+      )
+      const next: SuguanCoverage = {
+        ...coverage,
+        template,
+        oneWeekPagsasanayDate: trainingDate,
+        startDate: trainingDate,
+      }
+      const nextSchedules = weekScheduleSections(
+        next,
+        draft.schedules,
+        scheduleCategories,
+      )
+      const nextEvents = generateEventsFromCoverage(next, scheduleCategories)
+      const pagsasanay = nextEvents.find((e) => e.type === 'pagsasanay')?.date
+      const pagtupad = nextEvents.find((e) => e.type === 'pagtupad')?.date
       patch({
         coverage: next,
-        events: generateEventsFromCoverage(next),
-        date: '',
+        events: nextEvents,
+        date: laterDateKey(pagtupad, pagsasanay, next.startDate),
         time: draft.time,
-        pagsasanayDate: '',
-        pagtupadDate: '',
+        pagsasanayDate: pagsasanay ?? '',
+        pagtupadDate: pagtupad ?? '',
+        schedules: nextSchedules,
+        assignments: assignmentsFromSchedules(nextSchedules),
       })
       return
     }
@@ -206,7 +289,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
       template,
       startDate: isDateKey(coverage.startDate) ? coverage.startDate : '',
     }
-    const nextEvents = generateEventsFromCoverage(next)
+    const nextEvents = generateEventsFromCoverage(next, scheduleCategories)
     patch({
       coverage: next,
       events: nextEvents,
@@ -221,7 +304,34 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
         <StepHeading
-          title="1. Duration & coverage"
+          title="1. Service"
+          hint="The service is used for the sheet title and file naming."
+        />
+        <div className="grid gap-3 rounded-lg border p-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="serviceType">Service type</Label>
+            <Select
+              value={draft.serviceTypeId}
+              onValueChange={(v) => patch({ serviceTypeId: v })}
+            >
+              <SelectTrigger id="serviceType" className="w-full">
+                <SelectValue placeholder="Select a service" />
+              </SelectTrigger>
+              <SelectContent>
+                {allServiceTypes().map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <StepHeading
+          title="2. Duration & coverage"
           hint="Coverage decides the Pagsasanay and Pagtupad columns printed on the sheet."
         />
         <div className="grid gap-3 md:grid-cols-3">
@@ -238,70 +348,81 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
         </div>
 
         {coverage.template === 'one-week' ? (
-          <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="grid gap-1.5">
-              <Label htmlFor="cw-date" className="text-xs text-muted-foreground">
-                Worship date
-              </Label>
-              <Input
-                id="cw-date"
-                type="date"
-                value={coverage.oneWeekDate ?? ''}
-                onChange={(e) =>
-                  applyCoverage({ ...coverage, oneWeekDate: e.target.value })
-                }
-              />
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,240px)_1fr] md:items-center">
+              <div className="grid gap-1.5">
+                <Label htmlFor="cw-ow-psd" className="text-xs text-foreground">
+                  Petsa ng Pagsasanay
+                </Label>
+                <div className="flex items-center gap-2">
+                  <CalendarRange className="size-4 shrink-0 text-muted-foreground" />
+                  <Input
+                    id="cw-ow-psd"
+                    type="date"
+                    value={oneWeekTrainingDate}
+                    onChange={(e) => applyOneWeekTrainingDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {detectedWeek.length === 0 ? (
+                    <>
+                      One Week automatically covers every worship day of the
+                      calendar week around your Pagsasanay — Wednesday,
+                      Thursday, Saturday and Sunday. Choose a date and the whole
+                      week's schedules are added to the Schedules step.
+                    </>
+                  ) : (
+                    <>
+                      Pagsasanay on{' '}
+                      <span className="font-medium text-foreground">
+                        {formatDateKeyLongDate(oneWeekTrainingDate)}
+                      </span>{' '}
+                      detects the worship week{' '}
+                      <span className="font-medium text-foreground">
+                        {formatDateKeyNumeric(weekRange?.wednesday ?? '')}–
+                        {formatDateKeyNumeric(weekRange?.sunday ?? '')}
+                      </span>
+                      . These {detectedWeek.length} schedules are added
+                      automatically and stay editable in the Schedules step.
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="cw-psd" className="text-xs text-muted-foreground">
-                Pagsasanay date
-              </Label>
-              <Input
-                id="cw-psd"
-                type="date"
-                value={coverage.oneWeekPagsasanayDate ?? ''}
-                onChange={(e) =>
-                  applyCoverage({
-                    ...coverage,
-                    oneWeekPagsasanayDate: e.target.value,
-                  })
-                }
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="cw-ptd" className="text-xs text-muted-foreground">
-                Pagtupad start
-              </Label>
-              <Input
-                id="cw-ptd"
-                type="date"
-                disabled={!hasOneWeekRehearsal}
-                value={coverage.oneWeekPagtupadDate ?? ''}
-                onChange={(e) =>
-                  applyCoverage({
-                    ...coverage,
-                    oneWeekPagtupadDate: e.target.value,
-                  })
-                }
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="cw-pte" className="text-xs text-muted-foreground">
-                Pagtupad end (optional)
-              </Label>
-              <Input
-                id="cw-pte"
-                type="date"
-                disabled={!hasOneWeekRehearsal}
-                value={coverage.oneWeekPagtupadEndDate ?? ''}
-                onChange={(e) =>
-                  applyCoverage({
-                    ...coverage,
-                    oneWeekPagtupadEndDate: e.target.value || undefined,
-                  })
-                }
-              />
-            </div>
+
+            {detectedWeek.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {detectedWeek.map(({ schedule, date }) => (
+                  <div
+                    key={`${schedule.id}-${date}`}
+                    className="flex items-start gap-2.5 rounded-lg border border-primary/15 bg-primary/[0.03] px-3 py-2.5"
+                  >
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                      <Check className="size-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Detected schedule
+                      </span>
+                      <span className="mt-0.5 block text-sm font-semibold text-foreground">
+                        {WEEKDAY_LONG[schedule.weekday]}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {formatDateKeyLongDate(date)} · {schedule.scheduleTime}
+                      </span>
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    >
+                      Detected automatically
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -413,7 +534,7 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
                       Use{' '}
                       {suggestedService.days
                         .map((d) => WEEKDAY_LONG[d])
-                        .join(' &amp; ')}{' '}
+                        .join(' & ')}{' '}
                       ({formatDateKeyNumeric(suggestedService.start)}
                       {suggestedService.end !== suggestedService.start &&
                         `–${formatDateKeyNumeric(suggestedService.end)}`}
@@ -424,33 +545,6 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
             </div>
           </>
         )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <StepHeading
-          title="2. Service"
-          hint="The service is used for the sheet title and file naming."
-        />
-        <div className="grid gap-3 rounded-lg border p-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="serviceType">Service type</Label>
-            <Select
-              value={draft.serviceTypeId}
-              onValueChange={(v) => patch({ serviceTypeId: v })}
-            >
-              <SelectTrigger id="serviceType" className="w-full">
-                <SelectValue placeholder="Select a service" />
-              </SelectTrigger>
-              <SelectContent>
-                {allServiceTypes().map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
       </section>
 
       <section className="flex flex-col gap-3">

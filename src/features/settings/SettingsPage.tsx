@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Download, Trash2, Upload } from 'lucide-react'
+import { Download, FileDown, FileUp, Trash2, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -26,12 +26,18 @@ import { GenderBadge } from '@/components/StatusBadges'
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { phtInstantISO, phtStampForFilename } from '@/lib/phDate'
 import { MobileSettingsHeader } from './MobileSettingsHeader'
 import { SettingsList } from './SettingsList'
+import { WorshipSchedulesCard } from './WorshipSchedulesCard'
 import { deriveAbbreviation } from './referenceList'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
+import { ImportRosterDialog } from '@/features/master-list/ImportRosterDialog'
+import { MasterListPdfSetupDialog } from '@/features/master-list/MasterListPdfSetupDialog'
+import { exportMasterListPdf } from '@/features/master-list/masterListPdfExport'
+import type { MasterListPaperSize } from '@/features/master-list/masterListPaperSizes'
 
 interface BackupFile {
   app: string
@@ -43,6 +49,7 @@ interface BackupFile {
   serviceTypes: unknown[]
   dutyRoles: unknown[]
   voices: unknown[]
+  worshipSchedules?: { midweek: unknown[]; weekend: unknown[] }
 }
 
 export function SettingsPage() {
@@ -57,6 +64,8 @@ export function SettingsPage() {
 
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
+  const [masterListImportOpen, setMasterListImportOpen] = useState(false)
+  const [masterListPdfOpen, setMasterListPdfOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const serviceTypes = settingsStore.allServiceTypes()
@@ -85,6 +94,10 @@ export function SettingsPage() {
       serviceTypes: settingsStore.serviceTypes,
       dutyRoles: settingsStore.dutyRoles,
       voices: settingsStore.voices,
+      worshipSchedules: {
+        midweek: useWorshipScheduleStore.getState().midweek,
+        weekend: useWorshipScheduleStore.getState().weekend,
+      },
     }
     const blob = new Blob([JSON.stringify(backup, null, 2)], {
       type: 'application/json',
@@ -99,6 +112,22 @@ export function SettingsPage() {
     URL.revokeObjectURL(url)
     logAdminAction('Exported System Backup', 'Downloaded a browser backup file.')
     toast.success('Backup exported.')
+  }
+
+  const handleMasterListPdfExport = async (
+    name: string,
+    paperSize: MasterListPaperSize,
+  ) => {
+    await exportMasterListPdf(
+      memberStore.members,
+      memberStore.trainees,
+      settingsStore.voices,
+      settingsStore.dutyRoles,
+      name,
+      paperSize,
+    )
+    settingsStore.setLocaleName(name)
+    toast.success('Master List exported as PDF.')
   }
 
   const handleImportFile = (file: File) => {
@@ -120,6 +149,12 @@ export function SettingsPage() {
           data.dutyRoles as never,
           data.voices as never,
         )
+        if (data.worshipSchedules) {
+          useWorshipScheduleStore.getState().importData(
+            data.worshipSchedules.midweek as never,
+            data.worshipSchedules.weekend as never,
+          )
+        }
         logAdminAction('Restored System Backup', 'Imported a browser backup file.')
         toast.success('Backup imported successfully.')
       } catch {
@@ -157,6 +192,8 @@ export function SettingsPage() {
 
         <TabsContent value="general" className="mt-4">
   <div className="flex flex-col gap-4">
+    <WorshipSchedulesCard onAudit={logAdminAction} />
+
     <SettingsList
       items={serviceTypes}
       title="Service Types"
@@ -170,6 +207,17 @@ export function SettingsPage() {
         },
       ]}
       getLabel={(t) => t.name}
+      defaultId={settingsStore.defaultServiceTypeId}
+      onSetDefault={(id) => {
+        settingsStore.setDefaultServiceType(id)
+        const label = serviceTypes.find((t) => t.id === id)?.name ?? id
+        logAdminAction(
+          settingsStore.defaultServiceTypeId === id
+            ? 'Removed Default Service Type'
+            : 'Set Default Service Type',
+          label,
+        )
+      }}
       onCreate={(v) => {
         settingsStore.addServiceType(v.name.trim())
         logAdminAction('Created Service Type', v.name.trim())
@@ -313,6 +361,22 @@ export function SettingsPage() {
                 </Label>
               </div>
               <div className="flex flex-wrap gap-2">
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setMasterListImportOpen(true)}
+                  >
+                    <FileUp className="size-4" />
+                    Import Master List
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setMasterListPdfOpen(true)}
+                >
+                  <FileDown className="size-4" />
+                  Export Master List
+                </Button>
                 <Button variant="outline" onClick={handleExport}>
                   <Download className="size-4" />
                   Export Backup (JSON)
@@ -371,6 +435,7 @@ export function SettingsPage() {
                     memberStore.clear()
                     suguanStore.clear()
                     settingsStore.clear()
+                    useWorshipScheduleStore.getState().clear()
                     logAdminAction('Cleared System Data', 'Cleared members, trainees, Suguan records, and settings.')
                     toast.success('All data cleared.')
                   }}
@@ -410,6 +475,19 @@ export function SettingsPage() {
           </AlertDialog>
         </TabsContent>
       </Tabs>
+      {isAdmin && (
+        <ImportRosterDialog
+          open={masterListImportOpen}
+          onOpenChange={setMasterListImportOpen}
+        />
+      )}
+      {masterListPdfOpen && (
+        <MasterListPdfSetupDialog
+          onOpenChange={setMasterListPdfOpen}
+          savedLocaleName={settingsStore.localeName}
+          onExport={handleMasterListPdfExport}
+        />
+      )}
     </div>
   )
 }

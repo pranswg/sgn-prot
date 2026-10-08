@@ -34,10 +34,13 @@ import {
 } from './phDate.ts'
 import {
   ALL_WORSHIP_SCHEDULES,
+  DEFAULT_SCHEDULE_CATEGORIES,
   MIDWEEK_SCHEDULES,
   WEEKEND_SCHEDULES,
   isWorshipWeekday,
   worshipWeekdays,
+  type WorshipSchedule,
+  type WorshipScheduleCategories,
 } from '../core/constants/worshipSchedules.ts'
 import {
   nextWorshipBlock,
@@ -46,6 +49,7 @@ import {
   schedulesForTemplate,
   suggestPagtupadBlock,
   worshipWeekFromRehearsal,
+  worshipWeekSchedules,
 } from './suguanDates.ts'
 
 const WEDNESDAY = 3
@@ -432,7 +436,9 @@ test('empty overrides fall back to the suggested block', () => {
   assert.equal(events[1].endDate, '2026-10-11')
 })
 
-test('one-week templates suggest the full block and allow overriding it', () => {
+test('one-week Pagtupad follows the detected week and can be overridden', () => {
+  // A Wednesday training 2026-09-30 sits in the Sept 28 – Oct 4 week, so the
+  // suggested service runs Wednesday..Sunday of that same week.
   const suggested = planEventsFromCoverage({
     template: 'one-week',
     startDate: '2026-09-30',
@@ -442,7 +448,7 @@ test('one-week templates suggest the full block and allow overriding it', () => 
     suggested.map((e) => [e.type, e.date, e.endDate]),
     [
       ['pagsasanay', '2026-09-30', undefined],
-      ['pagtupad', '2026-09-30', '2026-10-01'],
+      ['pagtupad', '2026-09-30', '2026-10-04'],
     ],
   )
 
@@ -455,6 +461,96 @@ test('one-week templates suggest the full block and allow overriding it', () => 
   })
   assert.equal(overridden[1].date, '2026-10-03')
   assert.equal(overridden[1].endDate, '2026-10-04')
+})
+
+test('one-week covers the whole detected week around a Saturday training', () => {
+  // The user example: training Saturday 2026-09-26, worship week Wed 09-23,
+  // Thu 09-24, Sat 09-26, Sun 09-27.
+  const events = planEventsFromCoverage({
+    template: 'one-week',
+    startDate: '2026-09-26',
+    oneWeekPagsasanayDate: '2026-09-26',
+  })
+  assert.deepEqual(
+    events.map((e) => [e.type, e.date, e.endDate]),
+    [
+      ['pagsasanay', '2026-09-26', undefined],
+      ['pagtupad', '2026-09-23', '2026-09-27'],
+    ],
+  )
+})
+
+test('worshipWeekSchedules resolves every slot of the detected week to a date', () => {
+  const dated = worshipWeekSchedules('2026-09-26')
+  assert.deepEqual(
+    dated.map(({ schedule, date }) => [schedule.id, date]),
+    [
+      ['miyerkules-7pm', '2026-09-23'],
+      ['huwebes-6am', '2026-09-24'],
+      ['huwebes-7pm', '2026-09-24'],
+      ['sabado-6pm', '2026-09-26'],
+      ['linggo-6am', '2026-09-27'],
+      ['linggo-10am', '2026-09-27'],
+    ],
+  )
+  assert.deepEqual(worshipWeekSchedules(''), [])
+  assert.deepEqual(worshipWeekSchedules('not a date'), [])
+})
+
+test('worshipWeekSchedules picks up a custom Wednesday time added in Settings', () => {
+  const custom: WorshipSchedule[] = [
+    ...DEFAULT_SCHEDULE_CATEGORIES.midweek,
+    {
+      id: 'miyerkules-8pm',
+      scheduleDay: 'MIYERKULES',
+      weekday: 3,
+      scheduleTime: '8:00 PM',
+      label: 'Miyerkules, 8:00 PM',
+      presetHint: '',
+      custom: true,
+    },
+  ]
+  const dated = worshipWeekSchedules('2026-09-26', custom)
+  const slots = dated.filter((entry) => entry.schedule.id === 'miyerkules-8pm')
+  assert.equal(slots.length, 1)
+  assert.equal(slots[0].schedule.scheduleTime, '8:00 PM')
+  assert.equal(slots[0].date, '2026-09-23')
+})
+
+test('planEventsFromCoverage plans midweek around a custom worship schedule', () => {
+  const custom: WorshipScheduleCategories = {
+    midweek: [
+      ...DEFAULT_SCHEDULE_CATEGORIES.midweek,
+      {
+        id: 'biyernes-7pm',
+        scheduleDay: 'BIYERNES',
+        weekday: 5,
+        scheduleTime: '7:00 PM',
+        label: 'BIYERNES, 7:00 PM',
+        presetHint: '',
+        custom: true,
+      },
+    ],
+    weekend: DEFAULT_SCHEDULE_CATEGORIES.weekend,
+  }
+  const events = planEventsFromCoverage(
+    { template: 'midweek-2w', startDate: '2026-09-28' },
+    custom,
+  )
+  const firstPagtupad = events.find((e) => e.type === 'pagtupad')
+  // Wednesday training resolves to a midweek block that now runs to Friday,
+  // because that is the configured worship schedule.
+  assert.equal(firstPagtupad?.date, '2026-09-30')
+  assert.equal(firstPagtupad?.endDate, '2026-10-02')
+  assert.deepEqual(
+    events.map((e) => [e.type, e.date, e.endDate]),
+    [
+      ['pagsasanay', '2026-09-28', undefined],
+      ['pagtupad', '2026-09-30', '2026-10-02'],
+      ['pagsasanay', '2026-10-05', undefined],
+      ['pagtupad', '2026-10-07', '2026-10-09'],
+    ],
+  )
 })
 
 test('a blank Pagsasanay date plans nothing, and never falls back to today', () => {
@@ -481,8 +577,9 @@ test('a blank date plans nothing even when overrides are present', () => {
 })
 
 test('one-week still plans from its own date fields when startDate is blank', () => {
-  // The one-week template drives off `oneWeekDate`, not `startDate`, so a user
-  // who fills in only "Worship date" still gets events.
+  // Legacy one-week records may live only in `oneWeekDate` (or
+  // `oneWeekPagsasanayDate`), with `startDate` never set. Those must still
+  // detect a full week.
   const events = planEventsFromCoverage({
     template: 'one-week',
     startDate: '',
@@ -493,13 +590,15 @@ test('one-week still plans from its own date fields when startDate is blank', ()
     events.map((e) => [e.type, e.date, e.endDate]),
     [
       ['pagsasanay', '2026-09-30', undefined],
-      ['pagtupad', '2026-09-30', '2026-10-01'],
+      ['pagtupad', '2026-09-30', '2026-10-04'],
     ],
   )
 })
 
-test('every planned Pagtupad is a maximal run of real worship days', () => {
-  for (const template of ['midweek-2w', 'weekend-2w', 'one-week'] as const) {
+test('every planned two-week Pagtupad is a maximal run of real worship days', () => {
+  // One-week is deliberately excluded: its Pagtupad spans the whole detected
+  // week (Wed..Sun), which includes a bare Friday between worship days.
+  for (const template of ['midweek-2w', 'weekend-2w'] as const) {
     const allowed = new Set(worshipWeekdays(schedulesForTemplate(template)))
     for (const start of ['2026-09-30', '2026-10-03', '2026-10-07', '2026-10-31']) {
       const events = planEventsFromCoverage({ template, startDate: start })

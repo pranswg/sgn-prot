@@ -24,6 +24,7 @@ import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { phtInstantISO } from '@/lib/phDate'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface MemberFormDialogProps {
   open: boolean
@@ -40,6 +41,7 @@ interface MemberFormState {
   gender: 'male' | 'female'
   voicePosition: string
   membershipType: MembershipType
+  assignedDutyRoleIds: string[]
 }
 
 const emptyForm = (): MemberFormState => ({
@@ -50,6 +52,7 @@ const emptyForm = (): MemberFormState => ({
   gender: 'female',
   voicePosition: 'soprano-1',
   membershipType: 'regular',
+  assignedDutyRoleIds: [],
 })
 
 export function MemberFormDialog({
@@ -61,6 +64,7 @@ export function MemberFormDialog({
   const addMember = useMemberStore((s) => s.addMember)
   const updateMember = useMemberStore((s) => s.updateMember)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const dutyRoles = useSettingsStore((s) => s.dutyRoles)
 
   const [form, setForm] = useState<MemberFormState>(emptyForm)
 
@@ -76,6 +80,7 @@ export function MemberFormDialog({
               gender: member.gender,
               voicePosition: member.voicePosition,
               membershipType: member.membershipType,
+              assignedDutyRoleIds: member.assignedDutyRoleIds ?? [],
             }
           : emptyForm(),
       )
@@ -114,9 +119,9 @@ export function MemberFormDialog({
         gender: form.gender,
         voicePosition: form.voicePosition,
         membershipType: form.membershipType,
+        assignedDutyRoleIds: form.assignedDutyRoleIds,
       }
-      // isActive, positions, and notes are intentionally left untouched: the
-      // editor has no UI for them, so editing a member must never clear them.
+      // isActive, legacy positions, and notes remain untouched by this editor.
       updateMember(member.id, input)
       toast.success('Member updated.')
     } else {
@@ -128,6 +133,7 @@ export function MemberFormDialog({
         gender: form.gender,
         voicePosition: form.voicePosition,
         membershipType: form.membershipType,
+        assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: true,
         dateAdded: phtInstantISO(),
       }
@@ -258,6 +264,36 @@ export function MemberFormDialog({
               Organists for the Organist Suguan.
             </p>
           </div>
+
+          <fieldset className="grid gap-3">
+            <legend className="text-sm font-medium">Choir Rankings</legend>
+            <p className="text-xs text-muted-foreground">
+              Select any configured duty-role rankings held by this member.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {dutyRoles.map((role) => (
+                <label
+                  key={role.id}
+                  className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <Checkbox
+                    checked={form.assignedDutyRoleIds.includes(role.id)}
+                    onCheckedChange={(checked) =>
+                      set(
+                        'assignedDutyRoleIds',
+                        checked
+                          ? [...new Set([...form.assignedDutyRoleIds, role.id])]
+                          : form.assignedDutyRoleIds.filter(
+                              (id) => id !== role.id,
+                            ),
+                      )
+                    }
+                  />
+                  {role.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

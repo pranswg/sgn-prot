@@ -20,6 +20,7 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import type { Suguan } from '@/core/types/suguan'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/format'
@@ -59,6 +60,7 @@ export function SuguanBuilderPage() {
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
   const members = useMemberStore((s) => s.members)
+  const scheduleCategories = useWorshipScheduleCategories()
 
   // `editingId` is what we will write back to. It starts as the store's target so
   // deep links still work, but choosing "start new" or copying detaches it so a
@@ -78,14 +80,18 @@ export function SuguanBuilderPage() {
     existing ? BUILDER_STEPS.length - 1 : 0,
   )
   const [draft, setDraft] = useState<SuguanDraft>(() =>
-    existing ? createDraftFromSuguan(existing, voices) : createEmptyDraft(voices),
+    existing
+      ? createDraftFromSuguan(existing, voices, scheduleCategories)
+      : createEmptyDraft(voices, scheduleCategories),
   )
   const [startOpen, setStartOpen] = useState(!existing)
 
   if (loadedKey !== initialKey) {
     setLoadedKey(initialKey)
     setDraft(
-      existing ? createDraftFromSuguan(existing, voices) : createEmptyDraft(voices),
+      existing
+        ? createDraftFromSuguan(existing, voices, scheduleCategories)
+        : createEmptyDraft(voices, scheduleCategories),
     )
     setStep(existing ? BUILDER_STEPS.length - 1 : 0)
     setStartOpen(!existing)
@@ -454,7 +460,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
         onStartNew={() => {
           setEditingId(null)
           setLoadedKey('__new__')
-          setDraft(createEmptyDraft(voices))
+          setDraft(createEmptyDraft(voices, scheduleCategories))
           setStep(0)
           setStartOpen(false)
           clearBuilderReturnPage()
@@ -462,7 +468,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
         onCopy={(source) => {
           setEditingId(null)
           setLoadedKey('__new__')
-          setDraft(createCopyDraft(source, voices))
+          setDraft(createCopyDraft(source, voices, scheduleCategories))
           setStep(0)
           setStartOpen(false)
           clearBuilderReturnPage()

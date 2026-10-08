@@ -16,10 +16,11 @@
 import { addDays, firstDateKey, isDateKey, todayPHT, weekdayOf } from './phDate.ts'
 import {
   ALL_WORSHIP_SCHEDULES,
-  MIDWEEK_SCHEDULES,
-  WEEKEND_SCHEDULES,
+  DEFAULT_SCHEDULE_CATEGORIES,
+  allSchedulesOf,
   worshipWeekdays,
   type WorshipSchedule,
+  type WorshipScheduleCategories,
 } from '../core/constants/worshipSchedules.ts'
 import type { SuguanCoverage, SuguanEventType } from '../core/types/suguan.ts'
 
@@ -217,13 +218,18 @@ export function suggestPagtupadDate(
   return suggestPagtupadBlock(base, schedules)?.start ?? base
 }
 
-/** The worship schedules that apply to a coverage template. */
+/**
+ * The worship schedules that apply to a coverage template. Defaults to the
+ * built-in times; pass editable categories to plan against what the admin
+ * configured in Settings.
+ */
 export function schedulesForTemplate(
   template: SuguanCoverage['template'],
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
 ): readonly WorshipSchedule[] {
-  if (template === 'midweek-2w') return MIDWEEK_SCHEDULES
-  if (template === 'weekend-2w') return WEEKEND_SCHEDULES
-  return ALL_WORSHIP_SCHEDULES
+  if (template === 'midweek-2w') return categories.midweek
+  if (template === 'weekend-2w') return categories.weekend
+  return allSchedulesOf(categories)
 }
 
 /** The last date covered by a template, used for the "until ..." label. */
@@ -258,6 +264,53 @@ export function worshipWeekFromRehearsal(
     saturday: shiftKey(monday, 5),
     sunday: shiftKey(monday, 6),
   }
+}
+
+/** A configured worship schedule resolved to a concrete calendar date. */
+export type DatedWorshipSchedule = {
+  schedule: WorshipSchedule
+  /** The date this schedule falls on within the detected worship week. */
+  date: string
+}
+
+/**
+ * Every configured worship schedule of the calendar week containing
+ * `rehearsalDate`, resolved to its concrete date. One Pagsasanay date therefore
+ * yields the whole week's service slots — Wednesday and Thursday midweek,
+ * Saturday and Sunday weekend — ordered by date then time, e.g. for a training
+ * on Saturday 2026-09-26:
+ *
+ *   MIYERKULES 7:00 PM -> 2026-09-23
+ *   HUWEBES 6:00 AM    -> 2026-09-24
+ *   HUWEBES 7:00 PM    -> 2026-09-24
+ *   SABADO 6:00 PM     -> 2026-09-26
+ *   LINGGO 6:00 AM     -> 2026-09-27
+ *   LINGGO 10:00 AM    -> 2026-09-27
+ *
+ * @returns `[]` when `rehearsalDate` is blank or not a usable `YYYY-MM-DD` key.
+ */
+export function worshipWeekSchedules(
+  rehearsalDate: string,
+  schedules: readonly WorshipSchedule[] = ALL_WORSHIP_SCHEDULES,
+): DatedWorshipSchedule[] {
+  const week = worshipWeekFromRehearsal(rehearsalDate)
+  if (!week) return []
+  const dayToDate = new Map<number, string>([
+    [WEDNESDAY, week.wednesday],
+    [THURSDAY, week.thursday],
+    [SATURDAY, week.saturday],
+    [SUNDAY, week.sunday],
+  ])
+  return schedules.filter((schedule) =>
+    dayToDate.has(schedule.weekday),
+  )
+    .map((schedule) => ({
+      schedule,
+      date: dayToDate.get(schedule.weekday) as string,
+    }))
+    // One slot per date keeps the configured order (a stable sort preserves it
+    // for ties), so within a day the earlier service stays first.
+    .sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1))
 }
 
 /**
@@ -297,8 +350,9 @@ function resolveService(
  */
 export function planEventsFromCoverage(
   coverage: SuguanCoverage,
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
 ): PlannedEvent[] {
-  const weekdays = worshipWeekdays(schedulesForTemplate(coverage.template))
+  const weekdays = worshipWeekdays(schedulesForTemplate(coverage.template, categories))
 
   if (coverage.template === 'midweek-2w' || coverage.template === 'weekend-2w') {
     // Nothing is planned until the user picks a Pagsasanay date. This
@@ -342,20 +396,29 @@ export function planEventsFromCoverage(
     ]
   }
 
-  // One-week template: whatever the user entered for the rehearsal is kept
-  // exactly, and the Pagtupad falls back to the suggested block only when the
-  // user has not set one. This template has its own date fields, so it does not
-  // depend on `startDate` the way the two-week templates do.
+  // One-week template: the user picks one Pagsasanay (rehearsal) date and the
+  // whole worship week around it — Wednesday, Thursday, Saturday, Sunday — is
+  // covered. The training date is stored exactly as entered (in `startDate`,
+  // mirrored in `oneWeekPagsasanayDate`), and the Pagtupad is suggested as the
+  // full detected week. `oneWeekPagtupadDate` / `oneWeekPagtupadEndDate` still
+  // let an unusual service week be pinned by hand.
   const pagsasanay = firstDateKey(
+    isDateKey(coverage.startDate) ? coverage.startDate : '',
     coverage.oneWeekPagsasanayDate,
     coverage.oneWeekDate,
-    isDateKey(coverage.startDate) ? coverage.startDate : '',
   )
   if (!isDateKey(pagsasanay)) return []
+  const week = worshipWeekFromRehearsal(pagsasanay)
   const service = resolveService(
     coverage.oneWeekPagtupadDate,
     coverage.oneWeekPagtupadEndDate,
-    suggestBlockForSchedules(pagsasanay, weekdays),
+    week
+      ? {
+          start: week.wednesday,
+          end: week.sunday,
+          days: worshipWeekdays(schedulesForTemplate('one-week', categories)),
+        }
+      : null,
     pagsasanay,
   )
 

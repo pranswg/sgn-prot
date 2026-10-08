@@ -24,6 +24,15 @@ interface SettingsState {
   serviceTypes: StoredServiceType[]
   dutyRoles: StoredDutyRole[]
   voices: StoredVoice[]
+  localeName: string
+  /**
+   * Which service type a new Suguan starts with. There is at most one default;
+   * setting a new one replaces whatever was set before, and deleting the
+   * default clears it. `null` means "no default configured".
+   */
+  defaultServiceTypeId: string | null
+  setLocaleName: (name: string) => void
+  setDefaultServiceType: (id: string | null) => void
   addServiceType: (name: string) => void
   updateServiceType: (id: string, patch: { name: string }) => void
   removeServiceType: (id: string) => void
@@ -58,6 +67,18 @@ export const useSettingsStore = create<SettingsState>()(
       serviceTypes: seedServiceTypes(),
       dutyRoles: seedDutyRoles(),
       voices: seedVoices(),
+      localeName: 'Sta. Monica',
+      defaultServiceTypeId: null,
+
+      setLocaleName: (localeName) => set({ localeName: localeName.trim() }),
+
+      setDefaultServiceType: (id) =>
+        // Setting the current default again clears it, so "remove default" is
+        // the same gesture as "set default". Any other id simply replaces the
+        // previous default; only one default is ever active.
+        set((s) => ({
+          defaultServiceTypeId: s.defaultServiceTypeId === id ? null : id,
+        })),
 
       addServiceType: (name) => {
         set((s) => ({
@@ -79,6 +100,10 @@ export const useSettingsStore = create<SettingsState>()(
       removeServiceType: (id) => {
         set((s) => ({
           serviceTypes: s.serviceTypes.filter((t) => t.id !== id),
+          // A deleted default must not dangle behind an id that no longer
+          // exists in the list.
+          defaultServiceTypeId:
+            s.defaultServiceTypeId === id ? null : s.defaultServiceTypeId,
         }))
       },
 
@@ -161,16 +186,41 @@ export const useSettingsStore = create<SettingsState>()(
       allVoices: () => get().voices,
 
       importData: (serviceTypes, dutyRoles, voices) => {
-        set({ serviceTypes, dutyRoles, voices })
+        set((s) => ({
+          serviceTypes,
+          dutyRoles,
+          voices,
+          // A restored backup may not contain the current default service type;
+          // keep the default only when it survives the import.
+          defaultServiceTypeId:
+            s.defaultServiceTypeId != null &&
+            serviceTypes.some((t) => t.id === s.defaultServiceTypeId)
+              ? s.defaultServiceTypeId
+              : null,
+        }))
       },
 
       clear: () => {
-        set({ serviceTypes: [], dutyRoles: [], voices: [] })
+        set({
+          serviceTypes: [],
+          dutyRoles: [],
+          voices: [],
+          localeName: '',
+          defaultServiceTypeId: null,
+        })
       },
     }),
     {
       name: 'choir-settings',
-      version: 3,
+      version: 5,
+      migrate: (persisted) => {
+        const p = persisted as Partial<SettingsState> | undefined
+        return {
+          ...(p as Partial<SettingsState>),
+          localeName: p?.localeName ?? 'Sta. Monica',
+          defaultServiceTypeId: p?.defaultServiceTypeId ?? null,
+        }
+      },
     },
   ),
 )

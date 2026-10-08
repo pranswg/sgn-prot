@@ -23,9 +23,9 @@ import {
   weekdayOf,
 } from '@/lib/phDate'
 import {
-  MIDWEEK_SCHEDULES,
-  WEEKEND_SCHEDULES,
+  DEFAULT_SCHEDULE_CATEGORIES,
   worshipWeekdays,
+  type WorshipScheduleCategories,
 } from '@/core/constants/worshipSchedules'
 import {
   coverageLastDate,
@@ -355,6 +355,7 @@ export {
   suggestPagtupadBlock,
   suggestPagtupadDate,
   worshipWeekFromRehearsal,
+  worshipWeekSchedules,
 } from './suguanDates'
 
 /**
@@ -363,8 +364,9 @@ export {
  */
 export function generateEventsFromCoverage(
   coverage: SuguanCoverage,
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
 ): SuguanEvent[] {
-  return planEventsFromCoverage(coverage).map((event) => ({
+  return planEventsFromCoverage(coverage, categories).map((event) => ({
     ...event,
     id: nanoid(),
   }))
@@ -385,14 +387,15 @@ export function coverageLabel(coverage: SuguanCoverage | null | undefined): stri
 
 export function inferCoverageFromEvents(
   events: SuguanEvent[],
+  categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
 ): SuguanCoverage | null {
   if (!events || events.length === 0) return null
   const first = events[0]
   if (!first?.date) return null
   const startDate = first.date
   const firstWeekday = weekdayOf(startDate)
-  const midweekDay = worshipWeekdays(MIDWEEK_SCHEDULES)
-  const weekendDay = worshipWeekdays(WEEKEND_SCHEDULES)
+  const midweekDay = worshipWeekdays(categories.midweek)
+  const weekendDay = worshipWeekdays(categories.weekend)
   const template =
     events.length >= 4 && midweekDay.includes(firstWeekday)
       ? 'midweek-2w'
@@ -487,6 +490,7 @@ export function normalizeSchedules(suguan: Suguan): SuguanScheduleSection[] {
       scheduleLabel: s.scheduleLabel || 'SUGUAN',
       scheduleDay: s.scheduleDay || '',
       scheduleTime: s.scheduleTime || '',
+      scheduleDate: s.scheduleDate,
       assignments: Array.isArray(s.assignments) ? s.assignments : [],
     }))
   }

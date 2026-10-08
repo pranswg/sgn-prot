@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import {
   Download,
   FileDown,
-  FileUp,
   Plus,
   Search,
   SlidersHorizontal,
@@ -44,10 +43,12 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
+import { formatPHTDateTime } from '@/lib/phDate'
 import type { ChoirPosition, Member } from '@/core/types/member'
 import { CHOIR_POSITIONS, POSITION_LABELS } from '@/core/constants/choirPositions'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { exportCSV, exportExcel, membersToRows } from '@/lib/export'
+import { exportMasterListPdf } from './masterListPdfExport'
 import {
   EMPTY_DIRECTORY_FILTERS,
   MEMBER_SORT_LABEL,
@@ -71,7 +72,6 @@ import { cn } from '@/lib/utils'
 import { todayPHT } from '@/lib/phDate'
 import { MemberFormDialog } from './MemberFormDialog'
 import { MemberDetailDialog } from './MemberDetailDialog'
-import { ImportRosterDialog } from './ImportRosterDialog'
 import {
   MemberDirectoryTable,
   MemberDirectoryEmptyState,
@@ -89,6 +89,10 @@ import {
 } from './mobileFilters'
 import { MemberProfileSheet } from './MemberProfileSheet'
 import { MobileMemberFormSheet } from './MobileMemberFormSheet'
+import {
+  MasterListPdfSetupDialog,
+} from './MasterListPdfSetupDialog'
+import type { MasterListPaperSize } from './masterListPaperSizes'
 import { usePermissions } from '@/hooks/usePermissions'
 
 const GENDER_LABEL: Record<string, string> = {
@@ -135,11 +139,15 @@ function filterChipValue(
 export function MasterListPage() {
   const members = useMemberStore((s) => s.members)
   const trainees = useMemberStore((s) => s.trainees)
+  const lastUpdatedAt = useMemberStore((s) => s.lastUpdatedAt)
   const removeMember = useMemberStore((s) => s.removeMember)
   const deactivateMember = useMemberStore((s) => s.deactivateMember)
   const reactivateMember = useMemberStore((s) => s.reactivateMember)
   const voices = useSettingsStore((s) => s.voices)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const dutyRoles = useSettingsStore((s) => s.dutyRoles)
+  const localeName = useSettingsStore((s) => s.localeName)
+  const setLocaleName = useSettingsStore((s) => s.setLocaleName)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const navigate = useNavStore((s) => s.navigate)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
@@ -150,6 +158,16 @@ export function MasterListPage() {
   const canDeleteMembers = can('delete-members')
   const canAssignMembers = can('assign-members')
   const canExportDocuments = can('export-documents')
+  const updatedAt = new Date(lastUpdatedAt)
+  const lastUpdatedLabel = `${formatPHTDateTime(updatedAt, {
+    month: 'long',
+    day: '2-digit',
+    year: 'numeric',
+  })} - ${formatPHTDateTime(updatedAt, {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })}`
 
   const voiceMap = useMemo(() => allVoices(), [allVoices])
 
@@ -177,7 +195,7 @@ export function MasterListPage() {
   const [mobilePage, setMobilePage] = useState(1)
 
   const [formOpen, setFormOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
+  const [pdfSetupOpen, setPdfSetupOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [profileTarget, setProfileTarget] = useState<Member | null>(null)
   const [desktopDetailTarget, setDesktopDetailTarget] = useState<Member | null>(
@@ -310,6 +328,22 @@ export function MasterListPage() {
     }
   }
 
+  const handlePdfExport = async (
+    name: string,
+    paperSize: MasterListPaperSize,
+  ) => {
+    await exportMasterListPdf(
+      members,
+      trainees,
+      voices,
+      dutyRoles,
+      name,
+      paperSize,
+    )
+    setLocaleName(name)
+    toast.success('Master List exported as PDF.')
+  }
+
   const directoryProps = {
     members: filteredMembers,
     voices,
@@ -318,10 +352,8 @@ export function MasterListPage() {
     onView: setDesktopDetailTarget,
     onEdit: openEditDialog,
     onDelete: setRemoveTarget,
-    onImport: () => setImportOpen(true),
     canEdit: canEditMembers,
     canDelete: canDeleteMembers,
-    canImport: canAddMembers,
     hasAnyMembers: members.length > 0,
     onClearFilters: clearFilters,
   }
@@ -339,33 +371,25 @@ export function MasterListPage() {
         title="Master List"
         description="Manage your choir members, trainees, and positions."
         className="hidden md:flex"
-        actions={
-          <>
-            {canAddMembers && (
-              <Button onClick={openAddDialog}>
-                <Plus className="size-4" />
-                Add Member
-              </Button>
-            )}
-          </>
-        }
       />
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border/70 bg-card px-4 py-3 text-sm">
+        <span className="font-medium text-foreground">
+          Master List last updated on
+        </span>
+        <time
+          dateTime={lastUpdatedAt}
+          className="text-muted-foreground"
+        >
+          {lastUpdatedLabel}
+        </time>
+      </div>
 
       <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
 
-      {/* Import / export actions, shared across breakpoints: the import
-          button on the left, the export dropdown on the right. PDF is a
-          placeholder entry with no handler yet. */}
-      {(canAddMembers || canExportDocuments) && (
+      {canExportDocuments && (
         <div className="flex items-center gap-3">
-          {canAddMembers && (
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <FileUp className="size-4" />
-              Import Data
-            </Button>
-          )}
-          {canExportDocuments && (
-            <DropdownMenu>
+          <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="ml-auto">
                   <Download className="size-4" />
@@ -373,24 +397,21 @@ export function MasterListPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>
-                  Export current view ({filteredCount})
-                </DropdownMenuLabel>
+                <DropdownMenuLabel>Export data</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => handleExport('csv')}>
                   <Download className="size-4" />
-                  CSV
+                  CSV (current view)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleExport('excel')}>
                   <Download className="size-4" />
-                  Excel
+                  Excel (current view)
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled>
+                <DropdownMenuItem onClick={() => setPdfSetupOpen(true)}>
                   <FileDown className="size-4" />
-                  PDF
+                  PDF (full Master List)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
         </div>
       )}
 
@@ -759,7 +780,7 @@ export function MasterListPage() {
             {canAddMembers && (
               <Button
                 size="default"
-                className="shrink-0 md:hidden"
+                className="shrink-0"
                 onClick={openAddDialog}
               >
                 <Plus className="size-4" />
@@ -802,8 +823,6 @@ export function MasterListPage() {
             {filteredMembers.length === 0 ? (
               <MemberDirectoryEmptyState
                 hasAnyMembers={totalCount > 0}
-                onImport={() => setImportOpen(true)}
-                canImport={canAddMembers}
                 onClearFilters={clearFilters}
               />
             ) : (
@@ -915,7 +934,13 @@ export function MasterListPage() {
         />
       )}
 
-      <ImportRosterDialog open={importOpen} onOpenChange={setImportOpen} />
+      {pdfSetupOpen && (
+        <MasterListPdfSetupDialog
+          onOpenChange={setPdfSetupOpen}
+          savedLocaleName={localeName}
+          onExport={handlePdfExport}
+        />
+      )}
 
       {/* Mobile profile screen */}
       <MemberProfileSheet

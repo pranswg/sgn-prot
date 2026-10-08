@@ -126,7 +126,7 @@ export function MemberDirectoryEmptyState({
       ) : canImport ? (
         <Button variant="outline" size="sm" onClick={onImport}>
           <FileUp className="size-4" />
-          Import Roster
+          Import Data
         </Button>
       ) : null}
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Download,
+  FileDown,
   FileUp,
   Plus,
   Search,
@@ -331,12 +332,6 @@ export function MasterListPage() {
         title="Master List"
         description="Manage choir members"
         onOpenMenu={() => setMobileDrawerOpen(true)}
-        onAddMember={openAddDialog}
-        onImportRoster={() => setImportOpen(true)}
-        onExport={handleExport}
-        canAdd={canAddMembers}
-        canImport={canAddMembers}
-        canExport={canExportDocuments}
       />
 
       <PageHeader
@@ -346,31 +341,6 @@ export function MasterListPage() {
         className="hidden md:flex"
         actions={
           <>
-            {canExportDocuments && <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="size-4" />
-                  Export
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>
-                  Export current view ({filteredCount})
-                </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => handleExport('csv')}>
-                  CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport('excel')}>
-                  Excel
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>}
-            {canAddMembers && (
-              <Button variant="outline" onClick={() => setImportOpen(true)}>
-                <FileUp className="size-4" />
-                Import Roster
-              </Button>
-            )}
             {canAddMembers && (
               <Button onClick={openAddDialog}>
                 <Plus className="size-4" />
@@ -382,6 +352,47 @@ export function MasterListPage() {
       />
 
       <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
+
+      {/* Import / export actions, shared across breakpoints: the import
+          button on the left, the export dropdown on the right. PDF is a
+          placeholder entry with no handler yet. */}
+      {(canAddMembers || canExportDocuments) && (
+        <div className="flex items-center gap-3">
+          {canAddMembers && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUp className="size-4" />
+              Import Data
+            </Button>
+          )}
+          {canExportDocuments && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="ml-auto">
+                  <Download className="size-4" />
+                  Export Data
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>
+                  Export current view ({filteredCount})
+                </DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleExport('csv')}>
+                  <Download className="size-4" />
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('excel')}>
+                  <Download className="size-4" />
+                  Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <FileDown className="size-4" />
+                  PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      )}
 
       {/* Search & filter toolbar. Every directory filter lives here (choir
           segment, membership, status, voices, positions, sort). Sticky under
@@ -732,17 +743,29 @@ export function MasterListPage() {
       {/* Member directory */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold tracking-tight text-foreground">
-              Member Directory
-            </h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Showing{' '}
-              <span className="font-medium tabular-nums text-foreground/80">
-                {filteredCount}
-              </span>{' '}
-              of {totalCount} members
-            </p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight text-foreground">
+                Member Directory
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Showing{' '}
+                <span className="font-medium tabular-nums text-foreground/80">
+                  {filteredCount}
+                </span>{' '}
+                of {totalCount} members
+              </p>
+            </div>
+            {canAddMembers && (
+              <Button
+                size="default"
+                className="shrink-0 md:hidden"
+                onClick={openAddDialog}
+              >
+                <Plus className="size-4" />
+                Add Member
+              </Button>
+            )}
           </div>
         </div>
 

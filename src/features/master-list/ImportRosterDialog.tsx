@@ -248,7 +248,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     >
       <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Import Roster</DialogTitle>
+          <DialogTitle>Import Data</DialogTitle>
         <DialogDescription>
           Upload the choir roster PDF, or a CSV or Excel file exported from the
           Master List. Review the detected names before importing them.

@@ -18,6 +18,7 @@ import {
 
   earlierDateKey,
   firstDateKey,
+  filenameTimestampPHT,
   formatDateKey,
   formatDateKeyLong,
   formatDateKeyNumeric,
@@ -27,7 +28,6 @@ import {
   monthShortKey,
   nextDateOnWeekdays,
   phtInstantISO,
-  phtStampForFilename,
   toDateKeyFromInstant,
   todayPHT,
   weekdayOf,
@@ -151,7 +151,29 @@ test('firstDateKey lets an explicit entry outrank a later default', () => {
 test('PHT instant and filename stamps state Philippine time explicitly', () => {
   const instant = new Date('2026-09-30T16:30:00Z')
   assert.equal(phtInstantISO(instant), '2026-10-01T00:30:00+08:00')
-  assert.equal(phtStampForFilename(instant), '2026-10-01-0030')
+})
+
+test('filenameTimestampPHT writes the export filename timestamp', () => {
+  assert.equal(
+    filenameTimestampPHT(new Date('2026-10-08T11:00:00Z')),
+    '20261008_07-00PM',
+  )
+  assert.equal(
+    filenameTimestampPHT(new Date('2026-09-30T16:00:00Z')),
+    '20261001_12-00AM',
+  )
+  assert.equal(
+    filenameTimestampPHT(new Date('2026-10-08T17:30:00Z')),
+    '20261009_01-30AM',
+  )
+  assert.equal(
+    filenameTimestampPHT(new Date('2026-10-08T01:00:00Z')),
+    '20261008_09-00AM',
+  )
+  assert.equal(
+    filenameTimestampPHT(new Date('2026-10-08T13:00:00Z')),
+    '20261008_09-00PM',
+  )
 })
 
 test('the configured worship days are the real choir schedule', () => {

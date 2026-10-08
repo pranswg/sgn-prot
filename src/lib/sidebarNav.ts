@@ -8,6 +8,7 @@
  */
 
 import {
+  ArchiveRestore,
   CalendarPlus,
   GraduationCap,
   Grid2X2,
@@ -72,6 +73,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', page: 'dashboard', icon: LayoutDashboard },
   { label: 'Master List', page: 'master-list', icon: Users },
   { label: 'Trainees', page: 'trainees', icon: GraduationCap },
+  { label: 'Members History', page: 'members-history', icon: ArchiveRestore },
   { label: 'Koro Maker', page: 'koro-maker', icon: Grid2X2 },
   { label: 'Organist Suguan', page: 'organista-suguan-maker', icon: Music4 },
   { label: 'Choir Suguan', page: 'suguan-builder', icon: CalendarPlus },
@@ -82,7 +84,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   { label: 'Overview', pages: ['dashboard'] },
-  { label: 'Choir Management', pages: ['master-list', 'trainees', 'koro-maker'] },
+  {
+    label: 'Choir Management',
+    pages: ['master-list', 'trainees', 'members-history', 'koro-maker'],
+  },
   { label: 'Suguan', pages: ['suguan-builder', 'organista-suguan-maker', 'suguan-history'] },
   { label: 'System', pages: ['settings', 'administration'] },
 ]

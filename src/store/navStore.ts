@@ -5,6 +5,7 @@ export type Page =
   | 'dashboard'
   | 'master-list'
   | 'trainees'
+  | 'members-history'
   | 'koro-maker'
   | 'organista-suguan-maker'
   | 'suguan-builder'
@@ -17,6 +18,13 @@ interface NavState {
   page: Page
   selectedSuguanId: string | null
   builderSuguanId: string | null
+  /**
+   * The member whose Members History timeline should open on the next visit
+   * to the Members History page. Set when "View History" is chosen from the
+   * duplicate-detection dialog, so the archive opens on the right person.
+   * Cleared on every plain navigation, like `directoryStart`.
+   */
+  selectedHistoryMemberId: string | null
   /**
    * The page to return to if the "start a new Suguan" dialog is dismissed
    * without a choice. `null` when there is nothing to go back to.
@@ -50,6 +58,13 @@ interface NavState {
   navigateToDirectory: (start: DirectoryStartView) => void
   clearDirectoryStart: () => void
   openSuguanDetail: (id: string) => void
+  /**
+   * Navigate to the Members History page with a member's timeline open,
+   * e.g. from the duplicate-detection dialog's "View History" action.
+   */
+  openMemberHistoryDetail: (memberId: string) => void
+  /** Reads and clears the one-shot `selectedHistoryMemberId` flag. */
+  consumeSelectedHistoryMemberId: () => string | null
   startNewSuguan: () => void
   /** Returns to `builderReturnPage`, or `null` if there is nowhere to go back to. */
   dismissNewSuguan: () => Page | null
@@ -62,6 +77,7 @@ export const useNavStore = create<NavState>()((set, get) => ({
   page: 'dashboard',
   selectedSuguanId: null,
   builderSuguanId: null,
+  selectedHistoryMemberId: null,
   builderReturnPage: null,
   previousPage: null,
   directoryStart: null,
@@ -70,6 +86,8 @@ export const useNavStore = create<NavState>()((set, get) => ({
       page,
       selectedSuguanId: null,
       builderSuguanId: null,
+      // A plain navigation must not re-open a remembered history timeline.
+      selectedHistoryMemberId: null,
       // Tapping the page you are already on leaves the back destination alone,
       // so a repeated tap on Settings cannot point the back button at itself.
       previousPage: s.page === page ? s.previousPage : s.page,
@@ -88,6 +106,7 @@ export const useNavStore = create<NavState>()((set, get) => ({
       directoryStart: start,
       selectedSuguanId: null,
       builderSuguanId: null,
+      selectedHistoryMemberId: null,
       previousPage: s.page === 'master-list' ? s.previousPage : s.page,
       builderReturnPage: null,
     })),
@@ -105,15 +124,34 @@ export const useNavStore = create<NavState>()((set, get) => ({
       page: 'suguan-detail',
       selectedSuguanId: id,
       builderSuguanId: null,
+      selectedHistoryMemberId: null,
       builderReturnPage: null,
       directoryStart: null,
     }),
+  openMemberHistoryDetail: (memberId) =>
+    set({
+      page: 'members-history',
+      selectedHistoryMemberId: memberId,
+      selectedSuguanId: null,
+      builderSuguanId: null,
+      builderReturnPage: null,
+      directoryStart: null,
+    }),
+  consumeSelectedHistoryMemberId: () => {
+    const { selectedHistoryMemberId, navigate } = get()
+    if (!selectedHistoryMemberId) return null
+    // Re-navigating clears the flag exactly like any other plain navigation,
+    // so the timeline cannot re-open itself when the user moves on and back.
+    navigate('members-history')
+    return selectedHistoryMemberId
+  },
   startNewSuguan: () => {
     const { page } = get()
     set({
       page: 'suguan-builder',
       builderSuguanId: null,
       selectedSuguanId: null,
+      selectedHistoryMemberId: null,
       // Already in the builder means this is a deliberate "start over", not a
       // jump from elsewhere, so there is no origin worth returning to.
       builderReturnPage: page === 'suguan-builder' ? null : page,
@@ -135,6 +173,7 @@ export const useNavStore = create<NavState>()((set, get) => ({
       page: 'suguan-builder',
       builderSuguanId: id,
       selectedSuguanId: null,
+      selectedHistoryMemberId: null,
       builderReturnPage: null,
       directoryStart: null,
     }),

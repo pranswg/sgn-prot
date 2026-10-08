@@ -40,6 +40,7 @@ export type Permission =
   | 'restore-data'
   | 'view-login-history'
   | 'manage-sessions'
+  | 'manage-membership-history'
 
 /**
  * Which KDF produced `passwordHash`. `pbkdf2` needs WebCrypto's `subtle`, which

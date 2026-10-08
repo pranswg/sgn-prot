@@ -29,16 +29,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useNavStore } from '@/store/navStore'
@@ -68,8 +58,9 @@ import {
   type MemberPageSize,
   type MemberSort,
 } from '@/lib/memberDirectory'
+import { belongsInMasterList } from '@/lib/memberHistory'
 import { cn } from '@/lib/utils'
-import { todayPHT } from '@/lib/phDate'
+import { exportFileName, masterListExportDocumentName } from '@/lib/exportNaming'
 import { MemberFormDialog } from './MemberFormDialog'
 import { MemberDetailDialog } from './MemberDetailDialog'
 import {
@@ -78,7 +69,7 @@ import {
 } from './MemberDirectoryTable'
 import { PageSizeControl, SectionPaginator } from './SectionPaginator'
 import { StatCards, type StatAction } from './StatCards'
-import { MobileDirectoryHeader } from './MobileDirectoryHeader'
+import { MobileDirectoryHeader } from '@/components/MobileDirectoryHeader'
 import { MobileMemberCard } from './MobileMemberCard'
 import { MemberActionSheet } from './MemberActionSheet'
 import { MobileFilterSheet } from './MobileFilterSheet'
@@ -94,6 +85,12 @@ import {
 } from './MasterListPdfSetupDialog'
 import type { MasterListPaperSize } from './masterListPaperSizes'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useExportPreview } from '@/hooks/useExportPreview'
+import {
+  MemberLifecycleDialog,
+  MemberLifecycleSheet,
+  type LifecycleFormKind,
+} from '@/features/members-history/MemberLifecycleForm'
 
 const GENDER_LABEL: Record<string, string> = {
   female: "Women's Choir",
@@ -140,7 +137,6 @@ export function MasterListPage() {
   const members = useMemberStore((s) => s.members)
   const trainees = useMemberStore((s) => s.trainees)
   const lastUpdatedAt = useMemberStore((s) => s.lastUpdatedAt)
-  const removeMember = useMemberStore((s) => s.removeMember)
   const deactivateMember = useMemberStore((s) => s.deactivateMember)
   const reactivateMember = useMemberStore((s) => s.reactivateMember)
   const voices = useSettingsStore((s) => s.voices)
@@ -155,7 +151,9 @@ export function MasterListPage() {
   const { can } = usePermissions()
   const canAddMembers = can('add-members')
   const canEditMembers = can('edit-members')
-  const canDeleteMembers = can('delete-members')
+  // A member who transfers out (admin-only) is never deleted from the archive;
+  // the lifecycle form records the date, reason, and notes as history events.
+  const canManageHistory = can('manage-membership-history')
   const canAssignMembers = can('assign-members')
   const canExportDocuments = can('export-documents')
   const updatedAt = new Date(lastUpdatedAt)
@@ -196,25 +194,38 @@ export function MasterListPage() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [pdfSetupOpen, setPdfSetupOpen] = useState(false)
+  const { exportPreview, requestExport } = useExportPreview()
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [profileTarget, setProfileTarget] = useState<Member | null>(null)
   const [desktopDetailTarget, setDesktopDetailTarget] = useState<Member | null>(
     null,
   )
   const [actionTarget, setActionTarget] = useState<Member | null>(null)
-  const [removeTarget, setRemoveTarget] = useState<Member | null>(null)
+  const [lifecycleTarget, setLifecycleTarget] = useState<{
+    member: Member
+    kind: LifecycleFormKind
+  } | null>(null)
   // null closes the sheet; otherwise it names the one filter being edited.
   const [filterSheetSection, setFilterSheetSection] =
     useState<MobileFilterSection | null>(null)
 
+  // References are built from the full persisted roster so M-001 codes never
+  // shift for the remaining members when someone is transferred out.
   const references = useMemo(() => buildMemberReferences(members), [members])
+  // A formal transfer moves the member off the Master List entirely — they
+  // live on the Members History page from then on — so every list-scoped read
+  // (counts, filters, table, exports) works from this narrowed roster.
+  const directoryMembers = useMemo(
+    () => members.filter(belongsInMasterList),
+    [members],
+  )
   const stats = useMemo(
-    () => computeDirectoryStats(members, trainees, voices),
-    [members, trainees, voices],
+    () => computeDirectoryStats(directoryMembers, trainees, voices),
+    [directoryMembers, trainees, voices],
   )
   const positionCounts = useMemo(
-    () => countMembersByPosition(members),
-    [members],
+    () => countMembersByPosition(directoryMembers),
+    [directoryMembers],
   )
   const voiceCounts = useMemo(
     () => new Map(stats.voiceCounts.map((v) => [v.id, v.count] as const)),
@@ -222,8 +233,9 @@ export function MasterListPage() {
   )
 
   const filteredMembers = useMemo(
-    () => filterMembers(members, filters, voices, references, effectiveSort),
-    [members, filters, voices, references, effectiveSort],
+    () =>
+      filterMembers(directoryMembers, filters, voices, references, effectiveSort),
+    [directoryMembers, filters, voices, references, effectiveSort],
   )
 
   // The profile sheet stays open across a deactivate, so it reads the member
@@ -235,7 +247,8 @@ export function MasterListPage() {
   // Match count for the filter sheet's Apply button, evaluated against the
   // in-progress edits rather than the filters that are already applied.
   const previewCount = (candidate: MemberDirectoryFilters) =>
-    filterMembers(members, candidate, voices, references, effectiveSort).length
+    filterMembers(directoryMembers, candidate, voices, references, effectiveSort)
+      .length
 
   const filtersActive = hasActiveDirectoryFilters(filters)
   const activeFilterCount = countActiveDirectoryFilters(filters)
@@ -257,7 +270,7 @@ export function MasterListPage() {
   // Clamped on read, so narrowing the filters mid-page cannot leave the mobile
   // list stranded on an empty page 4.
   const mobilePageResult = paginate(filteredMembers, mobilePage, pageSize)
-  const totalCount = members.length
+  const totalCount = directoryMembers.length
 
   const setFilter = <K extends keyof MemberDirectoryFilters>(
     key: K,
@@ -301,24 +314,31 @@ export function MasterListPage() {
     )
   }
 
-  const handleExport = async (format: 'csv' | 'excel') => {
+  const handleExport = (format: 'csv' | 'excel') => {
     if (filteredCount === 0) {
       toast.error('No members to export.')
       return
     }
+    const fileName = exportFileName(masterListExportDocumentName(filters.gender), format)
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runSpreadsheetExport(format, fileName),
+    })
+  }
+
+  const runSpreadsheetExport = async (
+    format: 'csv' | 'excel',
+    fileName: string,
+  ) => {
     const rows = membersToRows(filteredMembers) as unknown as Record<
       string,
       string | number
     >[]
-    const suffix = `${filters.gender === 'all' ? 'all' : filters.gender}${
-      filters.query.trim() ? '-filtered' : ''
-    }`
-    const filename = `master-list-${suffix}-${todayPHT()}`
     try {
       if (format === 'csv') {
-        exportCSV(rows, `${filename}.csv`)
+        exportCSV(rows, fileName)
       } else {
-        await exportExcel(rows, `${filename}.xlsx`)
+        await exportExcel(rows, fileName)
       }
       toast.success(
         `Exported ${filteredCount} members as ${format.toUpperCase()}.`,
@@ -332,16 +352,35 @@ export function MasterListPage() {
     name: string,
     paperSize: MasterListPaperSize,
   ) => {
-    await exportMasterListPdf(
-      members,
-      trainees,
-      voices,
-      dutyRoles,
-      name,
-      paperSize,
-    )
+    setPdfSetupOpen(false)
     setLocaleName(name)
-    toast.success('Master List exported as PDF.')
+    const fileName = exportFileName('Master List', 'pdf')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runPdfExport(name, paperSize, fileName),
+    })
+  }
+
+  const runPdfExport = async (
+    name: string,
+    paperSize: MasterListPaperSize,
+    fileName: string,
+  ) => {
+    try {
+      await exportMasterListPdf(
+        directoryMembers,
+        trainees,
+        voices,
+        dutyRoles,
+        name,
+        paperSize,
+        fileName,
+      )
+      toast.success('Master List exported as PDF.')
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not export the Master List PDF.')
+    }
   }
 
   const directoryProps = {
@@ -351,15 +390,17 @@ export function MasterListPage() {
     sort,
     onView: setDesktopDetailTarget,
     onEdit: openEditDialog,
-    onDelete: setRemoveTarget,
+    onTransfer: (member: Member) =>
+      setLifecycleTarget({ member, kind: 'transfer' }),
     canEdit: canEditMembers,
-    canDelete: canDeleteMembers,
-    hasAnyMembers: members.length > 0,
+    canTransfer: canManageHistory,
+    hasAnyMembers: directoryMembers.length > 0,
     onClearFilters: clearFilters,
   }
 
   return (
     <div className="flex flex-col gap-5">
+      {exportPreview}
       <MobileDirectoryHeader
         title="Master List"
         description="Manage choir members"
@@ -838,7 +879,7 @@ export function MasterListPage() {
                       sort={sort}
                       onOpen={setProfileTarget}
                       onOpenMenu={setActionTarget}
-                      hasActions={canEditMembers || canAssignMembers || canDeleteMembers}
+                      hasActions={canEditMembers || canAssignMembers || canManageHistory}
                     />
                   ))}
                 </ul>
@@ -909,13 +950,13 @@ export function MasterListPage() {
           setActionTarget(null)
           handleAssign(member)
         }}
-        onRemove={(member) => {
+        onTransfer={(member) => {
           setActionTarget(null)
-          setRemoveTarget(member)
+          setLifecycleTarget({ member, kind: 'transfer' })
         }}
         canEdit={canEditMembers}
         canAssign={canAssignMembers}
-        canDelete={canDeleteMembers}
+        canTransfer={canManageHistory}
       />
 
       {isMobile ? (
@@ -965,7 +1006,14 @@ export function MasterListPage() {
             toast.success(`${name} reactivated.`)
           }
         }}
+        onLifecycle={(member) =>
+          setLifecycleTarget({
+            member,
+            kind: member.isActive ? 'transfer' : 'restore',
+          })
+        }
         canManage={canEditMembers}
+        canLifecycle={canManageHistory}
       />
 
       <MemberDetailDialog
@@ -976,40 +1024,33 @@ export function MasterListPage() {
         onEdit={() =>
           desktopDetailTarget && openEditDialog(desktopDetailTarget)
         }
+        onTransfer={(member) =>
+          setLifecycleTarget({ member, kind: 'transfer' })
+        }
         canEdit={canEditMembers}
-        canDelete={canDeleteMembers}
+        canTransfer={canManageHistory}
       />
 
-      <AlertDialog
-        open={!!removeTarget}
-        onOpenChange={(o) => !o && setRemoveTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove member?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Remove {removeTarget?.firstName} {removeTarget?.lastName} from the
-              Master List? This cannot be undone. Consider deactivating instead
-              to preserve history.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white"
-              onClick={() => {
-                if (removeTarget) {
-                  removeMember(removeTarget.id)
-                  toast.success('Member removed.')
-                  setRemoveTarget(null)
-                }
-              }}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {lifecycleTarget &&
+        (isMobile ? (
+          <MemberLifecycleSheet
+            open
+            onOpenChange={(open: boolean) => {
+              if (!open) setLifecycleTarget(null)
+            }}
+            member={lifecycleTarget.member}
+            kind={lifecycleTarget.kind}
+          />
+        ) : (
+          <MemberLifecycleDialog
+            open
+            onOpenChange={(open: boolean) => {
+              if (!open) setLifecycleTarget(null)
+            }}
+            member={lifecycleTarget.member}
+            kind={lifecycleTarget.kind}
+          />
+        ))}
     </div>
   )
 }

@@ -27,7 +27,8 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
-import { phtInstantISO, phtStampForFilename } from '@/lib/phDate'
+import { phtInstantISO } from '@/lib/phDate'
+import { exportFileName } from '@/lib/exportNaming'
 import { MobileSettingsHeader } from './MobileSettingsHeader'
 import { SettingsList } from './SettingsList'
 import { WorshipSchedulesCard } from './WorshipSchedulesCard'
@@ -38,6 +39,7 @@ import { ImportRosterDialog } from '@/features/master-list/ImportRosterDialog'
 import { MasterListPdfSetupDialog } from '@/features/master-list/MasterListPdfSetupDialog'
 import { exportMasterListPdf } from '@/features/master-list/masterListPdfExport'
 import type { MasterListPaperSize } from '@/features/master-list/masterListPaperSizes'
+import { useExportPreview } from '@/hooks/useExportPreview'
 
 interface BackupFile {
   app: string
@@ -66,6 +68,7 @@ export function SettingsPage() {
   const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
   const [masterListImportOpen, setMasterListImportOpen] = useState(false)
   const [masterListPdfOpen, setMasterListPdfOpen] = useState(false)
+  const { exportPreview, requestExport } = useExportPreview()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const serviceTypes = settingsStore.allServiceTypes()
@@ -84,6 +87,14 @@ export function SettingsPage() {
   }
 
   const handleExport = () => {
+    const fileName = exportFileName('Inc Choir Backup', 'json')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => runBackupExport(fileName),
+    })
+  }
+
+  const runBackupExport = (fileName: string) => {
     const backup: BackupFile = {
       app: 'inc-choir-manager',
       version: 2,
@@ -105,7 +116,7 @@ export function SettingsPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `inc-choir-backup-${phtStampForFilename()}.json`
+    link.download = fileName
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -118,16 +129,35 @@ export function SettingsPage() {
     name: string,
     paperSize: MasterListPaperSize,
   ) => {
-    await exportMasterListPdf(
-      memberStore.members,
-      memberStore.trainees,
-      settingsStore.voices,
-      settingsStore.dutyRoles,
-      name,
-      paperSize,
-    )
+    setMasterListPdfOpen(false)
     settingsStore.setLocaleName(name)
-    toast.success('Master List exported as PDF.')
+    const fileName = exportFileName('Master List', 'pdf')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runMasterListPdfExport(name, paperSize, fileName),
+    })
+  }
+
+  const runMasterListPdfExport = async (
+    name: string,
+    paperSize: MasterListPaperSize,
+    fileName: string,
+  ) => {
+    try {
+      await exportMasterListPdf(
+        memberStore.members,
+        memberStore.trainees,
+        settingsStore.voices,
+        settingsStore.dutyRoles,
+        name,
+        paperSize,
+        fileName,
+      )
+      toast.success('Master List exported as PDF.')
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not export the Master List PDF.')
+    }
   }
 
   const handleImportFile = (file: File) => {
@@ -167,6 +197,7 @@ export function SettingsPage() {
 // AFTER:
   return (
     <div className="flex flex-col gap-4 w-full">
+      {exportPreview}
       <MobileSettingsHeader />
       <PageHeader
         className="hidden md:flex"

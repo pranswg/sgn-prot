@@ -389,11 +389,24 @@ export function formatPHTTime(instant: Date = new Date()): string {
 }
 
 /**
- * Compact stamp for backup filenames, e.g. `2026-09-30-1904`.
- * The date half is PHT, so a 01:00 PHT backup is not named with yesterday.
+ * Filename timestamp for every exported document, e.g. `20261008_07-00PM`.
+ *
+ * `YYYYMMDD` (PHT calendar date) joined by an underscore to a 12-hour
+ * `hh-mmAMPM` clock, so files sort predictably and share folders group by date.
+ * Both halves are read from the same PHT+8 view; a minute or hour past
+ * midnight still lands on the Philippine day, never "yesterday" by device
+ * timezone. PHT has no daylight saving, so the offset math is exact.
  */
-export function phtStampForFilename(instant: Date = new Date()): string {
-  return `${todayPHT(instant)}-${formatPHTTime(instant).replace(':', '')}`
+export function filenameTimestampPHT(instant: Date = new Date()): string {
+  const pht = new Date(instant.getTime() + PHT_UTC_OFFSET_HOURS * 3_600_000)
+  const year = pht.getUTCFullYear()
+  const month = pad2(pht.getUTCMonth() + 1)
+  const day = pad2(pht.getUTCDate())
+  let hour = pht.getUTCHours()
+  const meridiem = hour < 12 ? 'AM' : 'PM'
+  hour = hour % 12
+  if (hour === 0) hour = 12
+  return `${year}${month}${day}_${pad2(hour)}-${pad2(pht.getUTCMinutes())}${meridiem}`
 }
 
 /**

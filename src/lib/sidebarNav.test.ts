@@ -29,6 +29,7 @@ import {
 const ALL_PAGES = [
   'dashboard',
   'master-list',
+  'members-history',
   'trainees',
   'koro-maker',
   'organista-suguan-maker',
@@ -76,7 +77,7 @@ test('resolvedNavGroups preserves group order and item order', () => {
     resolved.map((g) => g.items.map((i) => i.label)),
     [
       ['Dashboard'],
-      ['Master List', 'Trainees', 'Koro Maker'],
+      ['Master List', 'Trainees', 'Members History', 'Koro Maker'],
       ['Choir Suguan', 'Organist Suguan', 'Suguan History'],
       ['Settings', 'Administration'],
     ],

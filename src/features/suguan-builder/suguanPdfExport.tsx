@@ -58,6 +58,7 @@ export async function exportSuguanPdf(
   docFormat?: SuguanDocFormat | null,
   titleOverride?: string,
   output: 'download' | 'preview' = 'download',
+  filename?: string,
 ): Promise<Blob | void> {
   const { jsPDF } = await import('jspdf')
   const layout = computeSuguanLayout(suguan, members, docFormat)
@@ -307,5 +308,5 @@ export async function exportSuguanPdf(
   })
 
   if (output === 'preview') return doc.output('blob')
-  downloadBlob(doc.output('blob'), suguanFileName(suguan, 'pdf'))
+  downloadBlob(doc.output('blob'), filename ?? suguanFileName(suguan, 'pdf'))
 }

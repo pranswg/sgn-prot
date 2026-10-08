@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { LogOut } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { MemberLifecycleBadge } from '@/components/StatusBadges'
 import type { Member } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { getVoiceName } from '@/core/constants/voicePositions'
@@ -23,8 +25,9 @@ interface MemberDetailDialogProps {
   member: Member | null
   onOpenChange: (open: boolean) => void
   onEdit: () => void
+  onTransfer: (member: Member) => void
   canEdit: boolean
-  canDelete: boolean
+  canTransfer: boolean
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -40,12 +43,12 @@ export function MemberDetailDialog({
   member,
   onOpenChange,
   onEdit,
+  onTransfer,
   canEdit,
-  canDelete,
+  canTransfer,
 }: MemberDetailDialogProps) {
   const deactivateMember = useMemberStore((s) => s.deactivateMember)
   const reactivateMember = useMemberStore((s) => s.reactivateMember)
-  const removeMember = useMemberStore((s) => s.removeMember)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
 
@@ -59,12 +62,6 @@ export function MemberDetailDialog({
       reactivateMember(member.id)
       toast.success(`${member.firstName} ${member.lastName} reactivated.`)
     }
-  }
-
-  const handleRemove = () => {
-    removeMember(member.id)
-    toast.success('Member removed.')
-    onOpenChange(false)
   }
 
   return (
@@ -84,9 +81,14 @@ export function MemberDetailDialog({
             label="Roles"
             value={positionSummary(memberEffectivePositions(member))}
           />
-          <Row label="Status" value={member.isActive ? 'Active' : 'Inactive'} />
         </div>
-        {(canEdit || canDelete) && <DialogFooter className="flex !justify-between sm:justify-between">
+        <div className="flex items-center justify-between gap-4 py-1">
+          <Label className="text-sm font-medium text-muted-foreground">
+            Status
+          </Label>
+          <MemberLifecycleBadge member={member} />
+        </div>
+        {(canEdit || canTransfer) && <DialogFooter className="flex !justify-between sm:justify-between">
           <div className="flex gap-2">
             {canEdit && (
               <Button
@@ -97,13 +99,17 @@ export function MemberDetailDialog({
                 {member.isActive ? 'Deactivate' : 'Reactivate'}
               </Button>
             )}
-            {canDelete && (
+            {canTransfer && member.isActive && (
               <Button
                 variant="outline"
-                className="text-red-600 hover:text-red-600"
-                onClick={handleRemove}
+                className="text-amber-700 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-300"
+                onClick={() => {
+                  onOpenChange(false)
+                  onTransfer(member)
+                }}
               >
-                Remove
+                <LogOut className="size-4" />
+                Transfer Out
               </Button>
             )}
           </div>

@@ -366,7 +366,7 @@ function MobileMemberSheetBody({
               <button
                 type="button"
                 onClick={() => commitAndClose('N/A')}
-                className="flex min-h-12 items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition-colors hover:bg-accent"
+                className="pressable flex min-h-12 items-center justify-between rounded-lg px-3 text-left text-sm font-medium hover:bg-accent motion-reduce:transform-none"
               >
                 N/A
                 {isNA && <Check className="size-4 text-primary" />}
@@ -376,7 +376,7 @@ function MobileMemberSheetBody({
               <button
                 type="button"
                 onClick={() => commitAndClose(q ? draft.trim() : '')}
-                className="min-h-12 rounded-lg px-3 py-3 text-left text-sm transition-colors hover:bg-accent"
+                className="pressable min-h-12 rounded-lg px-3 py-3 text-left text-sm hover:bg-accent motion-reduce:transform-none"
               >
                 <span className="font-medium">
                   Use “{q ? draft.trim() : '…'}”
@@ -393,7 +393,7 @@ function MobileMemberSheetBody({
                     key={option.id}
                     type="button"
                     onClick={() => commitAndClose(option.name)}
-                    className="min-h-14 rounded-lg px-3 py-3 text-left transition-colors hover:bg-accent"
+                    className="pressable min-h-14 rounded-lg px-3 py-3 text-left hover:bg-accent motion-reduce:transform-none"
                   >
                     <span className="block truncate text-sm font-medium">
                       {option.name}

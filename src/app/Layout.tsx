@@ -31,6 +31,7 @@ import { canAccessPage } from '@/lib/rbac'
 import { useSidebarStore } from '@/store/sidebarStore'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { MasterListPage } from '@/features/master-list/MasterListPage'
+import { MembersHistoryPage } from '@/features/members-history/MembersHistoryPage'
 import { TraineePage } from '@/features/trainees/TraineePage'
 import { KoroMakerPage } from '@/features/koro-maker/KoroMakerPage'
 import { OrganistaSuguanMakerPage } from '@/features/organista-suguan-maker/OrganistaSuguanMakerPage'
@@ -79,6 +80,8 @@ function CurrentPage() {
   switch (page) {
     case 'master-list':
       return <MasterListPage />
+    case 'members-history':
+      return <MembersHistoryPage />
     case 'trainees':
       return <TraineePage />
     case 'koro-maker':
@@ -115,6 +118,12 @@ const PAGE_META: Record<
     title: 'Master List',
     subtitle:
       'Manage choir members, trainees, voice assignments, and choir positions.',
+  },
+  'members-history': {
+    group: 'Choir Management',
+    title: 'Members History',
+    subtitle:
+      'Track membership changes: joined dates, transfers, returns, and gaps.',
   },
   trainees: {
     group: 'Choir Management',
@@ -262,13 +271,16 @@ export function Layout() {
       */}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         {/*
-          The Master List, Settings, and Suguan Detail render their own screen
-          header and stick to the top on their own, so the global bar is hidden
-          there rather than stacking two titles on one screen. The global bar
-          matches the Master List header's light theming (`bg-background`,
-          foreground text) so every mobile header is uniform.
+          The Master List, Members History, Settings, and Suguan Detail render
+          their own screen header and stick to the top on their own, so the
+          global bar is hidden there rather than stacking two titles on one
+          screen. The global bar matches the Master List header's light theming
+          (`bg-background`, foreground text) so every mobile header is uniform.
         */}
-        {page !== 'master-list' && page !== 'settings' && page !== 'suguan-detail' && (
+        {page !== 'master-list' &&
+          page !== 'members-history' &&
+          page !== 'settings' &&
+          page !== 'suguan-detail' && (
           <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background px-3 md:hidden">
             <Button
               variant="ghost"
@@ -294,7 +306,7 @@ export function Layout() {
                 <button
                   type="button"
                   aria-label={`Signed in as ${account?.fullName ?? 'unknown'}`}
-                  className="flex size-9 items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  className="pressable flex size-9 items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transform-none"
                 >
                   {account ? initialsFor(account.fullName) : '?'}
                 </button>
@@ -341,7 +353,7 @@ export function Layout() {
                 <button
                   type="button"
                   aria-label={`Signed in as ${account?.fullName ?? 'unknown'}`}
-                  className="flex size-8 items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  className="pressable flex size-8 items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transform-none"
                 >
                   {account ? initialsFor(account.fullName) : '?'}
                 </button>
@@ -365,7 +377,15 @@ export function Layout() {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-5 p-4 pt-5 pb-24 md:p-6 md:pt-6 md:pb-6">
-          <CurrentPage />
+          {/* Keyed by page so every navigation mounts a fresh surface, giving
+              the fade-and-rise transition something to run instead of a sudden
+              swap. Respects reduced motion. */}
+          <div
+            key={page}
+            className="flex flex-1 animate-in fade-in slide-in-from-bottom-1 duration-200 ease-out motion-reduce:animate-none"
+          >
+            <CurrentPage />
+          </div>
         </div>
 
         <MobileBottomNav />

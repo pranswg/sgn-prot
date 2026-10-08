@@ -3,6 +3,7 @@ import { AlertTriangle, BadgeCheck, UserCheck } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useSettingsStore } from '@/store/settingsStore'
+import { CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS } from '@/core/constants/dutyRoles'
 import type { Member } from '@/core/types/member'
 import type { SuguanDutyRole } from '@/core/types/suguan'
 import {
@@ -40,9 +41,15 @@ const CLEAR_VALUE = '__clear__'
  * Roles kept out of the Special Duties picker. The Pangulong Mang-aawit is
  * read straight from the master list by `resolveSignatureNames` and printed on
  * the exported sheet from there, so picking it here would only be a second
- * source of truth. The Kalihim has no printed slot at all.
+ * source of truth. The Kalihim has no printed slot at all, and the organist
+ * roles belong to the Organist Suguan — see
+ * `CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS`.
  */
-const HIDDEN_DUTY_ROLE_IDS = new Set(['pangulong-mang-aawit', 'kalihim'])
+const HIDDEN_DUTY_ROLE_IDS = new Set([
+  'pangulong-mang-aawit',
+  'kalihim',
+  ...CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS,
+])
 
 /**
  * Preferred display order for duty roles. Roles not listed here (custom roles

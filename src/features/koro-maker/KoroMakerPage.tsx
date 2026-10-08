@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useKoroStore } from '@/store/koroStore'
+import { exportFileName } from '@/lib/exportNaming'
 import {
   KORO_DEFAULT_COLUMNS,
   KORO_DEFAULT_ROW_COLUMNS,
@@ -20,6 +21,7 @@ import {
 import type { KoroCell, KoroTable } from '@/core/types/koro'
 import type { DocFontSize, SuguanGroup } from '@/core/types/suguan'
 import { exportKoroAsSuguanPdf, exportKoroTablePdf } from './koroPdfExport'
+import { useExportPreview } from '@/hooks/useExportPreview'
 
 const GROUPS: { value: SuguanGroup; label: string }[] = [
   { value: 'babae', label: 'Babae' },
@@ -41,6 +43,7 @@ export function KoroMakerPage() {
   const [memberVoice, setMemberVoice] = useState('')
   const [memberGender, setMemberGender] = useState<'all' | 'male' | 'female'>('all')
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const { exportPreview, requestExport } = useExportPreview()
   const document =
     documents.find((entry) => entry.id === activeDocumentId) ?? documents[0]
   const availableMembers = members.filter((member) => member.isActive)
@@ -125,18 +128,30 @@ export function KoroMakerPage() {
     updateDocument(document.id, { tables: [...document.tables, table] })
   }
 
-  const handleExport = async (kind: 'table' | 'suguan') => {
+  const handleExport = (kind: 'table' | 'suguan') => {
     if (!document.title.trim() || !document.date) {
       toast.error('Enter an occasion title and date before exporting.')
       return
     }
+    const title = document.title.trim()
+    const fileName =
+      kind === 'table'
+        ? exportFileName(`${title} - Koro`, 'pdf')
+        : exportFileName(`${title} - Suguan`, 'pdf')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runExport(kind, fileName),
+    })
+  }
+
+  const runExport = async (kind: 'table' | 'suguan', fileName: string) => {
     setExporting(kind)
     try {
       if (kind === 'table') {
-        await exportKoroTablePdf(document, members, voices)
+        await exportKoroTablePdf(document, members, voices, fileName)
         toast.success('Koro table exported as PDF.')
       } else {
-        await exportKoroAsSuguanPdf(document, members, voices)
+        await exportKoroAsSuguanPdf(document, members, voices, 'download', fileName)
         toast.success('Suguan PDF exported.')
       }
     } catch (error) {
@@ -212,6 +227,7 @@ export function KoroMakerPage() {
 
   return (
     <div className="flex flex-col gap-5 pb-8">
+      {exportPreview}
       <PageHeader
         title="Koro Maker"
         description="Arrange members by seat and voice color for special occasions. Changes are saved automatically in this browser."

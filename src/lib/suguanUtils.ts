@@ -32,6 +32,7 @@ import {
   planEventsFromCoverage,
   suggestPagtupadBlock,
 } from '@/lib/suguanDates'
+import { exportFileName, suguanExportGroupLabel } from '@/lib/exportNaming'
 
 /** @deprecated Use `todayPHT` from `@/lib/phDate`. Kept as an alias so existing
  * call sites keep working; both now resolve to the PHT calendar date. */
@@ -572,12 +573,6 @@ export function suguanSheetTitle(suguan: Suguan): string {
   return `${suguanTitle(suguan)} ${groupLabel(suguan.group)}`
 }
 
-export function groupFileLabel(group: SuguanGroup): string {
-  if (group === 'lalaki') return 'Lalaki'
-  if (group === 'mixed') return 'Mixed'
-  return 'Babae'
-}
-
 export function formatEventDate(event: SuguanEvent): string {
   const start = event.date
   if (!isDateKey(start)) return start || '—'
@@ -630,10 +625,9 @@ export function assignmentDisplayName(
 }
 
 export function suguanFileName(suguan: Suguan, ext: 'xlsx' | 'pdf'): string {
-  const [month, year] = formatMonthYearKey(
-    isDateKey(suguan.date) ? suguan.date : todayPHT(),
-  ).split(' ')
-  return `Suguan_${month}_${year}_${groupFileLabel(suguan.group)}.${ext}`
+  const base = `${suguanExportGroupLabel(suguan.group)} Choir Suguan`
+  const service = serviceTypeLabel(suguan)
+  return exportFileName(service ? `${base} - ${service}` : base, ext)
 }
 
 export type SuguanEventLabel = 'PAGSASANAY' | 'PAGTUPAD'

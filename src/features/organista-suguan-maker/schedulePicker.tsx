@@ -128,7 +128,7 @@ export function SchedulePicker({
                       disabled={alreadyTaken}
                       onClick={() => select(id)}
                       className={cn(
-                        'flex min-h-11 items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2 text-left transition-colors',
+                        'pressable flex min-h-11 items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2 text-left motion-reduce:transform-none',
                         isSelected &&
                           'border-primary bg-primary/5 ring-1 ring-primary',
                         alreadyTaken && 'cursor-not-allowed opacity-50',

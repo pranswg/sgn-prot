@@ -1,11 +1,13 @@
 import { MoreVertical } from 'lucide-react'
 import {
   GenderBadge,
-  MemberStatusBadge,
+  MemberLifecycleBadge,
+  ReturnedMemberBadge,
   VoiceBadge,
 } from '@/components/StatusBadges'
 import { Button } from '@/components/ui/button'
 import { memberPositionLabel } from '@/core/constants/memberMembership'
+import { memberIsReturned } from '@/lib/memberHistory'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
@@ -43,7 +45,7 @@ export function MobileMemberCard({
   const name = formatMemberName(member, sort)
 
   return (
-    <li className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm transition-colors active:bg-brand-teal-soft/40">
+    <li className="pressable overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm active:bg-brand-teal-soft/40 motion-reduce:transform-none">
       <div className="flex items-center gap-2 p-3.5">
         <button
           type="button"
@@ -68,7 +70,8 @@ export function MobileMemberCard({
             <span className="mt-2 flex flex-wrap items-center gap-1.5">
               <GenderBadge gender={member.gender} />
               <VoiceBadge name={memberPositionLabel(member, voices)} />
-              <MemberStatusBadge active={member.isActive} />
+              <MemberLifecycleBadge member={member} />
+              {memberIsReturned(member) && <ReturnedMemberBadge />}
             </span>
           </span>
         </button>

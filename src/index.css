@@ -252,11 +252,39 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
   body {
     @apply bg-background text-foreground font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+}
+
+/*
+  Instant press feedback for mobile-tapped surfaces: a brief scale-down with a
+  light colour interaction. Replaces the native grey tap flash (now suppressed
+  in the base layer). The property list deliberately mirrors `transition-colors`
+  so swapping one class for the other never drops the existing colour animation.
+*/
+@utility pressable {
+  transition:
+    transform 160ms ease-out,
+    background-color 160ms ease-out,
+    color 160ms ease-out,
+    border-color 160ms ease-out,
+    box-shadow 160ms ease-out,
+    opacity 160ms ease-out;
+  &:active {
+    transform: scale(0.97);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:active {
+      transform: none;
+    }
   }
 }
 

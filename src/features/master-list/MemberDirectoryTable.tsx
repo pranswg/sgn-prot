@@ -11,14 +11,16 @@ import {
 } from '@/components/ui/table'
 import {
   GenderBadge,
-  MemberStatusBadge,
+  MemberLifecycleBadge,
   MembershipBadge,
+  ReturnedMemberBadge,
   VoiceBadge,
 } from '@/components/StatusBadges'
 import { memberPositionLabel } from '@/core/constants/memberMembership'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { cn } from '@/lib/utils'
+import { memberIsReturned } from '@/lib/memberHistory'
 import {
   formatMemberName,
   groupMembersByGender,
@@ -38,9 +40,9 @@ interface MemberDirectoryTableProps {
   sort: MemberSort
   onView: (member: Member) => void
   onEdit: (member: Member) => void
-  onDelete: (member: Member) => void
+  onTransfer: (member: Member) => void
   canEdit: boolean
-  canDelete: boolean
+  canTransfer: boolean
   hasAnyMembers: boolean
   onClearFilters: () => void
   pageSize: MemberPageSize
@@ -129,9 +131,9 @@ export function MemberDirectoryTable({
   sort,
   onView,
   onEdit,
-  onDelete,
+  onTransfer,
   canEdit,
-  canDelete,
+  canTransfer,
   hasAnyMembers,
   onClearFilters,
   pageSize,
@@ -230,9 +232,9 @@ export function MemberDirectoryTable({
                 sort={sort}
                 onView={onView}
                 onEdit={onEdit}
-                onDelete={onDelete}
+                onTransfer={onTransfer}
                 canEdit={canEdit}
-                canDelete={canDelete}
+                canTransfer={canTransfer}
                 onPageChange={(page) => setSectionPage(section.key, page)}
               />
             ))}
@@ -254,9 +256,9 @@ interface ChoirSectionProps {
   sort: MemberSort
   onView: (member: Member) => void
   onEdit: (member: Member) => void
-  onDelete: (member: Member) => void
+  onTransfer: (member: Member) => void
   canEdit: boolean
-  canDelete: boolean
+  canTransfer: boolean
   onPageChange: (page: number) => void
 }
 
@@ -270,9 +272,9 @@ function ChoirSection({
   sort,
   onView,
   onEdit,
-  onDelete,
+  onTransfer,
   canEdit,
-  canDelete,
+  canTransfer,
   onPageChange,
 }: ChoirSectionProps) {
   return (
@@ -305,8 +307,9 @@ function ChoirSection({
                 <p className="truncate text-[0.8125rem] font-semibold text-foreground">
                   {formatMemberName(member, sort)}
                 </p>
-                <p className="mt-0.5 text-[0.6875rem] tabular-nums text-muted-foreground">
+                <p className="mt-0.5 flex items-center gap-1.5 text-[0.6875rem] tabular-nums text-muted-foreground">
                   {references.get(member.id) ?? '—'}
+                  {memberIsReturned(member) && <ReturnedMemberBadge />}
                 </p>
               </div>
             </div>
@@ -321,7 +324,7 @@ function ChoirSection({
             <MembershipBadge type={member.membershipType} />
           </TableCell>
           <TableCell>
-            <MemberStatusBadge active={member.isActive} />
+            <MemberLifecycleBadge member={member} />
           </TableCell>
           <TableCell className="text-right">
             <MemberRowActions
@@ -329,9 +332,9 @@ function ChoirSection({
               sort={sort}
               onView={onView}
               onEdit={onEdit}
-              onDelete={onDelete}
+              onTransfer={onTransfer}
               canEdit={canEdit}
-              canDelete={canDelete}
+              canTransfer={canTransfer}
             />
           </TableCell>
         </TableRow>

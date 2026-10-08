@@ -16,6 +16,7 @@ import {
   summarizeMasterList,
 } from '@/lib/masterListPdfData'
 import type { DutyRole } from '@/core/types/suguan'
+import { exportFileName } from '@/lib/exportNaming'
 import {
   MASTER_LIST_PAPER_SIZES,
   type MasterListPaperSize,
@@ -63,6 +64,7 @@ export async function exportMasterListPdf(
   dutyRoles: DutyRole[],
   localeName: string,
   paperSize: MasterListPaperSize,
+  filename?: string,
 ): Promise<void> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
@@ -296,5 +298,5 @@ export async function exportMasterListPdf(
     )
   }
 
-  doc.save(`master-list-${paperSize}.pdf`)
+  doc.save(filename ?? exportFileName('Master List', 'pdf'))
 }

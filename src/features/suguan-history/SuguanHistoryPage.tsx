@@ -59,6 +59,8 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
 import { formatDate } from '@/lib/format'
 import { exportSuguanExcel } from '@/lib/suguanExport'
+import { suguanFileName } from '@/lib/suguanUtils'
+import { exportFileName } from '@/lib/exportNaming'
 import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import { buildOrganistaSuguanPdf } from '@/features/organista-suguan-maker/OrganistaSuguanMakerPage'
 import { organistaDateLabel } from '@/features/organista-suguan-maker/organistaDateLabel'
@@ -72,6 +74,7 @@ import { SectionPaginator } from '@/features/master-list/SectionPaginator'
 import type { Suguan } from '@/core/types/suguan'
 import type { OrganistaSuguanRecord } from '@/core/types/organistaSuguan'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useExportPreview } from '@/hooks/useExportPreview'
 
 const ORGANISTA_FILTER = 'organista-suguan'
 
@@ -172,6 +175,7 @@ export function SuguanHistoryPage() {
   const [pageNumber, setPageNumber] = useState(1)
   const [pageSize, setPageSize] =
     useState<MemberPageSize>(DEFAULT_MEMBER_PAGE_SIZE)
+  const { exportPreview, requestExport } = useExportPreview()
 
   const allTypes = allServiceTypes()
   const serviceName = (id: string) =>
@@ -273,12 +277,25 @@ export function SuguanHistoryPage() {
     setClearOpen(false)
   }
 
-  const exportSuguan = async (record: Suguan, kind: 'excel' | 'pdf') => {
+  const exportSuguan = (record: Suguan, kind: 'excel' | 'pdf') => {
+    const ext = kind === 'excel' ? 'xlsx' : 'pdf'
+    const fileName = suguanFileName(record, ext)
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runSuguanExport(record, kind, fileName),
+    })
+  }
+
+  const runSuguanExport = async (
+    record: Suguan,
+    kind: 'excel' | 'pdf',
+    fileName: string,
+  ) => {
     setExportingId(`suguan:${record.id}`)
     try {
       if (kind === 'excel')
-        await exportSuguanExcel(record, members, record.docFormat)
-      else await exportSuguanPdf(record, members, record.docFormat)
+        await exportSuguanExcel(record, members, record.docFormat, fileName)
+      else await exportSuguanPdf(record, members, record.docFormat, undefined, 'download', fileName)
       toast.success('SUGUAN sheet exported.')
     } catch (error) {
       console.error(error)
@@ -288,7 +305,18 @@ export function SuguanHistoryPage() {
     }
   }
 
-  const exportOrganista = async (record: OrganistaSuguanRecord) => {
+  const exportOrganista = (record: OrganistaSuguanRecord) => {
+    const fileName = exportFileName('Organist Suguan', 'pdf')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runOrganistaExport(record, fileName),
+    })
+  }
+
+  const runOrganistaExport = async (
+    record: OrganistaSuguanRecord,
+    fileName: string,
+  ) => {
     setExportingId(`organista:${record.id}`)
     try {
       const blob = await buildOrganistaSuguanPdf(
@@ -302,10 +330,7 @@ export function SuguanHistoryPage() {
       const fileUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = fileUrl
-      link.download = `${(record.churchName || 'Sta-Monica')
-        .trim()
-        .replace(/\s+/g, '-')
-        .toUpperCase()}-Organista-Suguan.pdf`
+      link.download = fileName
       document.body.append(link)
       link.click()
       link.remove()
@@ -370,6 +395,7 @@ export function SuguanHistoryPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {exportPreview}
       <PageHeader
         title="Suguan History"
         description={`${historyItems.length} total suguan records`}

@@ -38,8 +38,10 @@ import {
   suguanTitle,
 } from '@/lib/suguanUtils'
 import { exportSuguanExcel } from '@/lib/suguanExport'
+import { suguanFileName } from '@/lib/suguanUtils'
 import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import { SuguanSheetPreview } from '@/features/suguan-builder/SuguanSheetPreview'
+import { useExportPreview } from '@/hooks/useExportPreview'
 import { MobileSuguanDetailHeader } from './MobileSuguanDetailHeader'
 
 function MetaChip({ children }: { children: ReactNode }) {
@@ -62,6 +64,7 @@ export function SuguanDetailPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
+  const { exportPreview, requestExport } = useExportPreview()
 
   if (!s) {
     return (
@@ -86,10 +89,10 @@ export function SuguanDetailPage() {
 
   const events = s.events ?? []
 
-  const handleExportExcel = async () => {
+  const runExportExcel = async (fileName: string) => {
     setExporting('excel')
     try {
-      await exportSuguanExcel(s, members, s.docFormat)
+      await exportSuguanExcel(s, members, s.docFormat, fileName)
       toast.success('SUGUAN sheet exported as Excel.')
     } catch (err) {
       console.error(err)
@@ -99,10 +102,10 @@ export function SuguanDetailPage() {
     }
   }
 
-  const handleExportPdf = async () => {
+  const runExportPdf = async (fileName: string) => {
     setExporting('pdf')
     try {
-      await exportSuguanPdf(s, members, s.docFormat)
+      await exportSuguanPdf(s, members, s.docFormat, undefined, 'download', fileName)
       toast.success('SUGUAN sheet exported as PDF.')
     } catch (err) {
       console.error(err)
@@ -112,8 +115,19 @@ export function SuguanDetailPage() {
     }
   }
 
+  const handleExportExcel = () => {
+    const fileName = suguanFileName(s, 'xlsx')
+    requestExport({ filename: fileName, onConfirm: () => void runExportExcel(fileName) })
+  }
+
+  const handleExportPdf = () => {
+    const fileName = suguanFileName(s, 'pdf')
+    requestExport({ filename: fileName, onConfirm: () => void runExportPdf(fileName) })
+  }
+
   return (
     <div className="flex flex-col gap-4 pb-10 md:pb-0">
+      {exportPreview}
       <MobileSuguanDetailHeader />
 
       {/* Mobile: top information card with compact, wrap-friendly actions. */}

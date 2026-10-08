@@ -10,11 +10,12 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { formatDateLong, formatTime } from '@/lib/format'
-import { coverageLabel, groupLabel } from '@/lib/suguanUtils'
+import { coverageLabel, groupLabel, suguanFileName } from '@/lib/suguanUtils'
 import { exportSuguanExcel } from '@/lib/suguanExport'
 import { cn } from '@/lib/utils'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useExportPreview } from '@/hooks/useExportPreview'
 import { exportSuguanPdf } from './suguanPdfExport'
 import { SuguanSheetPreview } from './SuguanSheetPreview'
 import { buildPreviewSuguan, saveBlockers, totalAssigned, type SuguanDraft } from './builderState'
@@ -41,15 +42,16 @@ export function PreviewStep({
   const canSave = blockers.length === 0
 
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
+  const { exportPreview, requestExport } = useExportPreview()
 
   const serviceName =
     allServiceTypes().find((t) => t.id === draft.serviceTypeId)?.name ??
     draft.serviceTypeId
 
-  const handleExportExcel = async () => {
+const runExcelExport = async (exportFileName: string) => {
     setExporting('excel')
     try {
-      await exportSuguanExcel(preview, members, draft.docFormat)
+      await exportSuguanExcel(preview, members, draft.docFormat, exportFileName)
       toast.success('SUGUAN sheet exported as Excel.')
     } catch (err) {
       console.error(err)
@@ -59,10 +61,10 @@ export function PreviewStep({
     }
   }
 
-  const handleExportPdf = async () => {
+  const runPdfExport = async (exportFileName: string) => {
     setExporting('pdf')
     try {
-      await exportSuguanPdf(preview, members, draft.docFormat)
+      await exportSuguanPdf(preview, members, draft.docFormat, undefined, 'download', exportFileName)
       toast.success('SUGUAN sheet exported as PDF.')
     } catch (err) {
       console.error(err)
@@ -72,8 +74,25 @@ export function PreviewStep({
     }
   }
 
+  const handleExportExcel = () => {
+    const exportFileName = suguanFileName(preview, 'xlsx')
+    requestExport({
+      filename: exportFileName,
+      onConfirm: () => runExcelExport(exportFileName),
+    })
+  }
+
+  const handleExportPdf = () => {
+    const exportFileName = suguanFileName(preview, 'pdf')
+    requestExport({
+      filename: exportFileName,
+      onConfirm: () => runPdfExport(exportFileName),
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      {exportPreview}
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={onSave} disabled={!canSave}>
           <Save className="size-4" />

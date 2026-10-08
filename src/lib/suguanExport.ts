@@ -518,6 +518,7 @@ export async function exportSuguanExcel(
   suguan: Suguan,
   members: SheetMembers[],
   docFormat?: SuguanDocFormat | null,
+  filename?: string,
 ) {
   const ExcelJS = (await import('exceljs')).default
   const workbook = new ExcelJS.Workbook()
@@ -706,7 +707,7 @@ export async function exportSuguanExcel(
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = suguanFileName(suguan, 'xlsx')
+  link.download = filename ?? suguanFileName(suguan, 'xlsx')
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

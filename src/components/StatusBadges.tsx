@@ -1,8 +1,14 @@
+import { RotateCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { ChoirPosition, MembershipType } from '@/core/types/member'
+import type { ChoirPosition, Member, MembershipType } from '@/core/types/member'
 import { POSITION_SHORT_LABELS } from '@/core/constants/choirPositions'
 import { MEMBERSHIP_SHORT_LABELS } from '@/core/constants/memberMembership'
+import {
+  memberLifecycleStatus,
+  MEMBER_LIFECYCLE_STATE_LABELS,
+  type MemberLifecycleStatus,
+} from '@/lib/memberHistory'
 
 const badgeBase =
   'h-5 rounded-md border-transparent px-1.5 text-[0.6875rem] font-medium tracking-tight'
@@ -27,6 +33,59 @@ export function MemberStatusBadge({ active }: { active: boolean }) {
         )}
       />
       {active ? 'Active' : 'Inactive'}
+    </Badge>
+  )
+}
+
+const LIFECYCLE_STYLES: Record<MemberLifecycleStatus, string> = {
+  active: 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
+  returned:
+    'bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300',
+  'transferred-out':
+    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  inactive: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+}
+
+const LIFECYCLE_DOTS: Record<MemberLifecycleStatus, string> = {
+  active: 'bg-green-600',
+  returned: 'bg-teal-600',
+  'transferred-out': 'bg-amber-600',
+  inactive: 'bg-red-600',
+}
+
+/**
+ * The Master List's status cell. Unlike `MemberStatusBadge` it understands the
+ * membership timeline, so a transferred-out member reads "Transferred Out"
+ * instead of the older "Inactive", and a returned member reads "Returned".
+ */
+export function MemberLifecycleBadge({ member }: { member: Member }) {
+  const status = memberLifecycleStatus(member)
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        badgeBase,
+        'gap-1.5',
+        LIFECYCLE_STYLES[status],
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn('size-1.5 rounded-full', LIFECYCLE_DOTS[status])}
+      />
+      {MEMBER_LIFECYCLE_STATE_LABELS[status]}
+    </Badge>
+  )
+}
+
+/** Filled teal pill shown on a returned member in the Master List. */
+export function ReturnedMemberBadge() {
+  return (
+    <Badge
+      className="h-5 gap-1 rounded-md border-brand-teal/40 bg-brand-teal px-1.5 text-[0.6875rem] font-medium tracking-tight text-white"
+    >
+      <RotateCcw className="size-3" />
+      Returned Member
     </Badge>
   )
 }

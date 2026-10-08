@@ -1,4 +1,4 @@
-import { CalendarPlus, Eye, Pencil, Trash2 } from 'lucide-react'
+import { CalendarPlus, Eye, LogOut, Pencil } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -17,10 +17,10 @@ interface MemberActionSheetProps {
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onAssign: (member: Member) => void
-  onRemove: (member: Member) => void
+  onTransfer: (member: Member) => void
   canEdit: boolean
   canAssign: boolean
-  canDelete: boolean
+  canTransfer: boolean
 }
 
 /** Mobile three-dot menu. Each row is a full-width, thumb-sized tap target. */
@@ -31,10 +31,10 @@ export function MemberActionSheet({
   onView,
   onEdit,
   onAssign,
-  onRemove,
+  onTransfer,
   canEdit,
   canAssign,
-  canDelete,
+  canTransfer,
 }: MemberActionSheetProps) {
   const name = member ? formatMemberName(member, sort) : ''
 
@@ -70,12 +70,12 @@ export function MemberActionSheet({
                 onClick={() => onAssign(member)}
               />
             )}
-            {canDelete && (
+            {canTransfer && member.isActive && (
               <ActionRow
-                icon={Trash2}
-                label="Remove Member"
+                icon={LogOut}
+                label="Transfer Out"
                 destructive
-                onClick={() => onRemove(member)}
+                onClick={() => onTransfer(member)}
               />
             )}
           </ul>
@@ -102,7 +102,7 @@ function ActionRow({
         type="button"
         onClick={onClick}
         className={cn(
-          'flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-[0.9375rem] font-medium transition-colors active:bg-muted',
+          'pressable flex min-h-12 w-full items-center gap-3 rounded-lg px-3 text-left text-[0.9375rem] font-medium motion-reduce:transform-none active:bg-muted',
           destructive
             ? 'text-destructive'
             : 'text-foreground hover:bg-muted focus:bg-muted',

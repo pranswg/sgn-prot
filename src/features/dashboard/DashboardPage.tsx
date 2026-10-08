@@ -18,6 +18,7 @@ import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { formatDate, formatTime, isPast } from '@/lib/format'
 import { dayOfMonthKey, monthShortKey } from '@/lib/phDate'
+import { belongsInMasterList } from '@/lib/memberHistory'
 
 export function DashboardPage() {
   const members = useMemberStore((s) => s.members)
@@ -29,9 +30,12 @@ export function DashboardPage() {
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
 
-  const activeMembers = members.filter((m) => m.isActive)
-  const women = members.filter((m) => m.gender === 'female')
-  const men = members.filter((m) => m.gender === 'male')
+  // The cards navigate into the Master List, which excludes transferred-out
+  // members, so they count the same roster the directory will show.
+  const directoryMembers = members.filter(belongsInMasterList)
+  const activeMembers = directoryMembers.filter((m) => m.isActive)
+  const women = directoryMembers.filter((m) => m.gender === 'female')
+  const men = directoryMembers.filter((m) => m.gender === 'male')
   const activeTrainees = trainees.filter((t) => t.status === 'active')
 
   const upcoming = useMemo(() => {
@@ -55,7 +59,7 @@ export function DashboardPage() {
     s.serviceTypeId
 
   const stats = [
-    { label: 'Total Members', value: members.length, icon: Users, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('all') },
+    { label: 'Total Members', value: directoryMembers.length, icon: Users, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('all') },
     { label: 'Active Members', value: activeMembers.length, icon: Music2, color: 'text-emerald-600 dark:text-emerald-400', go: () => navigateToDirectory('active') },
     { label: "Women's Choir", value: women.length, icon: Trophy, color: 'text-pink-600 dark:text-pink-400', go: () => navigateToDirectory('female') },
     { label: "Men's Choir", value: men.length, icon: Trophy, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('male') },
@@ -88,7 +92,7 @@ export function DashboardPage() {
             type="button"
             onClick={s.go}
             aria-label={`${s.label}: ${s.value}. Go to ${s.label}`}
-            className="group cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="pressable group cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
           >
             <Card className="h-full transition-colors group-hover:bg-accent/40 group-hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
@@ -122,7 +126,7 @@ export function DashboardPage() {
                 key={s.id}
                 type="button"
                 onClick={() => openSuguanDetail(s.id)}
-                className="flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-accent"
+                className="pressable flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-accent motion-reduce:transform-none"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex size-10 flex-col items-center justify-center rounded-md bg-muted">
@@ -161,7 +165,7 @@ export function DashboardPage() {
                 key={s.id}
                 type="button"
                 onClick={() => openSuguanDetail(s.id)}
-                className="flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-accent"
+                className="pressable flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-accent motion-reduce:transform-none"
               >
                 <div>
                   <p className="text-sm font-medium">

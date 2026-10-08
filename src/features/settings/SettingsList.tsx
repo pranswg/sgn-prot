@@ -457,7 +457,7 @@ function ListRow({
         <button
           type="button"
           onClick={onEdit}
-          className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left transition-colors active:bg-muted/60"
+          className="pressable flex min-w-0 flex-1 items-center gap-3 py-3 text-left active:bg-muted/60 motion-reduce:transform-none"
         >
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-foreground">

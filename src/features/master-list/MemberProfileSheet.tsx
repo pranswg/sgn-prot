@@ -1,9 +1,11 @@
 import {
   ArrowLeft,
   CalendarDays,
+  LogOut,
   Music2,
   Pencil,
   ShieldCheck,
+  Undo2,
   User,
   UserCheck,
   UserX,
@@ -18,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   GenderBadge,
-  MemberStatusBadge,
+  MemberLifecycleBadge,
   MembershipBadge,
   PositionBadge,
   VoiceBadge,
@@ -40,7 +42,10 @@ interface MemberProfileSheetProps {
   onEdit: (member: Member) => void
   /** Deactivate an active member, or reactivate an inactive one. */
   onToggleStatus: (member: Member) => void
+  /** Open the transfer-out / restore form for this member. */
+  onLifecycle: (member: Member) => void
   canManage: boolean
+  canLifecycle: boolean
 }
 
 /**
@@ -55,7 +60,9 @@ export function MemberProfileSheet({
   onOpenChange,
   onEdit,
   onToggleStatus,
+  onLifecycle,
   canManage,
+  canLifecycle,
 }: MemberProfileSheetProps) {
   const allVoices = useSettingsStore((s) => s.allVoices)
   const suguanList = useSuguanStore((s) => s.suguan)
@@ -114,7 +121,7 @@ export function MemberProfileSheet({
                 {reference ?? '—'}
               </p>
             </div>
-            <MemberStatusBadge active={member.isActive} />
+            <MemberLifecycleBadge member={member} />
           </div>
 
           <div className="flex flex-col gap-3">
@@ -185,9 +192,31 @@ export function MemberProfileSheet({
         </div>
 
         {canManage && <div className="flex shrink-0 gap-2 border-t border-border/70 bg-background px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          {canLifecycle && (
+            <Button
+              variant="outline"
+              className={member.isActive ? 'flex-1 text-amber-700 dark:text-amber-300' : 'flex-1 text-brand-teal'}
+              onClick={() => {
+                onOpenChange(false)
+                onLifecycle(member)
+              }}
+            >
+              {member.isActive ? (
+                <>
+                  <LogOut className="size-4" />
+                  Transfer Out
+                </>
+              ) : (
+                <>
+                  <Undo2 className="size-4" />
+                  Restore
+                </>
+              )}
+            </Button>
+          )}
           <Button
             variant="outline"
-            className="flex-1"
+            className={canLifecycle ? 'text-amber-700 dark:text-amber-300' : 'flex-1 text-amber-700 dark:text-amber-300'}
             onClick={() => {
               onOpenChange(false)
               onToggleStatus(member)

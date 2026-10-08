@@ -133,7 +133,7 @@ function CheckRow({
         aria-checked={active}
         onClick={onToggle}
         className={cn(
-          'flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 text-left text-sm transition-colors',
+          'pressable flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 text-left text-sm motion-reduce:transform-none',
           active
             ? 'border-brand-teal/40 bg-brand-teal-soft text-brand-teal'
             : 'border-border/70 bg-background text-foreground active:bg-muted',

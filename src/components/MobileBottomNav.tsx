@@ -46,6 +46,7 @@ const PRIMARY_BAR_PAGES: Page[] = [
 
 /** Pages reached only from the More sheet light up the More tab itself. */
 const MORE_PAGES: Page[] = [
+  'members-history',
   'organista-suguan-maker',
   'suguan-history',
   'settings',
@@ -121,7 +122,7 @@ export function MobileBottomNav() {
                       : navigate(item.page)
                   }
                   className={cn(
-                    'flex w-full flex-col items-center gap-1 px-1 py-2.5 transition-colors',
+                    'pressable flex w-full flex-col items-center gap-1 px-1 py-2.5',
                     isActive
                       ? 'text-brand-teal'
                       : 'text-muted-foreground hover:text-foreground',
@@ -183,7 +184,7 @@ export function MobileBottomNav() {
                             navigate(item.page)
                           }}
                           className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                            'pressable flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium',
                             active
                               ? 'bg-brand-teal-soft text-brand-teal'
                               : 'text-foreground hover:bg-muted',

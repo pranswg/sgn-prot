@@ -25,6 +25,9 @@ import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { cn } from '@/lib/utils'
 import { phtInstantISO } from '@/lib/phDate'
 import { Checkbox } from '@/components/ui/checkbox'
+import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
+import { DuplicateMemberPanel } from './DuplicateMemberPanel'
+import { useDuplicateActions } from './useDuplicateActions'
 
 interface MobileMemberFormSheetProps {
   open: boolean
@@ -71,9 +74,15 @@ export function MobileMemberFormSheet({
 }: MobileMemberFormSheetProps) {
   const addMember = useMemberStore((s) => s.addMember)
   const updateMember = useMemberStore((s) => s.updateMember)
+  const members = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
   const [form, setForm] = useState<FormState>(blankForm)
+  const [duplicateCandidates, setDuplicateCandidates] = useState<Member[]>([])
+  // "Create New Member Anyway" is a one-shot bypass; it is reset on the next
+  // time the sheet opens so a later add still checks for duplicates.
+  const [skipDuplicateCheck, setSkipDuplicateCheck] = useState(false)
+  const duplicateActions = useDuplicateActions(() => onOpenChange(false))
   const [wasOpen, setWasOpen] = useState(open)
   const [personalOpen, setPersonalOpen] = useState(true)
   const [choirOpen, setChoirOpen] = useState(false)
@@ -85,6 +94,8 @@ export function MobileMemberFormSheet({
   if (open !== wasOpen) {
     setWasOpen(open)
     if (open) {
+      setDuplicateCandidates([])
+      setSkipDuplicateCheck(false)
       setForm(
         member
           ? {
@@ -136,6 +147,14 @@ export function MobileMemberFormSheet({
       updateMember(member.id, input)
       toast.success('Member updated.')
     } else {
+      const duplicates = findPossibleDuplicateMembers(members, {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+      })
+      if (duplicates.length > 0 && !skipDuplicateCheck) {
+        setDuplicateCandidates(duplicates)
+        return
+      }
       const input: MemberInput = {
         firstName: form.firstName.trim(),
         middleName: form.middleName.trim() || undefined,
@@ -157,6 +176,8 @@ export function MobileMemberFormSheet({
 
   const close = () => onOpenChange(false)
 
+  const duplicateFocused = duplicateCandidates.length > 0
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -176,12 +197,18 @@ export function MobileMemberFormSheet({
             </div>
             <div className="min-w-0">
               <SheetTitle className="text-lg font-bold">
-                {member ? 'Edit Member' : 'Add Member'}
+                {duplicateFocused
+                  ? 'Possible Duplicate'
+                  : member
+                    ? 'Edit Member'
+                    : 'Add Member'}
               </SheetTitle>
               <SheetDescription className="text-xs">
-                {member
-                  ? `Update ${member.firstName} ${member.lastName}.`
-                  : 'Add a new choir member to the Master List.'}
+                {duplicateFocused
+                  ? 'A member with this name already exists in the Master List.'
+                  : member
+                    ? `Update ${member.firstName} ${member.lastName}.`
+                    : 'Add a new choir member to the Master List.'}
               </SheetDescription>
             </div>
           </div>
@@ -196,8 +223,25 @@ export function MobileMemberFormSheet({
           </Button>
         </div>
 
-        <div className="min-w-0 flex-1 overflow-y-auto border-t border-border/60 px-4 py-4 pb-6">
-          <div className="flex min-w-0 flex-col gap-3">
+        {duplicateFocused ? (
+          <div className="min-w-0 flex-1 overflow-y-auto px-4 py-4 pb-6">
+            <DuplicateMemberPanel
+              mobile
+              candidates={duplicateCandidates}
+              onViewHistory={duplicateActions.viewHistory}
+              onRestore={duplicateActions.restore}
+              onContinue={() => {
+                setDuplicateCandidates([])
+                setSkipDuplicateCheck(true)
+                handleSave()
+              }}
+              onCancel={() => setDuplicateCandidates([])}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="min-w-0 flex-1 overflow-y-auto border-t border-border/60 px-4 py-4 pb-6">
+              <div className="flex min-w-0 flex-col gap-3">
             <SectionCard
               icon={<User className="size-4" />}
               title="Personal Information"
@@ -402,6 +446,8 @@ export function MobileMemberFormSheet({
             {member ? 'Save Changes' : 'Add Member'}
           </Button>
         </div>
+          </>
+        )}
       </SheetContent>
     </Sheet>
   )

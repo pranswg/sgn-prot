@@ -11,6 +11,7 @@ export const PERMISSION_DEFINITIONS: {
   { id: 'edit-members', label: 'Edit Members', module: 'Choir Management' },
   { id: 'delete-members', label: 'Delete Members', module: 'Choir Management' },
   { id: 'manage-trainees', label: 'Manage Trainees', module: 'Choir Management' },
+  { id: 'manage-membership-history', label: 'Manage Members History', module: 'Choir Management' },
   { id: 'view-suguan', label: 'View Suguan History', module: 'Suguan' },
   { id: 'create-suguan', label: 'Create Suguan', module: 'Suguan' },
   { id: 'edit-suguan', label: 'Edit Suguan', module: 'Suguan' },
@@ -34,6 +35,7 @@ export const ADMIN_ONLY_PERMISSIONS: Permission[] = [
   'restore-data',
   'view-login-history',
   'manage-sessions',
+  'manage-membership-history',
 ]
 
 export const ACCOUNT_ROLES: {
@@ -117,6 +119,7 @@ export function canAccessPage(
   const pagePermission: Record<string, Permission> = {
     dashboard: 'view-dashboard',
     'master-list': 'view-master-list',
+    'members-history': 'view-master-list',
     trainees: 'manage-trainees',
     'koro-maker': 'edit-members',
     'organista-suguan-maker': 'create-suguan',

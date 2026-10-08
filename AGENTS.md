@@ -206,6 +206,27 @@ Date Added, or Notes. `isActive` is only toggled from the profile, `dateAdded`
 is auto-set on add to a PHT timestamp (`phtInstantISO`), and `positions` /
 `notes` are preserved untouched on edit.
 
+**A formal transfer moves the member off the Master List.** `transferMember`
+appends a `transferred-out` event and sets `isActive: false` together;
+`belongsInMasterList` in `src/lib/memberHistory.ts` is the predicate the
+Master List page, its PDF export, and the Dashboard cards all narrow through,
+so a transferred member is only reachable from the Members History page (which
+has Restore). A plain deactivate keeps the member on the Master List with an
+"Inactive" badge. `memberLifecycleStatus` lets `isActive` gate the derived
+status for exactly this reason: the deactivate toggle flips the flag without
+appending an event, so a stale `joined`/`returned` event must not read as
+active. Do not re-derive lifecycle status from events alone.
+
+The Choir Suguan builder **never assigns the `organista` or
+`organista-reserve` duty roles** — organist duties belong to the Organist
+Suguan feature, and the printed choir sheet has no organista slot.
+`CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in `src/core/constants/dutyRoles.ts` is
+the single source: `DutyRolesPanel` hides those selectors and
+`createDraftFromSuguan` strips stored entries on load/edit, so already-saved
+records keep their data until re-saved. The roles themselves stay in Settings
+and `DEFAULT_DUTY_ROLES` for the Master List PDF's Organists section, which
+resolves through `memberIsOrganist`, not the duty-role assignments.
+
 ## Sidebar
 
 `src/components/ui/sidebar.tsx` was deleted. Its state model (`collapsible =
@@ -405,6 +426,45 @@ export. When you change one side, change the other:
   normalised key, title rows above the header are skipped, voice sections
   resolve by id, full name, or short name, and unreadable values fall back
   rather than dropping the row. Keep it that way.
+
+## Export file naming and the export preview gate
+
+Every feature that downloads a file uses one naming convention and one confirm
+gate, so a download never happens with a surprise filename.
+
+**Naming.** `{YYYYMMDD}_{hh-mmAMPM} - {Document Name}.{extension}`, e.g.
+`20261008_07-00PM - Women Choir Suguan.pdf`. The timestamp half comes from
+`filenameTimestampPHT()` in `src/lib/phDate.ts` (Philippine time, 12-hour
+clock, underscore between date and time). All naming helpers live in
+`src/lib/exportNaming.ts` and are covered by `exportNaming.test.ts`:
+
+- `exportFileName(name, ext)` builds the whole string and sanitises the
+  document name through `sanitizeExportName`, which removes the characters a
+  file system rejects (`<>:"/\|?*`). **Never build a filename alongside it with
+  a hand-rolled stamp or a raw `.replace`.** `suguanFileName` in
+  `src/lib/suguanUtils.ts` is the Suguan sheet's wrapper (group word + optional
+  service type), so all four Suguan renderers share it.
+- Document names by feature: Choir Suguan is `{Women|Men|Mixed} Choir Suguan`
+  with ` - {Service}` appended when the service type is known (e.g.
+  `- Pagsamba`); **Organist Suguan is not gender-specific** and stays a plain
+  `Organist Suguan`; Koro exports are `{Title} - Koro` and `{Title} - Suguan`;
+  the Master List is `{Women Choir|Men Choir} Master List` or plain
+  `Master List` (spreadsheets follow the gender filter via
+  `masterListExportDocumentName`, the PDF is always plain `Master List`); the
+  backup is `Inc Choir Backup`. `Trainees List`, `Members History`, and
+  `Audit Logs` names exist as conventions for future features — do not build
+  new export UIs for them without asking.
+
+**Preview gate.** Do not call a download from a button. Every export surface
+renders `ExportPreviewDialog` through the `useExportPreview` hook
+(`src/hooks/useExportPreview.tsx`): build the filename first, pass it plus the
+real download action to `requestExport`, and only the user's confirm runs the
+download. Export functions (`exportSuguanPdf`, `exportSuguanExcel`,
+`exportMasterListPdf`, `exportKoroTablePdf`, `exportKoroAsSuguanPdf`) take an
+optional trailing `filename` so the saved file is exactly the string the user
+confirmed — the preview never shows one name while the browser saves another.
+The Master List PDF setup dialog closes before the preview opens (`setPdfSetupOpen(false)`
+inside the `onExport` handler) so the two dialogs are never open at once.
 
 ## Conventions
 

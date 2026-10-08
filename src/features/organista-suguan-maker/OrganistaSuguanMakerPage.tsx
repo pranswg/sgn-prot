@@ -19,9 +19,11 @@ import {
 } from '@/lib/suguanUtils'
 import { formatDateKeyNumeric, weekdayOf } from '@/lib/phDate'
 import { fullName } from '@/lib/format'
+import { exportFileName } from '@/lib/exportNaming'
 import { useMemberStore } from '@/store/memberStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
+import { useExportPreview } from '@/hooks/useExportPreview'
 import type { OrganistaSuguanService } from '@/core/types/organistaSuguan'
 import { MemberPicker } from './memberPicker'
 import {
@@ -351,6 +353,7 @@ export function OrganistaSuguanMakerPage() {
     | null
   >(null)
   const newServiceCardRef = useRef<HTMLDivElement>(null)
+  const { exportPreview, requestExport } = useExportPreview()
 
   const takenScheduleIds = useMemo(
     () =>
@@ -471,8 +474,16 @@ export function OrganistaSuguanMakerPage() {
     setServices(reorderList(services, id, toIndex))
   }
 
-  const exportPdf = async () => {
+  const exportPdf = () => {
     if (!requirePagsasanayDate()) return
+    const fileName = exportFileName('Organist Suguan', 'pdf')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runExportPdf(fileName),
+    })
+  }
+
+  const runExportPdf = async (fileName: string) => {
     try {
       const blob = await buildOrganistaSuguanPdf(
         churchName,
@@ -485,10 +496,7 @@ export function OrganistaSuguanMakerPage() {
       const link = document.createElement('a')
       const fileUrl = URL.createObjectURL(blob)
       link.href = fileUrl
-      const trimmedChurch = churchName.trim()
-      link.download = `${(trimmedChurch ? trimmedChurch : 'Lokal')
-        .replace(/\s+/g, '-')
-        .toUpperCase()}-Organista-Suguan.pdf`
+      link.download = fileName
       document.body.append(link)
       link.click()
       link.remove()
@@ -577,6 +585,7 @@ export function OrganistaSuguanMakerPage() {
 
   return (
     <div className="flex flex-col gap-5 pb-10">
+      {exportPreview}
       <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-start gap-3">
           <span className="flex size-10 items-center justify-center rounded-lg bg-brand-navy text-white">

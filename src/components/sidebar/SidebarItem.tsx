@@ -37,7 +37,7 @@ export function SidebarItem({ item, collapsed, onNavigate }: SidebarItemProps) {
         onClick={handleClick}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'group flex items-center rounded-lg transition-colors duration-150 ease-in-out motion-reduce:transition-none',
+          'pressable group flex items-center rounded-lg motion-reduce:transform-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar',
           collapsed
             ? 'size-11 justify-center rounded-xl'

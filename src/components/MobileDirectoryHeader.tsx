@@ -8,10 +8,10 @@ interface MobileDirectoryHeaderProps {
 }
 
 /**
- * Mobile screen header. It owns the top navigation for the Master List on its
- * own — menu button and title — so `Layout` hides its app bar on this page and
- * the two titles do not stack. Import and export live in the content area under
- * the KPI cards, not here.
+ * Mobile screen header. It owns the top navigation for a list page on its own —
+ * menu button and title — so `Layout` hides its app bar on those pages and the
+ * two titles do not stack. Import and export live in the content area under the
+ * summary cards, not here.
  *
  * The negative margins cancel the `p-4 pt-5` gutter that `Layout` puts on the
  * page container, which is what lets a sticky, full-bleed bar sit flush with the

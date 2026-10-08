@@ -11,6 +11,7 @@ import {
   koroVoiceColor,
 } from '@/lib/koro'
 import { formatDateLong, formatDateLongDate } from '@/lib/format'
+import { exportFileName } from '@/lib/exportNaming'
 
 function hexToRgb(hex: string): [number, number, number] {
   const normalized = hex.replace('#', '')
@@ -25,6 +26,7 @@ export async function exportKoroTablePdf(
   document: KoroDocument,
   members: Member[],
   voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
+  filename?: string,
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const docFormat = {
@@ -156,7 +158,7 @@ export async function exportKoroTablePdf(
   })
 
   const safeTitle = title.replace(/[<>:"/\\|?*]+/g, '').trim() || 'Koro'
-  pdf.save(`${safeTitle} - Koro.pdf`)
+  pdf.save(filename ?? exportFileName(`${safeTitle} - Koro`, 'pdf'))
 }
 
 export async function exportKoroAsSuguanPdf(
@@ -164,6 +166,7 @@ export async function exportKoroAsSuguanPdf(
   members: Member[],
   voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
   output: 'download' | 'preview' = 'download',
+  filename?: string,
 ): Promise<Blob | void> {
   const { jsPDF } = await import('jspdf')
   const dimensions = docPaperDimensionsMm({
@@ -404,5 +407,5 @@ export async function exportKoroAsSuguanPdf(
 
   if (output === 'preview') return pdf.output('blob')
   const safeTitle = title.replace(/[<>:"/\\|?*]+/g, '').trim() || 'Suguan'
-  pdf.save(`${safeTitle} - Suguan.pdf`)
+  pdf.save(filename ?? exportFileName(`${safeTitle} - Suguan`, 'pdf'))
 }

@@ -10,7 +10,7 @@ import {
   DEFAULT_SCHEDULE_CATEGORIES,
   type WorshipScheduleCategories,
 } from '@/core/constants/worshipSchedules'
-import { createCopyDraft, weekScheduleSections } from './builderState.ts'
+import { createCopyDraft, createDraftFromSuguan, weekScheduleSections } from './builderState.ts'
 
 const customCategories: WorshipScheduleCategories = {
   midweek: [
@@ -154,6 +154,33 @@ test('copy snapshots the source, so editing a copy never mutates the saved Sugua
   assert.equal(source.schedules[0].assignments[0].memberName, 'Test Member')
   assert.equal(source.dutyRoles[0].memberId, 'm1')
   assert.equal(source.coverage?.template, 'midweek-2w')
+})
+
+test('organist duty roles are stripped from loaded and copied drafts', () => {
+  const stored: Suguan = {
+    ...source,
+    dutyRoles: [
+      { memberId: 'm1', memberName: 'Test Member', dutyRoleId: 'oic' },
+      { memberId: 'm2', memberName: 'Test Member', dutyRoleId: 'organista' },
+      {
+        memberId: 'm3',
+        memberName: 'Test Member',
+        dutyRoleId: 'organista-reserve',
+      },
+    ],
+  }
+
+  const draft = createDraftFromSuguan(stored, voices)
+  assert.deepEqual(
+    draft.dutyRoles.map((d) => d.dutyRoleId),
+    ['oic'],
+  )
+  assert.deepEqual(
+    createCopyDraft(stored, voices).dutyRoles.map((d) => d.dutyRoleId),
+    ['oic'],
+  )
+  // Only the draft is cleaned; the saved record keeps what it stored.
+  assert.equal(stored.dutyRoles.length, 3)
 })
 
 test('weekScheduleSections builds the whole detected week and keeps assignments by key', () => {

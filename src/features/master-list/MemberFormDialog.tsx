@@ -24,7 +24,10 @@ import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { phtInstantISO } from '@/lib/phDate'
+import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DuplicateMemberPanel } from './DuplicateMemberPanel'
+import { useDuplicateActions } from './useDuplicateActions'
 
 interface MemberFormDialogProps {
   open: boolean
@@ -61,15 +64,23 @@ export function MemberFormDialog({
   member,
   onSaved,
 }: MemberFormDialogProps) {
+  const members = useMemberStore((s) => s.members)
   const addMember = useMemberStore((s) => s.addMember)
   const updateMember = useMemberStore((s) => s.updateMember)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
 
   const [form, setForm] = useState<MemberFormState>(emptyForm)
+  const [duplicateCandidates, setDuplicateCandidates] = useState<Member[]>([])
+  // "Create New Member Anyway" is a one-shot bypass; it is reset on the next
+  // time the dialog opens so a later add still checks for duplicates.
+  const [skipDuplicateCheck, setSkipDuplicateCheck] = useState(false)
+  const duplicateActions = useDuplicateActions(() => onOpenChange(false))
 
   useEffect(() => {
     if (open) {
+      setDuplicateCandidates([])
+      setSkipDuplicateCheck(false)
       setForm(
         member
           ? {
@@ -110,12 +121,14 @@ export function MemberFormDialog({
       toast.error("Please provide the member's full name.")
       return
     }
+    const firstName = form.firstName.trim()
+    const lastName = form.lastName.trim()
     if (member) {
       const input: Partial<MemberInput> = {
-        firstName: form.firstName.trim(),
+        firstName,
         middleName: form.middleName.trim() || undefined,
         suffix: form.suffix.trim() || undefined,
-        lastName: form.lastName.trim(),
+        lastName,
         gender: form.gender,
         voicePosition: form.voicePosition,
         membershipType: form.membershipType,
@@ -124,38 +137,77 @@ export function MemberFormDialog({
       // isActive, legacy positions, and notes remain untouched by this editor.
       updateMember(member.id, input)
       toast.success('Member updated.')
-    } else {
-      const input: MemberInput = {
-        firstName: form.firstName.trim(),
-        middleName: form.middleName.trim() || undefined,
-        suffix: form.suffix.trim() || undefined,
-        lastName: form.lastName.trim(),
-        gender: form.gender,
-        voicePosition: form.voicePosition,
-        membershipType: form.membershipType,
-        assignedDutyRoleIds: form.assignedDutyRoleIds,
-        isActive: true,
-        dateAdded: phtInstantISO(),
-      }
-      addMember(input)
-      toast.success('Member added.')
+      onOpenChange(false)
+      onSaved?.()
+      return
     }
+
+    const duplicates = findPossibleDuplicateMembers(members, {
+      firstName,
+      lastName,
+    })
+    if (duplicates.length > 0 && !skipDuplicateCheck) {
+      setDuplicateCandidates(duplicates)
+      return
+    }
+    const input: MemberInput = {
+      firstName,
+      middleName: form.middleName.trim() || undefined,
+      suffix: form.suffix.trim() || undefined,
+      lastName,
+      gender: form.gender,
+      voicePosition: form.voicePosition,
+      membershipType: form.membershipType,
+      assignedDutyRoleIds: form.assignedDutyRoleIds,
+      isActive: true,
+      dateAdded: phtInstantISO(),
+    }
+    addMember(input)
+    toast.success('Member added.')
     onOpenChange(false)
     onSaved?.()
   }
+
+  const duplicateFocused = duplicateCandidates.length > 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{member ? 'Edit Member' : 'Add Member'}</DialogTitle>
+          <DialogTitle>
+            {duplicateFocused
+              ? 'Possible Duplicate'
+              : member
+                ? 'Edit Member'
+                : 'Add Member'}
+          </DialogTitle>
           <DialogDescription>
-            {member
-              ? `Update the information for ${member.firstName} ${member.lastName}.`
-              : 'Add a new choir member to the Master List.'}
+            {duplicateFocused
+              ? 'A member with this name already exists in the Master List.'
+              : member
+                ? `Update the information for ${member.firstName} ${member.lastName}.`
+                : 'Add a new choir member to the Master List.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        {duplicateFocused ? (
+          <div className="py-2">
+            <DuplicateMemberPanel
+              candidates={duplicateCandidates}
+              onViewHistory={duplicateActions.viewHistory}
+              onRestore={duplicateActions.restore}
+              onContinue={() => {
+                // Bypass the check once: the user already confirmed they want a
+                // separate record. The form data is untouched, so nothing is lost.
+                setDuplicateCandidates([])
+                setSkipDuplicateCheck(true)
+                handleSave()
+              }}
+              onCancel={() => setDuplicateCandidates([])}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="firstName">
@@ -301,6 +353,8 @@ export function MemberFormDialog({
           </Button>
           <Button onClick={handleSave}>{member ? 'Save Changes' : 'Add Member'}</Button>
         </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

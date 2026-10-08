@@ -102,7 +102,7 @@ export function AuthPage() {
                 {isFirstAdminSetup ? 'Set up administrator account' : 'Sign in'}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Choir Manager &middot; Sta. Monica
+                Choir Manager
               </p>
             </div>
           </div>
@@ -147,7 +147,7 @@ export function AuthPage() {
                   messageFor('username') ? `${fieldId}-username-error` : undefined
                 }
                 className="h-10"
-                placeholder="maria"
+                placeholder="Enter Username"
                 value={form.username}
                 onChange={(e) => set('username', e.target.value)}
               />
@@ -169,7 +169,7 @@ export function AuthPage() {
                     messageFor('password') ? `${fieldId}-password-error` : undefined
                   }
                   className="h-10 pr-10"
-                  placeholder={isFirstAdminSetup ? 'At least 8 characters' : ''}
+                  placeholder="Enter password"
                   value={form.password}
                   onChange={(e) => set('password', e.target.value)}
                 />
@@ -246,14 +246,6 @@ export function AuthPage() {
               </p>
             )}
           </form>
-
-          <p className="mt-4 flex items-start gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              Accounts are stored on this device only. Passwords are hashed, but
-              anyone with access to this browser can read the data.
-            </span>
-          </p>
         </div>
       </div>
     </div>

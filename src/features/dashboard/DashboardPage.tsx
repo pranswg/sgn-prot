@@ -90,14 +90,14 @@ export function DashboardPage() {
             aria-label={`${s.label}: ${s.value}. Go to ${s.label}`}
             className="group cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <Card className="transition-colors group-hover:bg-accent/40 group-hover:shadow-md">
+            <Card className="h-full transition-colors group-hover:bg-accent/40 group-hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="flex size-10 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-card">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-card">
                   <s.icon className={`size-5 ${s.color}`} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-2xl font-semibold leading-none">{s.value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{s.label}</p>
                 </div>
               </CardContent>
             </Card>

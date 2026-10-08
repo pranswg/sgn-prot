@@ -289,14 +289,32 @@ export function Layout() {
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Open settings"
-              onClick={() => navigate('settings')}
-            >
-              <Settings2 className="size-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Signed in as ${account?.fullName ?? 'unknown'}`}
+                  className="flex size-9 items-center justify-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white ring-1 ring-inset ring-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
+                  {account ? initialsFor(account.fullName) : '?'}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="grid gap-0.5">
+                  <span className="truncate text-sm font-medium">
+                    {account?.fullName}
+                  </span>
+                  <span className="truncate text-xs font-normal text-muted-foreground">
+                    @{account?.username}
+                  </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => signOut()}>
+                  <LogOut className="size-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
 

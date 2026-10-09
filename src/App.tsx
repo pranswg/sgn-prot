@@ -10,16 +10,18 @@ import { ThemeProvider } from '@/components/sidebar/ThemeProvider'
 function App() {
   // Reading the id rather than the account object keeps this component from
   // re-rendering when an unrelated field of the signed-in account changes.
+  const ready = useAuthStore((s) => s.ready)
   const currentAccountId = useAuthStore((s) => s.currentAccountId)
   const mustChangePassword = useAuthStore((s) =>
     s.accounts.find((account) => account.id === s.currentAccountId)?.mustChangePassword
       ?? false,
   )
 
-  // Guarantee a known Admin login on a fresh browser (or one whose admins were
-  // all disabled). Idempotent: a store that already has an active Admin is
-  // untouched. Never signs the visitor in.
+  // Restore the Supabase session on boot and subscribe to sign-out, then make
+  // sure a known Admin login exists (server-side, idempotent). `seedDefaultAdmin`
+  // never signs anyone in.
   useEffect(() => {
+    void useAuthStore.getState().bootstrap()
     void useAuthStore.getState().seedDefaultAdmin()
   }, [])
 
@@ -30,11 +32,13 @@ function App() {
   return (
     <ThemeProvider>
       <TooltipProvider delayDuration={0}>
-        {currentAccountId
-          ? mustChangePassword
-            ? <PasswordChangePage />
-            : <Layout />
-          : <AuthPage />}
+        {!ready
+          ? <div className="min-h-dvh bg-muted/40" aria-busy="true" />
+          : currentAccountId
+            ? mustChangePassword
+              ? <PasswordChangePage />
+              : <Layout />
+            : <AuthPage />}
         <Toaster richColors position="top-center" />
       </TooltipProvider>
     </ThemeProvider>

@@ -1,93 +1,55 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Eye, EyeOff, Loader2, Music4, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Music4 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { NewAccountInput } from '@/core/types/auth'
-import { passwordStrengthProblems, type FieldProblem } from '@/lib/credentials'
+import type { FieldProblem } from '@/lib/credentials'
 import { useAuthStore } from '@/store/authStore'
 
-const EMPTY_FORM: NewAccountInput = {
-  username: '',
-  fullName: '',
-  password: '',
-  confirmPassword: '',
-}
-
 /**
- * Login and first-Admin setup on one screen. `App.tsx` renders this bare, outside
- * the `Layout` shell, because an unauthenticated visitor should not see the
- * sidebar or the page chrome.
+ * Sign-in screen. `App.tsx` renders this bare, outside the `Layout` shell,
+ * because an unauthenticated visitor should not see the sidebar or the page
+ * chrome.
  *
- * Validation lives in `src/lib/credentials.ts` and is shared with the store, so
- * this component only renders messages and never re-implements a rule.
+ * There is no self-registration: accounts are created by an Admin through the
+ * Administration screens. Validation of a new account lives in
+ * `src/lib/credentials.ts`; this component only reports sign-in failures.
  */
 export function AuthPage() {
-  const register = useAuthStore((s) => s.register)
   const signIn = useAuthStore((s) => s.signIn)
-  const accountCount = useAuthStore((s) => s.accounts.length)
 
-  // A fresh install can initialize one Admin. Later accounts are Admin-managed.
-  const [form, setForm] = useState<NewAccountInput>(EMPTY_FORM)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [pending, setPending] = useState(false)
-  // Inline messages from the last failed submit. Kept as the full problem list
-  // so every bad field is explained at once instead of one per attempt.
   const [problems, setProblems] = useState<FieldProblem[]>([])
-
-  const isRegister = accountCount === 0
-  const isFirstAdminSetup = isRegister
   const fieldId = useId()
 
   const messageFor = (field: FieldProblem['field']) =>
     problems.find((p) => p.field === field)?.message
-
-  const set = (field: keyof NewAccountInput, value: string) => {
-    setForm((f) => ({ ...f, [field]: value }))
-    // Clear just this field's error as soon as it is edited, so the message
-    // never contradicts what is on screen.
-    setProblems((list) => list.filter((p) => p.field !== field))
-  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (pending) return
     setPending(true)
     try {
-      const result = isRegister
-        ? await register(form)
-        : await signIn(form.username, form.password)
-
+      const result = await signIn(username, password)
       if ('problems' in result) {
         setProblems(result.problems)
-        // A form-level problem (bad credentials) has no field to mark, so it
-        // goes in a toast. Field-level problems are shown inline.
         const formLevel = result.problems.find((p) => p.field === 'form')
         if (formLevel) toast.error(formLevel.message)
         return
       }
-
       setProblems([])
-
-      toast.success(
-        isRegister
-          ? `Welcome, ${result.account.fullName}.`
-          : `Welcome back, ${result.account.fullName}.`,
-      )
+      toast.success(`Welcome back, ${result.account.fullName}.`)
     } catch {
-      // Web Crypto is unavailable on insecure origins other than localhost, so
-      // hashing can genuinely throw. Say so instead of failing silently.
-      toast.error('Could not process the password on this browser.')
+      toast.error('Could not sign in. Please check your connection and try again.')
     } finally {
       setPending(false)
     }
   }
-
-  const strength = isRegister && form.password
-    ? passwordStrengthProblems(form.password)
-    : []
 
   return (
     <div className="flex min-h-dvh flex-col bg-muted/40">
@@ -98,12 +60,8 @@ export function AuthPage() {
               <Music4 className="size-6 text-brand-teal-bright" />
             </span>
             <div className="grid gap-1">
-              <h1 className="text-xl font-semibold tracking-tight">
-                {isFirstAdminSetup ? 'Set up administrator account' : 'Sign in'}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Choir Manager
-              </p>
+              <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+              <p className="text-sm text-muted-foreground">Choir Manager</p>
             </div>
           </div>
 
@@ -111,28 +69,6 @@ export function AuthPage() {
             onSubmit={handleSubmit}
             className="grid gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm"
           >
-            {isFirstAdminSetup && (
-              <div className="grid gap-2">
-                <Label htmlFor={`${fieldId}-name`}>Full name</Label>
-                <Input
-                  id={`${fieldId}-name`}
-                  name="name"
-                  autoComplete="name"
-                  aria-invalid={messageFor('fullName') ? true : undefined}
-                  aria-describedby={
-                    messageFor('fullName') ? `${fieldId}-name-error` : undefined
-                  }
-                  className="h-10"
-                  placeholder="Maria Santos"
-                  value={form.fullName}
-                  onChange={(e) => set('fullName', e.target.value)}
-                />
-                <FieldMessage id={`${fieldId}-name-error`}>
-                  {messageFor('fullName')}
-                </FieldMessage>
-              </div>
-            )}
-
             <div className="grid gap-2">
               <Label htmlFor={`${fieldId}-username`}>Username</Label>
               <Input
@@ -148,8 +84,8 @@ export function AuthPage() {
                 }
                 className="h-10"
                 placeholder="Enter Username"
-                value={form.username}
-                onChange={(e) => set('username', e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
               />
               <FieldMessage id={`${fieldId}-username-error`}>
                 {messageFor('username')}
@@ -163,15 +99,15 @@ export function AuthPage() {
                   id={`${fieldId}-password`}
                   name="password"
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete={isFirstAdminSetup ? 'new-password' : 'current-password'}
+                  autoComplete="current-password"
                   aria-invalid={messageFor('password') ? true : undefined}
                   aria-describedby={
                     messageFor('password') ? `${fieldId}-password-error` : undefined
                   }
                   className="h-10 pr-10"
                   placeholder="Enter password"
-                  value={form.password}
-                  onChange={(e) => set('password', e.target.value)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
                 <button
                   type="button"
@@ -191,60 +127,14 @@ export function AuthPage() {
               </FieldMessage>
             </div>
 
-            {isRegister && (
-              <>
-                <div className="grid gap-2">
-                  <Label htmlFor={`${fieldId}-confirm`}>Confirm password</Label>
-                  <Input
-                    id={`${fieldId}-confirm`}
-                    name="confirmPassword"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    aria-invalid={messageFor('confirmPassword') ? true : undefined}
-                    aria-describedby={
-                      messageFor('confirmPassword')
-                        ? `${fieldId}-confirm-error`
-                        : undefined
-                    }
-                    className="h-10"
-                    value={form.confirmPassword}
-                    onChange={(e) => set('confirmPassword', e.target.value)}
-                  />
-                  <FieldMessage id={`${fieldId}-confirm-error`}>
-                    {messageFor('confirmPassword')}
-                  </FieldMessage>
-                </div>
-
-                {strength.length > 0 ? (
-                  <ul className="grid gap-1 text-xs text-muted-foreground">
-                    {strength.map((problem) => (
-                      <li key={problem}>Needs: {problem}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="flex items-center gap-1.5 text-xs text-brand-teal">
-                    <ShieldCheck className="size-3.5" />
-                    Password looks reasonable.
-                  </p>
-                )}
-              </>
-            )}
-
             <Button type="submit" size="lg" className="h-10 w-full" disabled={pending}>
               {pending && <Loader2 className="size-4 animate-spin" />}
-              {isFirstAdminSetup ? 'Create Admin Account' : 'Sign in'}
+              Sign in
             </Button>
 
-            {accountCount === 0 ? (
-              <p className="text-center text-xs text-muted-foreground">
-                This creates the first Admin account for this browser. After
-                setup, system accounts can only be created by an Admin.
-              </p>
-            ) : (
-              <p className="text-center text-xs text-muted-foreground">
-                Need access? Contact an administrator to create your account.
-              </p>
-            )}
+            <p className="text-center text-xs text-muted-foreground">
+              Need access? Contact an administrator to create your account.
+            </p>
           </form>
         </div>
       </div>

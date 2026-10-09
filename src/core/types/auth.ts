@@ -1,11 +1,9 @@
 /**
- * Account types for the local sign-in gate.
+ * Account types for the signed-in user and the Administration screens.
  *
- * There is no server. Accounts live in `localStorage` under `choir-auth`, and a
- * password is only ever stored as a PBKDF2 digest plus its salt. That stops an
- * exported backup file from containing a plaintext password, but it is NOT
- * real security: anyone with devtools can read and rewrite the whole store.
- * Treat this as a way to keep the app's screens honest, not as protection.
+ * Accounts now live in Supabase Auth + the `profiles` table; the password
+ * digest fields below are vestigial from the old browser-local sign-in and are
+ * always absent on a server-backed account. Nothing new should populate them.
  */
 
 /** Role IDs are strings so Admin-created roles can be persisted and assigned. */
@@ -54,11 +52,11 @@ export interface Account {
   username: string
   /** As typed at registration. Display only; never used to log in. */
   fullName: string
-  /** Lower-case hex digest. Never a plaintext password. */
-  passwordHash: string
-  /** Lower-case hex salt, unique per account. */
-  passwordSalt: string
-  /** How `passwordHash` was produced; assumed `pbkdf2` when absent. */
+  /** Legacy local digest; absent on Supabase-backed accounts. */
+  passwordHash?: string
+  /** Legacy local salt; absent on Supabase-backed accounts. */
+  passwordSalt?: string
+  /** Legacy marker for which KDF produced `passwordHash`. */
   hashAlgo?: PasswordHashAlgo
   role: AccountRole
   status?: AccountStatus

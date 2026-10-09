@@ -1,53 +1,21 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { nanoid } from 'nanoid'
 import type { AccountRole, Permission } from '@/core/types/auth'
+import type {
+  ActiveSession,
+  AuditLogEntry,
+  LoginHistoryEntry,
+  ManagedRole,
+} from '@/core/types/admin'
 import {
-  ADMIN_ONLY_PERMISSIONS,
-  DEFAULT_ROLE_PERMISSIONS,
-} from '@/lib/rbac'
+  auditLogToEntry,
+  groupRolePermissions,
+  loginEventToEntry,
+  roleToManagedRole,
+  sessionRowToActiveSession,
+} from '@/lib/accountMapping'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 
-export interface ManagedRole {
-  id: AccountRole
-  label: string
-  description: string
-}
-
-export interface AuditLogEntry {
-  id: string
-  actorId: string | null
-  actorName: string
-  actorUsername: string
-  action: string
-  module: string
-  affectedUserId?: string
-  affectedUserName?: string
-  details?: string
-  createdAt: string
-}
-
-export interface LoginHistoryEntry {
-  id: string
-  userId?: string
-  userName: string
-  username: string
-  device: string
-  locationIp: string
-  status: 'successful' | 'failed'
-  createdAt: string
-}
-
-export interface ActiveSession {
-  id: string
-  userId: string
-  userName: string
-  username: string
-  device: string
-  platform: string
-  locationIp: string
-  startedAt: string
-  lastActiveAt: string
-}
+export type { ActiveSession, AuditLogEntry, LoginHistoryEntry, ManagedRole }
 
 interface AdminState {
   auditLogs: AuditLogEntry[]
@@ -56,147 +24,90 @@ interface AdminState {
   customRoles: ManagedRole[]
   removedRoleIds: AccountRole[]
   rolePermissions: Partial<Record<AccountRole, Permission[]>>
+  /** Rebuilds the mirror from Supabase. No-op when unconfigured (tests). */
+  refresh: () => Promise<void>
+  /** Writes an audit entry server-side. Fire-and-forget. */
   addAuditLog: (entry: Omit<AuditLogEntry, 'id' | 'createdAt'>) => void
-  recordLogin: (entry: Omit<LoginHistoryEntry, 'id' | 'createdAt'>) => void
-  startSession: (entry: Omit<ActiveSession, 'id' | 'startedAt' | 'lastActiveAt'>) => string
-  endSession: (id: string) => void
-  endUserSessions: (userId: string) => void
-  updateRolePermissions: (role: AccountRole, permissions: Permission[]) => void
-  addCustomRole: (role: ManagedRole, permissions: Permission[]) => void
-  updateCustomRole: (role: ManagedRole) => void
-  removeRole: (role: AccountRole) => void
+  clear: () => void
 }
 
-export const useAdminStore = create<AdminState>()(
-  persist(
-    (set) => ({
+/**
+ * A synchronous read mirror over the `roles`, `role_permissions`, `audit_logs`,
+ * `login_events`, and `admin_list_sessions()` data. Many components read it
+ * synchronously (RBAC, the Administration tables), so the store keeps the same
+ * shape the old local store had and is refreshed after each mutation.
+ */
+export const useAdminStore = create<AdminState>()((set) => ({
+  auditLogs: [],
+  loginHistory: [],
+  activeSessions: [],
+  customRoles: [],
+  removedRoleIds: [],
+  rolePermissions: {},
+
+  refresh: async () => {
+    if (!isSupabaseConfigured) return
+    const supabase = getSupabase()
+    const [rolesResult, permissionsResult, auditResult, loginResult] =
+      await Promise.all([
+        supabase.from('roles').select('*').order('created_at', { ascending: true }),
+        supabase.from('role_permissions').select('*'),
+        supabase
+          .from('audit_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500),
+        supabase
+          .from('login_events')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(500),
+      ])
+
+    const customRoles = (rolesResult.data ?? [])
+      .filter((role) => !role.is_system && role.id !== 'admin')
+      .map(roleToManagedRole)
+
+    set({
+      customRoles,
+      rolePermissions: groupRolePermissions(permissionsResult.data ?? []),
+      removedRoleIds: [],
+      auditLogs: (auditResult.data ?? []).map(auditLogToEntry),
+      loginHistory: (loginResult.data ?? []).map(loginEventToEntry),
+    })
+
+    // RLS raises for non-admins; treat an error as "no visible sessions".
+    const { data: sessionRows, error: sessionError } =
+      await supabase.rpc('admin_list_sessions')
+    set({
+      activeSessions: sessionError
+        ? []
+        : (sessionRows ?? []).map(sessionRowToActiveSession),
+    })
+  },
+
+  addAuditLog: (entry) => {
+    if (!isSupabaseConfigured) return
+    void getSupabase()
+      .rpc('log_audit', {
+        p_action: entry.action,
+        p_module: entry.module,
+        p_details: entry.details ?? undefined,
+        p_affected_user_id: entry.affectedUserId ?? undefined,
+        p_affected_user_name: entry.affectedUserName ?? undefined,
+      })
+      .then(({ error }) => {
+        if (error) console.error('Could not write audit log:', error.message)
+      })
+  },
+
+  clear: () =>
+    set({
       auditLogs: [],
       loginHistory: [],
       activeSessions: [],
       customRoles: [],
       removedRoleIds: [],
-      rolePermissions: DEFAULT_ROLE_PERMISSIONS,
-      addAuditLog: (entry) =>
-        set((state) => ({
-          auditLogs: [
-            { ...entry, id: nanoid(), createdAt: new Date().toISOString() },
-            ...state.auditLogs,
-          ],
-        })),
-      recordLogin: (entry) =>
-        set((state) => ({
-          loginHistory: [
-            { ...entry, id: nanoid(), createdAt: new Date().toISOString() },
-            ...state.loginHistory,
-          ].slice(0, 5000),
-        })),
-      startSession: (entry) => {
-        const id = nanoid()
-        const now = new Date().toISOString()
-        set((state) => ({
-          activeSessions: [
-            ...state.activeSessions.filter((session) => session.userId !== entry.userId),
-            { ...entry, id, startedAt: now, lastActiveAt: now },
-          ],
-        }))
-        return id
-      },
-      endSession: (id) =>
-        set((state) => ({
-          activeSessions: state.activeSessions.filter((session) => session.id !== id),
-        })),
-      endUserSessions: (userId) =>
-        set((state) => ({
-          activeSessions: state.activeSessions.filter(
-            (session) => session.userId !== userId,
-          ),
-        })),
-      updateRolePermissions: (role, permissions) =>
-        set((state) => ({
-          rolePermissions: {
-            ...state.rolePermissions,
-            [role]:
-              role === 'admin'
-                ? DEFAULT_ROLE_PERMISSIONS.admin
-                : [...new Set(permissions)].filter(
-                    (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-                  ),
-          },
-        })),
-      addCustomRole: (role, permissions) =>
-        set((state) => ({
-          customRoles: [...state.customRoles, role],
-          rolePermissions: {
-            ...state.rolePermissions,
-            [role.id]: [...new Set(permissions)].filter(
-              (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-            ),
-          },
-        })),
-      updateCustomRole: (role) =>
-        set((state) => ({
-          customRoles: state.customRoles.map((item) =>
-            item.id === role.id ? role : item,
-          ),
-        })),
-      removeRole: (role) =>
-        set((state) => {
-          const rolePermissions = { ...state.rolePermissions }
-          delete rolePermissions[role]
-          return {
-            customRoles: state.customRoles.filter((item) => item.id !== role),
-            removedRoleIds: state.removedRoleIds.includes(role)
-              ? state.removedRoleIds
-              : [...state.removedRoleIds, role],
-            rolePermissions,
-          }
-        }),
+      rolePermissions: {},
     }),
-    {
-      name: 'choir-admin-security',
-      version: 4,
-      migrate: (persisted) => {
-        const state = (persisted ?? {}) as Partial<AdminState>
-        const customRoles = Array.isArray(state.customRoles)
-          ? state.customRoles.filter(
-              (role) =>
-                typeof role.id === 'string' &&
-                role.id.startsWith('custom-') &&
-                typeof role.label === 'string' &&
-                typeof role.description === 'string',
-            )
-          : []
-        const permissions: Partial<Record<AccountRole, Permission[]>> = {
-          ...(state.rolePermissions ?? {}),
-          admin: DEFAULT_ROLE_PERMISSIONS.admin,
-        }
-        for (const role of Object.keys(permissions)) {
-          if (role !== 'admin' && !customRoles.some((item) => item.id === role)) {
-            delete permissions[role]
-          } else if (role !== 'admin') {
-            permissions[role] = (permissions[role] ?? []).filter(
-              (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-            )
-          }
-        }
-        return {
-          auditLogs: Array.isArray(state.auditLogs) ? state.auditLogs : [],
-          loginHistory: Array.isArray(state.loginHistory)
-            ? state.loginHistory
-            : [],
-          activeSessions: Array.isArray(state.activeSessions)
-            ? state.activeSessions
-            : [],
-          customRoles,
-          removedRoleIds: Array.isArray(state.removedRoleIds)
-            ? state.removedRoleIds.filter(
-                (role): role is AccountRole =>
-                  typeof role === 'string' && role !== 'admin',
-              )
-            : [],
-          rolePermissions: permissions,
-        }
-      },
-    },
-  ),
-)
+}))

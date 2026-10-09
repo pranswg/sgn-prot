@@ -31,9 +31,10 @@ extensionless relative imports. Two consequences:
 Test files that exist, all pure-logic: `suguanDates.test.ts`,
 `suguanExport.test.ts`, `spreadsheetImport.test.ts`, `rosterImport.test.ts`,
 `memberDirectory.test.ts`, `format.test.ts`, `credentials.test.ts`,
-`sidebarNav.test.ts`, `reorderList.test.ts`, `navStore.test.ts`, and
-`features/settings/referenceList.test.ts`. When you add a pure function worth
-protecting, add cases next to it rather than leaving behaviour implicit.
+`accountMapping.test.ts`, `sidebarNav.test.ts`, `reorderList.test.ts`,
+`navStore.test.ts`, and `features/settings/referenceList.test.ts`. When you add
+a pure function worth protecting, add cases next to it rather than leaving
+behaviour implicit.
 
 `tsconfig.app.json` enables `noUnusedLocals` and `noUnusedParameters`, so a
 typecheck failure about an unused import is usually a real leftover from an edit
@@ -129,30 +130,30 @@ Date and layout logic is covered by `src/lib/suguanDates.test.ts` and
 
 ## Where state lives
 
-Zustand stores in `src/store/`, each persisted to `localStorage` with a
-migration function. **UI-only changes must not change a persisted shape.**
+Zustand stores in `src/store/`. The **data** stores are persisted to
+`localStorage` with a migration function. `authStore` and `adminStore` are
+**not persisted** — they are read-mirrors of Supabase (see the sign-in section).
+**UI-only changes must not change a persisted shape.**
 
-| Store | localStorage key | version |
+| Store | Persistence | version |
 | --- | --- | --- |
-| `memberStore.ts` | `choir-members` | 4 |
-| `suguanStore.ts` | `choir-suguan` | 6 |
-| `settingsStore.ts` | `choir-settings` | 3 |
-| `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
-| `authStore.ts` | `choir-auth` | 2 |
-| `sidebarStore.ts` | `sidebarExpanded` | 1 |
-| `navStore.ts` | `choir-nav` | 1 |
+| `memberStore.ts` | localStorage `choir-members` | 4 |
+| `suguanStore.ts` | localStorage `choir-suguan` | 6 |
+| `settingsStore.ts` | localStorage `choir-settings` | 3 |
+| `assignmentPresetStore.ts` | localStorage `choir-assignment-presets` | 1 |
+| `sidebarStore.ts` | localStorage `sidebarExpanded` | 1 |
+| `navStore.ts` | localStorage `choir-nav` | 1 |
+| `authStore.ts` | Supabase (not persisted) | — |
+| `adminStore.ts` | Supabase (not persisted) | — |
 
 **The repo must stay data-free.** Everything the user types — locale congregation
-name, worship schedules, service types, members, Suguan records, accounts —
-lives only in the browser's `localStorage`; none of it is ever written to a file
-in this repository. Pushing code never ships their input. The only user-account
-artefact that travels is the default-admin seed *logic* in `authStore.ts`, which
-recreates a known Admin login (`admin` / `admin1234`) on startup whenever no
-active Admin exists — that runtime seed is the lone exception and must remain.
-If a store or feature ever needs to persist user input to disk (a data file, an
-export written into the project, a local DB), stop and ask first: it would
-violate this rule. Drops and accidental files from Settings' backup/export
-belong in `.gitignore`, not in a commit.
+name, worship schedules, service types, members, Suguan records — lives in the
+browser's `localStorage` (see the table above); accounts live in the Supabase
+project. None of it is ever written to a file in this repository, so pushing
+code never ships their input. If a store or feature ever needs to persist user
+input to disk (a data file, an export written into the project, a local DB),
+stop and ask first: it would violate this rule. Drops and accidental files from
+Settings' backup/export belong in `.gitignore`, not in a commit.
 
 `settingsStore` holds the three editable reference lists: service types, duty
 roles, and voice positions. Each stored item carries `custom: boolean`; entries
@@ -187,11 +188,11 @@ change. There is no router, so `page` is the entire navigation model, and the
 list, and it is not keyed by page, so `SuguanBuilderPage` resets `startOpen`
 from `existing` rather than remembering that the user already chose.
 
-Most persisted stores implement `importData()` so Settings' backup/restore can
-round-trip them. **`authStore` deliberately does not** — accounts are excluded
-from the backup file, because restoring a JSON file should never install someone
-else's password hashes on this machine. Do not add `importData` to it later
-without asking.
+Most persisted **data** stores implement `importData()` so Settings'
+backup/restore can round-trip them. `authStore` and `adminStore` are **not
+persisted** and have no `importData` — accounts and roles live in Supabase and
+are deliberately excluded from the backup file, because restoring a JSON file
+should never install someone else's account on this machine.
 
 ### Membership model
 
@@ -352,53 +353,65 @@ The sidebar has its own neutral scale rather than reusing `--background`:
 `--brand-gold` is a brand highlight only, currently the rule under the wordmark.
 It must never colour a nav row, a button, or a state.
 
-## Sign-in is local, and that is a deliberate limitation
+## Sign-in is Supabase Auth, and the backend owns accounts
 
-`App.tsx` renders `features/auth/AuthPage.tsx` instead of `Layout` until
-`authStore.currentAccountId` is set. Login and registration live on one screen
-because there is no router in this app; the mode is local state.
+`App.tsx` calls `authStore.bootstrap()` (and `seedDefaultAdmin()`) on mount, then
+renders a splash until `authStore.ready`, then `features/auth/AuthPage.tsx`
+instead of `Layout` until `authStore.currentAccountId` is set. Sign-up is
+disabled: `AuthPage` is sign-in only, and accounts are created by an Admin.
 
-**There is no server.** Accounts live in `localStorage` under `choir-auth`, and a
-password is stored only as a PBKDF2-SHA256 digest (210k iterations) plus a
-per-account salt. On insecure origins (a phone hitting the dev server over
-plain http, where `crypto.subtle` does not exist) hashing falls back to an
-iterated pure-JS SHA-256 KDF instead of throwing; the account records which
-`hashAlgo` produced it and verification must use the same one. That keeps
-plaintext out of the backup file. It is not
-security: anyone with devtools can read the store, or overwrite it to sign in as
-anyone. Do not describe this to the user as protecting their data, and do not
-build features that assume it does — there is no real authorisation anywhere.
+The backend is Supabase (Postgres + Auth + RLS + Edge Functions) for a **single
+shared choir workspace** — there is no multi-tenancy. `src/lib/supabase.ts`
+exports an import-safe lazy `getSupabase()` plus `isSupabaseConfigured`; the
+client fails closed when `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are
+absent (this is also why the stores do nothing under `node:test`, which has no
+`import.meta.env`). Migrations under `supabase/migrations/**` are the schema
+source of truth; regenerate `src/lib/database.types.ts` after changing them.
+
+- **Auth.** A username maps to a synthetic email `<username>@choir.internal`
+  (`usernameToEmail` in `src/lib/accountMapping.ts`). Supabase Auth stores and
+  verifies passwords, so the client never hashes for login. The app's own
+  PBKDF2 code in `src/lib/credentials.ts` now backs only the offline-era
+  validation helpers, not sign-in.
+- **Profiles and roles.** `profiles` plus `roles` / `role_permissions` drive
+  access. `authStore` and `adminStore` are non-persisted read-mirrors with the
+  same shapes the old stores exposed; `refresh()` reads `profiles` (RLS shows a
+  non-admin only its own row) and the admin tables, so ~20 read-only consumers
+  need no change.
+- **Mutations.** Admin user operations go through the Edge Functions
+  (`admin-create-user`, `admin-update-user`, `admin-reset-password`,
+  `admin-delete-user`) because they need the service role; role and permission
+  writes go straight to `roles` / `role_permissions` under RLS.
+- **Authorisation is RLS.** `is_active_user()`, `is_admin()`, and
+  `has_permission()` in SQL are the real gate. The TS matrix in
+  `src/lib/rbac.ts` must mirror them (admin-only permissions are enforced in
+  both), but anything a signed-in client can read is ultimately decided by RLS.
+- **Default admin.** `seedDefaultAdmin()` invokes the `seed-default-admin`
+  Edge Function (deployed with `verify_jwt = false`, idempotent) once from
+  `App.tsx`. It recreates `admin` / `admin1234` with `must_change_password =
+  true` only when no active Admin exists, so a fresh workspace always has a
+  known login. It runs server-side now; there is no "wipe localStorage to
+  recover" path anymore.
 
 Rules if you touch it:
 
-- Keep rules in `src/lib/credentials.ts`, not in the component. The page renders
-  `FieldProblem[]` returned by `validateRegistration`; it must not re-check a
-  rule locally or the two will drift.
-- Never log, toast, or render a password or hash. `AuthPage` deliberately has no
+- Never log, toast, or render a password. `AuthPage` deliberately has no
   password in any error message.
 - `signIn` returns the same message for an unknown username and a wrong
-  password, and hashes anyway in the unknown-username case so the two take
-  similar time. Do not "helpfully" split those cases.
-- `roleForNewAccount` grants `admin` to the first registration only because a
-  fresh install needs someone to see that an admin exists. It is not an
-  authorisation check.
-- `authStore` seeds a default Admin (`admin` / `admin1234`) on startup whenever
-  `hasActiveAdmin(accounts)` is false — a fresh browser always has a known
-  login, and a setup whose admins were all disabled recovers automatically. It
-  never signs itself in and never runs while any active Admin exists, so it is
-  not a backdoor into a real multi-account setup. `seedDefaultAdmin` is invoked
-  once from `App.tsx` on mount and memoised at module scope so StrictMode's
-  double mount cannot race two `${hashPassword}` calls into duplicate `admin`
-  accounts. The seed builds the account directly (it bypasses the welcome/
-  registration form), so do not route it through `validateRegistration`.
+  password; do not "helpfully" split those cases.
+- `bootstrap` and `refresh` must never leave `ready` false on a network
+  failure, or the app strands on the splash with no sign-in screen.
+- The service-role key is server-only, in Edge Function secrets. Never put it,
+  or any secret, into a `VITE_` variable.
 
 ## Feature map
 
 Seven features under `src/features/`. Only the imports below cross feature
 boundaries, so a change in one feature rarely reaches another.
 
-- **auth** — `AuthPage.tsx`, the pre-shell sign-in and registration screen.
-  Bypasses `Layout` entirely; see the sign-in section above.
+- **auth** — `AuthPage.tsx`, the pre-shell sign-in screen (no registration; an
+  Admin creates accounts). Bypasses `Layout` entirely; see the sign-in section
+  above.
 - **dashboard** — `DashboardPage.tsx`, read-only summaries.
 - **master-list** — members and trainees. The largest feature. Directory table
   and grid, mobile sheets, roster import, and CSV/Excel export.

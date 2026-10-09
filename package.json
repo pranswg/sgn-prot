@@ -13,7 +13,9 @@
     "verify": "npm run typecheck && npm run test && npm run lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.104.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

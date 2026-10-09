@@ -408,19 +408,25 @@ function ManagedRoleDialog({
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
-  const save = () => {
+  const save = async () => {
     setPending(true)
     setError('')
-    const result = role
-      ? updateManagedRole(actorId, role.id, { label, description })
-      : createManagedRole(actorId, { label, description, permissions })
-    if ('problems' in result) {
-      setError(result.problems.map((problem) => problem.message).join(' '))
-    } else {
+    try {
+      const result = role
+        ? await updateManagedRole(actorId, role.id, { label, description })
+        : await createManagedRole(actorId, { label, description, permissions })
+      if ('problems' in result) {
+        setError(result.problems.map((problem) => problem.message).join(' '))
+        return
+      }
       toast.success(role ? 'Role updated.' : 'Role created.')
       onClose()
+    } catch (cause) {
+      console.error(cause)
+      setError('Could not save the role. Please try again.')
+    } finally {
+      setPending(false)
     }
-    setPending(false)
   }
 
   return (
@@ -464,7 +470,7 @@ function ManagedRoleDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={pending}>
+          <Button onClick={() => void save()} disabled={pending}>
             {pending ? 'Saving…' : role ? 'Save Role' : 'Create Role'}
           </Button>
         </DialogFooter>
@@ -524,20 +530,25 @@ function UserProfileDialog({
     setEditing(true)
   }
 
-  const save = () => {
+  const save = async () => {
     if (!account) return
     const nextPermissions =
       form.role === 'admin' || !permissionsCustomized ? null : [...permissions]
-    const result = updateManagedAccount(actorId, account.id, {
-      ...form,
-      customPermissions: nextPermissions,
-    })
-    if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
-      return
+    try {
+      const result = await updateManagedAccount(actorId, account.id, {
+        ...form,
+        customPermissions: nextPermissions,
+      })
+      if ('problems' in result) {
+        toast.error(result.problems.map((problem) => problem.message).join(' '))
+        return
+      }
+      toast.success('User account updated.')
+      setEditing(false)
+    } catch (cause) {
+      console.error(cause)
+      toast.error('Could not update the account. Please try again.')
     }
-    toast.success('User account updated.')
-    setEditing(false)
   }
 
   const resetPassword = async () => {
@@ -567,18 +578,23 @@ function UserProfileDialog({
     }
   }
 
-  const changeStatus = (status: AccountStatus, reason = '') => {
+  const changeStatus = async (status: AccountStatus, reason = '') => {
     if (!account) return
-    const result = updateManagedAccount(actorId, account.id, {
-      status,
-      statusReason: reason,
-    })
-    if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
-      return
+    try {
+      const result = await updateManagedAccount(actorId, account.id, {
+        status,
+        statusReason: reason,
+      })
+      if ('problems' in result) {
+        toast.error(result.problems.map((problem) => problem.message).join(' '))
+        return
+      }
+      toast.success(`Account ${status === 'active' ? 'reactivated' : status}.`)
+      onClose()
+    } catch (cause) {
+      console.error(cause)
+      toast.error('Could not change the account status. Please try again.')
     }
-    toast.success(`Account ${status === 'active' ? 'reactivated' : status}.`)
-    onClose()
   }
 
   return (
@@ -626,7 +642,7 @@ function UserProfileDialog({
                         variant="destructive"
                         disabled={!disableReason.trim()}
                         onClick={() => {
-                          changeStatus('disabled', disableReason.trim())
+                          void changeStatus('disabled', disableReason.trim())
                           setDisableReason('')
                         }}
                       >
@@ -637,7 +653,7 @@ function UserProfileDialog({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => changeStatus('active')}
+                      onClick={() => void changeStatus('active')}
                     >
                       Reactivate
                     </Button>
@@ -768,7 +784,7 @@ function UserProfileDialog({
                     <Button variant="outline" onClick={() => setEditing(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={save}>Save Changes</Button>
+                    <Button onClick={() => void save()}>Save Changes</Button>
                   </div>
                 </div>
               ) : (
@@ -965,7 +981,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     setSelectedAccountId(account.id)
   }
 
-  const changeRolePermission = (
+  const changeRolePermission = async (
     role: AccountRole,
     permission: Permission,
     enabled: boolean,
@@ -975,30 +991,41 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     const after = enabled
       ? [...new Set([...before, permission])]
       : before.filter((item) => item !== permission)
-    const result = updateManagedRolePermissions(actorId, role, after)
+    const result = await updateManagedRolePermissions(actorId, role, after)
     if ('problems' in result) {
       toast.error(result.problems.map((problem) => problem.message).join(' '))
     }
   }
 
-  const terminateSession = (id: string) => {
-    const result = terminateManagedSession(actorId, id)
-    if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
-      return
+  const terminateSession = async (id: string) => {
+    try {
+      const result = await terminateManagedSession(actorId, id)
+      if ('problems' in result) {
+        toast.error(result.problems.map((problem) => problem.message).join(' '))
+        return
+      }
+      toast.success(`Session for ${result.session.userName} ended.`)
+    } catch (cause) {
+      console.error(cause)
+      toast.error('Could not end the session. Please try again.')
     }
-    toast.success(`Session for ${result.session.userName} ended.`)
   }
 
-  const confirmDeleteRole = () => {
+  const confirmDeleteRole = async () => {
     if (!rolePendingDelete) return
-    const result = deleteManagedRole(actorId, rolePendingDelete.id)
-    if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
-    } else {
-      toast.success(`${rolePendingDelete.label} role deleted.`)
+    try {
+      const result = await deleteManagedRole(actorId, rolePendingDelete.id)
+      if ('problems' in result) {
+        toast.error(result.problems.map((problem) => problem.message).join(' '))
+      } else {
+        toast.success(`${rolePendingDelete.label} role deleted.`)
+      }
+    } catch (cause) {
+      console.error(cause)
+      toast.error('Could not delete the role. Please try again.')
+    } finally {
+      setRolePendingDelete(null)
     }
-    setRolePendingDelete(null)
   }
 
   const changeTab = (target: AdminSection) => setSection(target)
@@ -1010,12 +1037,12 @@ export function AdminManagement({ actorId }: { actorId: string }) {
         description="Manage system accounts, roles, permissions, and security activity."
       />
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
-        <p className="font-medium">Browser-local administration</p>
+        <p className="font-medium">Server-backed administration</p>
         <p className="mt-1 text-xs leading-relaxed text-blue-900/80">
-          Accounts, permissions, audit records, and sessions are stored only in
-          this browser. This local-only app cannot verify remote IP addresses or
-          revoke sessions on another device; server-side authentication is
-          required for production security.
+          Accounts, roles, permissions, audit records, logins, and sessions are
+          stored on your organization's server and shared across every device
+          that signs in. Permissions are enforced by the server, not just by
+          this screen.
         </p>
       </div>
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
@@ -1253,7 +1280,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                                 ADMIN_ONLY_PERMISSIONS.includes(permission.id)
                               }
                               onCheckedChange={(checked) =>
-                                changeRolePermission(
+                                void changeRolePermission(
                                   role.id,
                                   permission.id,
                                   checked === true,
@@ -1324,7 +1351,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       {section === 'audit' && (
         <ActivityTable
           title="Audit Logs"
-          description="Administrative changes and security actions recorded on this browser."
+          description="Administrative changes and security actions recorded by the server."
           empty="No administrative activity has been recorded yet."
           headings={['Action', 'Performed By', 'Affected User', 'Details', 'Date & Time']}
           rows={auditLogs.map((log) => [
@@ -1340,7 +1367,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       {section === 'logins' && (
         <ActivityTable
           title="Login History"
-          description="Successful and failed sign-in attempts recorded by this browser."
+          description="Successful and failed sign-in attempts recorded by the server."
           empty="No login attempts have been recorded yet."
           headings={['User', 'Device', 'Location / IP', 'Date & Time', 'Status']}
           rows={loginHistory.map((entry) => [
@@ -1358,7 +1385,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
           <CardHeader>
             <CardTitle className="text-base">Active Sessions</CardTitle>
             <CardDescription>
-              Signed-in browser sessions known to this device. End a session to revoke its local sign-in.
+              Signed-in sessions recorded by the server. End a session to revoke that device's sign-in.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1381,7 +1408,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                     </p>
                   </div>
                   <span className="text-xs font-medium text-emerald-700">Active now</span>
-                  <Button size="sm" variant="outline" onClick={() => terminateSession(session.id)}>
+                  <Button size="sm" variant="outline" onClick={() => void terminateSession(session.id)}>
                     <X className="size-4" />
                     Logout Device
                   </Button>
@@ -1429,7 +1456,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white"
-              onClick={confirmDeleteRole}
+              onClick={() => void confirmDeleteRole()}
             >
               Delete Role
             </AlertDialogAction>

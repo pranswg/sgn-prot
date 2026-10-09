@@ -9,7 +9,6 @@ import { passwordStrengthProblems } from '@/lib/credentials'
 import { useAuthStore } from '@/store/authStore'
 
 export function PasswordChangePage() {
-  const accountId = useAuthStore((state) => state.currentAccountId)
   const changeOwnPassword = useAuthStore((state) => state.changeOwnPassword)
   const signOut = useAuthStore((state) => state.signOut)
   const [password, setPassword] = useState('')
@@ -27,7 +26,7 @@ export function PasswordChangePage() {
     setPending(true)
     setError('')
     try {
-      const result = await changeOwnPassword(accountId ?? '', password)
+      const result = await changeOwnPassword(password)
       if ('problems' in result) {
         setError(result.problems.map((problem) => problem.message).join(' '))
         return

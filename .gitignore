@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Environment variables. Real values (Supabase URL and anon key) never get
+# committed; only the committed .env.example documents the required names.
+.env
+.env.*
+!.env.example
+
 # User data dropped into the project must never be committed. The app keeps all
 # user input in the browser's localStorage; these catch a Settings backup/export
 # that someone accidentally saves into the repo folder.

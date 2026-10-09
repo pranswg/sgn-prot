@@ -211,6 +211,48 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_records: {
+        Row: {
+          collection: string
+          created_at: string
+          data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          collection: string
+          created_at?: string
+          data: Json
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          collection?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      workspace_settings: {
+        Row: {
+          data: Json
+          key: string
+          updated_at: string
+        }
+        Insert: {
+          data: Json
+          key: string
+          updated_at?: string
+        }
+        Update: {
+          data?: Json
+          key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -238,6 +280,8 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      can_read_collection: { Args: { col: string }; Returns: boolean }
+      can_write_collection: { Args: { col: string }; Returns: boolean }
       complete_password_change: { Args: never; Returns: undefined }
       has_permission: { Args: { perm: string }; Returns: boolean }
       is_active_user: { Args: never; Returns: boolean }

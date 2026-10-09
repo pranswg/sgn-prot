@@ -31,9 +31,9 @@ extensionless relative imports. Two consequences:
 Test files that exist, all pure-logic: `suguanDates.test.ts`,
 `suguanExport.test.ts`, `spreadsheetImport.test.ts`, `rosterImport.test.ts`,
 `memberDirectory.test.ts`, `format.test.ts`, `credentials.test.ts`,
-`accountMapping.test.ts`, `sidebarNav.test.ts`, `reorderList.test.ts`,
-`navStore.test.ts`, and `features/settings/referenceList.test.ts`. When you add
-a pure function worth protecting, add cases next to it rather than leaving
+`accountMapping.test.ts`, `workspaceDiff.test.ts`, `sidebarNav.test.ts`,
+`reorderList.test.ts`, `navStore.test.ts`, and
+`features/settings/referenceList.test.ts`. When you add a pure function worth protecting, add cases next to it rather than leaving
 behaviour implicit.
 
 `tsconfig.app.json` enables `noUnusedLocals` and `noUnusedParameters`, so a
@@ -130,30 +130,71 @@ Date and layout logic is covered by `src/lib/suguanDates.test.ts` and
 
 ## Where state lives
 
-Zustand stores in `src/store/`. The **data** stores are persisted to
-`localStorage` with a migration function. `authStore` and `adminStore` are
-**not persisted** — they are read-mirrors of Supabase (see the sign-in section).
-**UI-only changes must not change a persisted shape.**
+Zustand stores in `src/store/`. The **data** stores keep a synchronous
+`localStorage` cache for fast paint, but their real home is Postgres, mirrored by
+`src/lib/workspaceSync.ts` (see "Workspace data" below). `authStore` and
+`adminStore` are **not persisted** — they are read-mirrors of Supabase (see the
+sign-in section). `navStore`/`sidebarStore` are UI-only and never leave the
+browser. **UI-only changes must not change a persisted shape.**
 
-| Store | Persistence | version |
+| Store | Home | local cache version |
 | --- | --- | --- |
-| `memberStore.ts` | localStorage `choir-members` | 4 |
-| `suguanStore.ts` | localStorage `choir-suguan` | 6 |
-| `settingsStore.ts` | localStorage `choir-settings` | 3 |
-| `assignmentPresetStore.ts` | localStorage `choir-assignment-presets` | 1 |
+| `memberStore.ts` | Postgres `workspace_records` (`members`, `trainees`) | 6 |
+| `suguanStore.ts` | Postgres `workspace_records` (`suguan-records`) | 7 |
+| `organistaSuguanStore.ts` | Postgres (`organista-suguan-records`) | — |
+| `koroStore.ts` | Postgres (`koro-documents`) | — |
+| `assignmentPresetStore.ts` | Postgres (`assignment-presets`) | 1 |
+| `settingsStore.ts` | Postgres `workspace_settings` (`settings`) | 6 |
+| `worshipScheduleStore.ts` | Postgres `workspace_settings` (`worship-schedules`) | 1 |
 | `sidebarStore.ts` | localStorage `sidebarExpanded` | 1 |
 | `navStore.ts` | localStorage `choir-nav` | 1 |
 | `authStore.ts` | Supabase (not persisted) | — |
 | `adminStore.ts` | Supabase (not persisted) | — |
 
 **The repo must stay data-free.** Everything the user types — locale congregation
-name, worship schedules, service types, members, Suguan records — lives in the
-browser's `localStorage` (see the table above); accounts live in the Supabase
-project. None of it is ever written to a file in this repository, so pushing
-code never ships their input. If a store or feature ever needs to persist user
-input to disk (a data file, an export written into the project, a local DB),
-stop and ask first: it would violate this rule. Drops and accidental files from
-Settings' backup/export belong in `.gitignore`, not in a commit.
+name, worship schedules, service types, members, Suguan records — lives in
+Postgres; accounts live in Supabase Auth. Each browser keeps a `localStorage`
+cache, but that is a cache, not the source of truth. None of it is ever written
+to a file in this repository, so pushing code never ships their input. If a
+store or feature ever needs to persist user input to disk (a data file, an
+export written into the project, a local DB), stop and ask first: it would
+violate this rule. Drops and accidental files from Settings' backup/export
+belong in `.gitignore`, not in a commit.
+
+### Workspace data
+
+`src/lib/workspaceSync.ts` is the whole data sync story. It runs once per
+sign-in, driven by `useWorkspaceStore.hydrate()` from `App.tsx`, which also holds
+the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
+
+- **The stores stay the synchronous working copy.** Every `useXStore` mutation
+  keeps its current signature, so no UI call site becomes async. The sync layer
+  subscribes to each store and, on change, diffs by id (`diffCollection` in
+  `src/lib/workspaceDiff.ts`) and pushes only the changed rows/deletes, debounced
+  350ms.
+- **The server wins on load.** Hydration replaces each store's contents with the
+  server's rows. To keep the first upgrade from losing data, when a collection is
+  **empty on the server** and non-empty in the browser, the browser's rows are
+  seeded up once. There is no merge: two devices that each held offline edits do
+  not reconcile, the later hydrate simply overwrites.
+- **Rows are whole JSON documents.** Postgres owns identity (`id`), tenancy, and
+  access; the client owns the document shape. `workspace_records(id, collection,
+  data jsonb)` holds the collections, `workspace_settings(key, data jsonb)` holds
+  the two singletons. Migrations are still the schema source of truth — adding a
+  column means regenerating `src/lib/database.types.ts`.
+- **Adding a collection or setting means three edits, not one:** register a
+  binding in `hydrateWorkspace`, add a `can_read_collection` / `can_write_collection`
+  branch in `supabase/migrations/**`, and set the store field in the binding's
+  `set`. Forget the SQL branch and reads fail closed (empty) rather than error.
+- **Sign-out tears the mirror down.** `App.tsx` calls
+  `useWorkspaceStore.reset()` → `stopWorkspaceSync()` when `currentAccountId`
+  clears, so no write fires without a session.
+- Collection names are `members`, `trainees`, `suguan-records`,
+  `organista-suguan-records`, `koro-documents`, `assignment-presets`; setting keys
+  are `settings` and `worship-schedules`. The string must match on both sides.
+- Under `node:test` `isSupabaseConfigured` is false, so hydration and the sync
+  subscriptions do nothing; the pure diff logic is covered by
+  `src/lib/workspaceDiff.test.ts`.
 
 `settingsStore` holds the three editable reference lists: service types, duty
 roles, and voice positions. Each stored item carries `custom: boolean`; entries

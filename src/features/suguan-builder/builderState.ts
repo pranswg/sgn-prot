@@ -203,7 +203,7 @@ export function createDraftFromSuguan(
       inferCoverageFromEvents(suguan.events ?? [], categories),
     date: suguan.date || todayPHT(),
     time: suguan.time || '09:00',
-    serviceTypeId: suguan.serviceTypeId || 'pagsamba',
+    serviceTypeId: suguan.serviceTypeId || preferredServiceTypeId(),
     pagsasanayDate: suguan.pagsasanayDate ?? '',
     pagtupadDate: suguan.pagtupadDate ?? '',
     group: suguan.group ?? 'babae',

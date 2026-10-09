@@ -60,6 +60,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
   const trainees = useMemberStore((s) => s.trainees)
   const importMasterList = useMemberStore((s) => s.importMasterList)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const allDutyRoles = useSettingsStore((s) => s.allDutyRoles)
   const account = useAuthStore((state) =>
     state.accounts.find((item) => item.id === state.currentAccountId),
   )
@@ -129,7 +130,13 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     setError(null)
     try {
       const result = spreadsheet
-        ? await extractRosterFromSpreadsheet(file, allVoices(), members, trainees)
+        ? await extractRosterFromSpreadsheet(
+            file,
+            allVoices(),
+            members,
+            trainees,
+            allDutyRoles(),
+          )
         : await extractRosterFromPdf(file, allVoices(), members, trainees)
       setCandidates(result.candidates)
       if (result.candidates.length === 0) {
@@ -234,6 +241,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           isActive: candidate.isActive,
           dateAdded,
           positions: candidate.positions,
+          assignedDutyRoleIds: candidate.assignedDutyRoleIds,
           notes: candidate.notes.trim() || undefined,
         })
       }

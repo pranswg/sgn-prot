@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { KoroDocument } from '@/core/types/koro'
 import type { Member } from '@/core/types/member'
-import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
+import type { VoicePosition } from '@/core/types/suguan'
 import {
   assignmentsFromKoro,
   balanceKoroVoiceSections,
@@ -23,6 +23,14 @@ const member: Member = {
   dateAdded: '2026-01-01',
   positions: [],
 }
+
+const TEST_VOICES: VoicePosition[] = [
+  { id: 'soprano-1', name: 'Soprano 1', shortName: 'S1', gender: 'female' },
+  { id: 'soprano-2', name: 'Soprano 2', shortName: 'S2', gender: 'female' },
+  { id: 'alto', name: 'Alto', shortName: 'A', gender: 'female' },
+  { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
+  { id: 'bass', name: 'Bass', shortName: 'B', gender: 'male' },
+]
 
 function documentWithMember(): KoroDocument {
   const document = createKoroDocument()
@@ -92,7 +100,7 @@ test('direct Suguan groups names by effective voice and balances sections across
   const sections = buildKoroSuguanVoiceSections(
     document,
     [member, sopranoTwoMember, altoMember],
-    DEFAULT_VOICE_POSITIONS,
+    TEST_VOICES,
   )
   assert.deepEqual(
     sections.map(({ voicePosition, label, members }) => ({

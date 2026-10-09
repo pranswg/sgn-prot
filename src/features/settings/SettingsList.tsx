@@ -56,7 +56,7 @@ import {
   type ReferenceValues,
 } from './referenceList'
 
-export interface SettingsListProps<T extends { id: string; custom?: boolean }> {
+export interface SettingsListProps<T extends { id: string }> {
   items: T[]
   title: string
   description: string
@@ -66,7 +66,7 @@ export interface SettingsListProps<T extends { id: string; custom?: boolean }> {
   getLabel: (item: T) => string
   /** Secondary text beside the name, e.g. a duty role's abbreviation. */
   getMeta?: (item: T) => string | undefined
-  /** Extra badges shown before Standard/Custom, e.g. a voice's gender. */
+  /** Optional metadata badges, e.g. a voice's gender. */
   extraBadges?: (item: T) => ReactNode
   /** When provided the list gains a "Set as default" control; the item whose id
    * matches `defaultId` is marked as the current default. */
@@ -88,7 +88,7 @@ export interface SettingsListProps<T extends { id: string; custom?: boolean }> {
  * card, with the form presented as a dialog on desktop and a bottom sheet on a
  * phone, so the two breakpoints cannot drift into different rules.
  */
-export function SettingsList<T extends { id: string; custom?: boolean }>({
+export function SettingsList<T extends { id: string }>({
   items,
   title,
   description,
@@ -306,7 +306,6 @@ export function SettingsList<T extends { id: string; custom?: boolean }>({
                     badges={
                       <>
                         {extraBadges?.(item)}
-                        <StandardBadge custom={item.custom} />
                       </>
                     }
                     compact={isMobile}
@@ -595,21 +594,5 @@ function ListRow({
         </Button>
       </span>
     </li>
-  )
-}
-
-/** Distinguishes an entry seeded from the constants from one the user added. */
-function StandardBadge({ custom }: { custom?: boolean }) {
-  return custom ? (
-    <Badge
-      variant="outline"
-      className="border-brand-teal/30 bg-brand-teal-soft/60 text-brand-teal"
-    >
-      Custom
-    </Badge>
-  ) : (
-    <Badge variant="secondary" className="border-transparent text-muted-foreground">
-      Standard
-    </Badge>
   )
 }

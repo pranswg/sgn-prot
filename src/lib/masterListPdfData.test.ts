@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Member, Trainee } from '@/core/types/member'
 import type { DutyRole } from '@/core/types/suguan'
-import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
+import type { VoicePosition } from '@/core/types/suguan'
 import {
   groupMasterListPdfSections,
   masterListPdfName,
@@ -23,6 +23,14 @@ const DUTY_ROLES: DutyRole[] = [
   { id: 'organista', name: 'Organista', abbreviation: 'ORG' },
   { id: 'organista-reserve', name: 'Reserve Organist', abbreviation: 'RO' },
   { id: 'choir-coordinator', name: 'Choir Coordinator', abbreviation: 'CC' },
+]
+
+const TEST_VOICES: VoicePosition[] = [
+  { id: 'soprano-1', name: 'Soprano 1', shortName: 'S1', gender: 'female' },
+  { id: 'soprano-2', name: 'Soprano 2', shortName: 'S2', gender: 'female' },
+  { id: 'alto', name: 'Alto', shortName: 'A', gender: 'female' },
+  { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
+  { id: 'bass', name: 'Bass', shortName: 'B', gender: 'male' },
 ]
 
 function makeMember(
@@ -173,7 +181,7 @@ test('singer tables are ordered by voice section and then by surname', () => {
   })
   const sorted = sortMasterListPdfMembers(
     [alto, soprano],
-    DEFAULT_VOICE_POSITIONS,
+    TEST_VOICES,
     'voice',
   )
 
@@ -209,7 +217,7 @@ test('PDF summary uses stored gender, voice family, positions, and active status
         makeTrainee('Inactive trainee', { gender: 'male', status: 'inactive' }),
         makeTrainee('Promoted trainee', { status: 'promoted' }),
       ],
-      DEFAULT_VOICE_POSITIONS,
+      TEST_VOICES,
     )
       .filter((row) => row.kind === 'item')
       .map(({ category, count }) => [category, count]),

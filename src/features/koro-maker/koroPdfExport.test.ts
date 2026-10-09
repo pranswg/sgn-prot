@@ -2,8 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { KoroDocument } from '@/core/types/koro'
 import type { Member } from '@/core/types/member'
+import type { VoicePosition } from '@/core/types/suguan'
 import { createKoroDocument } from '@/lib/koro'
 import { exportKoroAsSuguanPdf } from './koroPdfExport.ts'
+
+const voices: VoicePosition[] = [
+  { id: 'soprano-1', name: 'Soprano 1', shortName: 'S1', gender: 'female' },
+  { id: 'soprano-2', name: 'Soprano 2', shortName: 'S2', gender: 'female' },
+]
 
 const members: Member[] = [
   {
@@ -51,7 +57,7 @@ test('Suguan PDF preview keeps combined soprano heading and last-name-first name
   const pdf = await exportKoroAsSuguanPdf(
     documentWithSopranoMembers(),
     members,
-    undefined,
+    voices,
     'preview',
   )
 

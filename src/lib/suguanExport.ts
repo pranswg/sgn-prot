@@ -22,6 +22,7 @@ import {
 
 const PAGSASANAY_FILL = 'FFF2CC'
 const HEADER_FILL = 'F2F2F2'
+const WRITE_IN_ROWS_PER_SCHEDULE = 2
 
 /**
  * The exported sheet's accent fills depend on the choir: green for the Women's
@@ -137,15 +138,24 @@ export function buildSections(
       (d) => d.dutyRoleId === 'oic',
     )?.memberId ?? ''
   const mapRows = (assignments: Suguan['assignments']) =>
-    sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
-      (a, i) => {
+    {
+      const rows = sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
+        (a, i) => {
         const name = assignmentDisplayName(a.memberName, a.memberId, members)
         return {
           no: i + 1,
           name: a.memberId === oicMemberId ? `${name} - OIC` : name,
         }
-      },
-    )
+        },
+      )
+      return [
+        ...rows,
+        ...Array.from({ length: WRITE_IN_ROWS_PER_SCHEDULE }, (_, i) => ({
+          no: rows.length + i + 1,
+          name: '',
+        })),
+      ]
+    }
   if (schedules.length > 0) {
     return schedules.map((sec) => ({
       sectionId: sec.id,
@@ -317,6 +327,7 @@ export interface SuguanSheetLayout {
   fs: FontSizePreset
   events: SuguanEvent[]
   totalCols: number
+  assignedCount: number
   rowCount: number
   noColWidthMm: number
   nameColWidthMm: number
@@ -418,6 +429,7 @@ export function computeSuguanLayout(
   const sections = buildSections(suguan, members)
   const allNames = sections.flatMap((s) => s.rows.map((r) => r.name))
   const rowCount = allNames.length
+  const assignedCount = allNames.filter((name) => name.length > 0).length
   const nameLayout = computeNameLayout(fs, allNames)
 
   const usableWidthMm = dims.width - margins.left - margins.right
@@ -491,6 +503,7 @@ export function computeSuguanLayout(
     fs,
     events,
     totalCols,
+    assignedCount,
     rowCount,
     noColWidthMm,
     nameColWidthMm,

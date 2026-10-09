@@ -89,6 +89,88 @@ test('reads a comma-form name under a voice heading', () => {
   assert.equal(candidates[0].isActive, true)
 })
 
+test('imports names from sectioned Master List PDF tables instead of gender cells', () => {
+  const items: ExtractedTextItem[] = [
+    { x: 40, y: 750, str: 'STA. MONICA CHOIR - Women' },
+    { x: 38, y: 720, width: 15, str: 'Blg.' },
+    { x: 95, y: 720, width: 45, str: 'Pangalan' },
+    { x: 235, y: 720, width: 45, str: 'Gender' },
+    { x: 320, y: 720, width: 30, str: 'Voice' },
+    { x: 390, y: 720, width: 40, str: 'Status' },
+    { x: 470, y: 720, width: 65, str: 'Position' },
+    { x: 38, y: 704, width: 15, str: '1.' },
+    { x: 95, y: 704, width: 100, str: 'Reyes, Ana Maria' },
+    { x: 235, y: 704, width: 45, str: 'Female' },
+    { x: 320, y: 704, width: 45, str: 'Soprano I' },
+    { x: 390, y: 704, width: 40, str: 'Active' },
+    { x: 470, y: 704, width: 65, str: 'Member' },
+    { x: 38, y: 688, width: 15, str: '2.' },
+    { x: 95, y: 688, width: 100, str: 'Cruz, Maria' },
+    { x: 235, y: 688, width: 45, str: 'Female' },
+    { x: 320, y: 688, width: 45, str: 'Alto' },
+    { x: 390, y: 688, width: 40, str: 'Inactive' },
+    { x: 470, y: 688, width: 65, str: 'Member' },
+    { x: 40, y: 660, str: 'STA. MONICA CHOIR - Men' },
+    { x: 38, y: 644, width: 15, str: 'Blg.' },
+    { x: 95, y: 644, width: 45, str: 'Pangalan' },
+    { x: 235, y: 644, width: 45, str: 'Gender' },
+    { x: 320, y: 644, width: 30, str: 'Voice' },
+    { x: 390, y: 644, width: 40, str: 'Status' },
+    { x: 470, y: 644, width: 65, str: 'Position' },
+    { x: 38, y: 628, width: 15, str: '1.' },
+    { x: 95, y: 628, width: 100, str: 'Santos, Juan' },
+    { x: 235, y: 628, width: 45, str: 'Male' },
+    { x: 320, y: 628, width: 45, str: 'Tenor' },
+    { x: 390, y: 628, width: 40, str: 'Active' },
+    { x: 470, y: 628, width: 65, str: 'Member' },
+  ]
+
+  const candidates = parse([items])
+  assert.equal(candidates.length, 3)
+  assert.deepEqual(
+    candidates.map(({ firstName, lastName, gender, voicePosition, isActive }) => ({
+      firstName,
+      lastName,
+      gender,
+      voicePosition,
+      isActive,
+    })),
+    [
+      {
+        firstName: 'Ana Maria',
+        lastName: 'Reyes',
+        gender: 'female',
+        voicePosition: 'soprano-1',
+        isActive: true,
+      },
+      {
+        firstName: 'Maria',
+        lastName: 'Cruz',
+        gender: 'female',
+        voicePosition: 'alto',
+        isActive: false,
+      },
+      {
+        firstName: 'Juan',
+        lastName: 'Santos',
+        gender: 'male',
+        voicePosition: 'tenor',
+        isActive: true,
+      },
+    ],
+  )
+})
+
+test('ignores a gender value when it appears beside a legacy PDF roster name', () => {
+  const candidates = parse([
+    page('SOPRANO I', '1. Female Reyes, Ana Maria ACTIVE'),
+  ])
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].firstName, 'Ana Maria')
+  assert.equal(candidates[0].lastName, 'Reyes')
+})
+
 test('matches voice headings case-insensitively and resolves gender', () => {
   const candidates = parse([page('BASS', 'Santos, Juan Pedro')])
   assert.equal(candidates[0].voicePosition, 'bass')

@@ -44,41 +44,25 @@ export const ACCOUNT_ROLES: {
   description: string
 }[] = [
   { id: 'admin', label: 'Admin', description: 'Super Admin with full system access.' },
-  {
-    id: 'suguan-manager',
-    label: 'Suguan Manager',
-    description: 'Manages schedules, assignments, and exports.',
-  },
-  {
-    id: 'choir-manager',
-    label: 'Choir Manager',
-    description: 'Manages the Master List and trainees.',
-  },
-  { id: 'viewer', label: 'Viewer', description: 'Read-only access to permitted pages.' },
 ]
 
-export const DEFAULT_ROLE_PERMISSIONS: Record<AccountRole, Permission[]> = {
+export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   admin: PERMISSION_DEFINITIONS.map((permission) => permission.id),
-  'suguan-manager': [
-    'view-dashboard',
-    'view-suguan',
-    'create-suguan',
-    'edit-suguan',
-    'assign-members',
-    'export-documents',
-  ],
-  'choir-manager': [
-    'view-dashboard',
-    'view-master-list',
-    'add-members',
-    'edit-members',
-    'manage-trainees',
-  ],
-  viewer: ['view-dashboard', 'view-master-list', 'view-suguan'],
 }
 
 export function isAccountRole(value: unknown): value is AccountRole {
-  return ACCOUNT_ROLES.some((role) => role.id === value)
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+export function rolePermissionsFor(
+  role: AccountRole,
+  rolePermissions: Partial<Record<AccountRole, Permission[]>>,
+): Permission[] {
+  return (
+    rolePermissions[role] ??
+    DEFAULT_ROLE_PERMISSIONS[role] ??
+    []
+  )
 }
 
 export function effectivePermissions(
@@ -87,8 +71,7 @@ export function effectivePermissions(
 ): Permission[] {
   if (account.role === 'admin') return DEFAULT_ROLE_PERMISSIONS.admin
   return (account.customPermissions ??
-    rolePermissions[account.role] ??
-    DEFAULT_ROLE_PERMISSIONS[account.role]).filter(
+    rolePermissionsFor(account.role, rolePermissions)).filter(
     (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
   )
 }

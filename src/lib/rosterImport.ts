@@ -11,6 +11,7 @@ export interface ExtractedTextItem {
   x: number
   y: number
   str: string
+  width?: number
 }
 
 export interface RosterCandidate {
@@ -33,6 +34,7 @@ export interface RosterCandidate {
    */
   membershipType?: MembershipType
   positions?: ChoirPosition[]
+  assignedDutyRoleIds?: string[]
   dateAdded?: string
 }
 
@@ -57,6 +59,8 @@ const BANNED_NAME_TOKENS = new Set([
   'STATUS',
   'ACTIVE',
   'INACTIVE',
+  'FEMALE',
+  'MALE',
   'BALIK-TUNGKULIN',
   'SICK',
   'LEAVE',
@@ -270,6 +274,192 @@ function toLines(column: ExtractedTextItem[]): string[] {
   )
 }
 
+function toPositionedLines(items: ExtractedTextItem[]): ExtractedTextItem[][] {
+  const rows: ExtractedTextItem[][] = []
+  const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x)
+
+  for (const item of sorted) {
+    const row = rows.find((candidate) => Math.abs(candidate[0].y - item.y) <= 2)
+    if (row) row.push(item)
+    else rows.push([item])
+  }
+
+  return rows.map((row) => row.sort((a, b) => a.x - b.x))
+}
+
+function rosterTableSection(title: string): SectionInfo | null {
+  const normalized = collapseSpaces(title)
+  const choirSection = normalized.match(/\bCHOIR\s*-\s*(.+)$/i)
+  if (!choirSection) return null
+
+  const sectionTitle = choirSection[1].trim()
+  const upper = sectionTitle.toUpperCase()
+  if (upper === 'WOMEN' || upper === 'MEN') {
+    return {
+      title: normalized.toUpperCase(),
+      kind: 'voice',
+      gender: upper === 'WOMEN' ? 'female' : 'male',
+    }
+  }
+  if (upper.startsWith('NAGSASANAY')) {
+    return {
+      title: normalized.toUpperCase(),
+      kind: 'trainee',
+      gender: upper.includes('WOMEN') ? 'female' : 'male',
+    }
+  }
+  if (upper.includes('ORGANISTA')) {
+    return { title: normalized.toUpperCase(), kind: 'organista' }
+  }
+  return { title: normalized.toUpperCase(), kind: 'leaders' }
+}
+
+function rosterHeaderKey(value: string): string {
+  const key = value.toUpperCase().replace(/[^A-Z]/g, '')
+  if (key === 'PANGALAN' || key === 'NAME' || key === 'FULLNAME') return 'name'
+  if (key === 'GENDER' || key === 'SEX') return 'gender'
+  if (key === 'VOICE' || key === 'VOICEPOSITION') return 'voice'
+  if (key === 'STATUS') return 'status'
+  if (key === 'POSITION' || key === 'GAMPANIN') return 'position'
+  if (key === 'BLG' || key === 'NO' || key === 'NUMBER') return 'number'
+  return ''
+}
+
+function rosterVoice(value: string, voices: VoicePosition[]): VoicePosition | undefined {
+  const key = value.toLowerCase().replace(/\s+/g, '')
+  if (!key) return undefined
+  return voices.find(
+    (voice) =>
+      [voice.id, voice.name, voice.shortName]
+        .filter(Boolean)
+        .some((label) => label.toLowerCase().replace(/\s+/g, '') === key),
+  )
+}
+
+function createTableCandidate(
+  name: string,
+  section: SectionInfo,
+  genderValue: string,
+  voiceValue: string,
+  statusValue: string,
+  voices: VoicePosition[],
+  existing: Map<string, { gender: 'male' | 'female'; voicePosition: string }>,
+  seen: Set<string>,
+): RosterCandidate | null {
+  const cleanName = collapseSpaces(name)
+  if (!looksLikeName(cleanName)) return null
+
+  const { firstName, lastName } = splitName(cleanName, false)
+  if (!firstName || !lastName) return null
+
+  const key = normalizeNameKey(lastName, firstName)
+  const duplicate = seen.has(key) || existing.has(key)
+  seen.add(key)
+
+  const genderText = genderValue.toLowerCase()
+  const voice = rosterVoice(voiceValue, voices)
+  const existingMember = existing.get(key)
+  const gender: 'male' | 'female' =
+    genderText.startsWith('f')
+      ? 'female'
+      : genderText.startsWith('m')
+        ? 'male'
+        : section.gender ?? voice?.gender ?? existingMember?.gender ?? 'female'
+  const voicePosition =
+    voice?.id ||
+    existingMember?.voicePosition ||
+    voices.find((candidate) => candidate.gender === gender)?.id ||
+    voices[0]?.id ||
+    ''
+
+  return {
+    id: nanoid(),
+    section: section.title,
+    isTrainee: section.kind === 'trainee',
+    firstName,
+    lastName,
+    gender: existingMember?.gender ?? gender,
+    voicePosition: existingMember?.voicePosition ?? voicePosition,
+    isActive: !statusValue.toLowerCase().includes('inactive'),
+    notes: '',
+    duplicate,
+    selected: !duplicate,
+  }
+}
+
+function parseRosterTablePage(
+  items: ExtractedTextItem[],
+  voices: VoicePosition[],
+  existing: Map<string, { gender: 'male' | 'female'; voicePosition: string }>,
+  seen: Set<string>,
+): { candidates: RosterCandidate[]; isRosterTable: boolean } {
+  let section: SectionInfo | null = null
+  let headers: { key: string; center: number }[] = []
+  let isRosterTable = false
+  const candidates: RosterCandidate[] = []
+
+  for (const row of toPositionedLines(items)) {
+    const line = collapseSpaces(row.map((item) => item.str).join(' '))
+    const detectedSection = rosterTableSection(line)
+    if (detectedSection) {
+      section = detectedSection
+      headers = []
+      continue
+    }
+
+    const rowHeaders = row
+      .map((item) => ({
+        key: rosterHeaderKey(item.str),
+        center: item.x + (item.width ?? 0) / 2,
+      }))
+      .filter((header) => header.key)
+    if (
+      rowHeaders.some((header) => header.key === 'name') &&
+      rowHeaders.length >= 2
+    ) {
+      headers = rowHeaders.sort((a, b) => a.center - b.center)
+      isRosterTable = true
+      continue
+    }
+    if (!section || headers.length === 0) continue
+
+    const cells = new Map<string, string>()
+    for (const item of row) {
+      const center = item.x + (item.width ?? 0) / 2
+      const nearest = headers.reduce((best, header) =>
+        Math.abs(header.center - center) < Math.abs(best.center - center)
+          ? header
+          : best,
+      )
+      cells.set(
+        nearest.key,
+        [cells.get(nearest.key), item.str].filter(Boolean).join(' '),
+      )
+    }
+
+    if (
+      headers.some((header) => header.key === 'number') &&
+      !/^\s*\d+\.?\s*$/.test(cells.get('number') ?? '')
+    ) {
+      continue
+    }
+
+    const candidate = createTableCandidate(
+      cells.get('name') ?? '',
+      section,
+      cells.get('gender') ?? '',
+      cells.get('voice') ?? '',
+      cells.get('status') ?? '',
+      voices,
+      existing,
+      seen,
+    )
+    if (candidate) candidates.push(candidate)
+  }
+
+  return { candidates, isRosterTable }
+}
+
 export function parseRosterPages(
   pages: ExtractedTextItem[][],
   voices: VoicePosition[],
@@ -283,6 +473,12 @@ export function parseRosterPages(
   let pendingStatus: 'active' | 'inactive' | undefined
 
   for (const page of pages) {
+    const tableResult = parseRosterTablePage(page, voices, existing, seen)
+    if (tableResult.isRosterTable) {
+      candidates.push(...tableResult.candidates)
+      continue
+    }
+
     for (const column of splitColumns(page)) {
       for (const line of toLines(column)) {
         if (!line) continue
@@ -313,6 +509,8 @@ export function parseRosterPages(
             !isNumberToken(token) &&
             upper !== 'ACTIVE' &&
             upper !== 'INACTIVE' &&
+            upper !== 'FEMALE' &&
+            upper !== 'MALE' &&
             upper !== 'BALIK-TUNGKULIN'
           )
         })
@@ -324,7 +522,13 @@ export function parseRosterPages(
 
         for (const token of raw) {
           const upper = token.toUpperCase()
-          if (isNumberToken(token) || upper === 'ACTIVE' || upper === 'INACTIVE') {
+          if (
+            isNumberToken(token) ||
+            upper === 'ACTIVE' ||
+            upper === 'INACTIVE' ||
+            upper === 'FEMALE' ||
+            upper === 'MALE'
+          ) {
             if (upper === 'ACTIVE') status = 'active'
             else if (upper === 'INACTIVE') status = 'inactive'
           } else if (upper === 'BALIK-TUNGKULIN') {
@@ -428,6 +632,7 @@ export async function extractRosterFromPdf(
           x: item.transform[4],
           y: item.transform[5],
           str: item.str,
+          width: item.width,
         })
       }
     }

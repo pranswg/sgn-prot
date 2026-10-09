@@ -4,7 +4,6 @@ import type { Member } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { Suguan, SuguanAssignment } from '@/core/types/suguan'
 import { todayPHT, weekdayOf } from '@/lib/phDate'
-import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
 
 export const KORO_DEFAULT_COLUMNS = 15
 
@@ -40,7 +39,7 @@ const EXTRA_VOICE_COLORS = ['#d9eaf7', '#e4dfec', '#f4cccc', '#d9ead3']
 
 export function koroVoiceColor(
   voicePosition: string,
-  voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
+  voices: VoicePosition[] = [],
 ): string {
   const knownColor = KORO_VOICE_COLORS[voicePosition]
   if (knownColor) return knownColor

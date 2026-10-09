@@ -39,7 +39,7 @@ function account(overrides: Partial<Account> = {}): Account {
     fullName: 'Maria Santos',
     passwordHash: 'deadbeef',
     passwordSalt: 'cafe',
-    role: 'viewer',
+    role: 'custom-test-role',
     createdAt: '2026-09-30T02:00:00.000Z',
     ...overrides,
   }
@@ -150,14 +150,14 @@ test('findAccountByUsername matches on the normalised key', () => {
   assert.equal(isUsernameTaken(accounts, 'someone'), false)
 })
 
-test('roleForNewAccount reserves Admin for initial setup', () => {
+test('only initial setup receives Admin; later accounts need an assigned role', () => {
   assert.equal(roleForNewAccount([]), 'admin')
-  assert.equal(roleForNewAccount([account()]), 'viewer')
+  assert.equal(roleForNewAccount([account()]), '')
 })
 
 test('hasActiveAdmin is true only when an active Admin exists', () => {
   assert.equal(hasActiveAdmin([]), false)
-  assert.equal(hasActiveAdmin([account({ role: 'viewer' })]), false)
+  assert.equal(hasActiveAdmin([account({ role: 'custom-test-role' })]), false)
   // Suspended or disabled admins do not count: the seed must run to recover.
   assert.equal(hasActiveAdmin([account({ role: 'admin', status: 'disabled' })]), false)
   assert.equal(hasActiveAdmin([account({ role: 'admin', status: 'suspended' })]), false)

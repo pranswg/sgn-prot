@@ -8,11 +8,8 @@
  * Treat this as a way to keep the app's screens honest, not as protection.
  */
 
-export type AccountRole =
-  | 'admin'
-  | 'suguan-manager'
-  | 'choir-manager'
-  | 'viewer'
+/** Role IDs are strings so Admin-created roles can be persisted and assigned. */
+export type AccountRole = string
 
 export type AccountStatus =
   | 'active'
@@ -69,6 +66,7 @@ export interface Account {
   firstName?: string
   lastName?: string
   customPermissions?: Permission[] | null
+  mustChangePassword?: boolean
   statusReason?: string
   createdAt: string
   lastLoginAt?: string

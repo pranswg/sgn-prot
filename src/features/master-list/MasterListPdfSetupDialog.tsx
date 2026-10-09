@@ -27,12 +27,14 @@ interface MasterListPdfSetupDialogProps {
   onOpenChange: (open: boolean) => void
   savedLocaleName: string
   onExport: (localeName: string, paperSize: MasterListPaperSize) => Promise<void>
+  documentType?: 'PDF' | 'Word'
 }
 
 export function MasterListPdfSetupDialog({
   onOpenChange,
   savedLocaleName,
   onExport,
+  documentType = 'PDF',
 }: MasterListPdfSetupDialogProps) {
   const [localeName, setLocaleName] = useState(savedLocaleName)
   const [paperSize, setPaperSize] = useState<MasterListPaperSize>('legal')
@@ -57,7 +59,7 @@ export function MasterListPdfSetupDialog({
       setError(
         exportError instanceof Error
           ? exportError.message
-          : 'PDF export failed. Please try again.',
+          : `${documentType} export failed. Please try again.`,
       )
     } finally {
       setIsExporting(false)
@@ -78,10 +80,10 @@ export function MasterListPdfSetupDialog({
               <FileText className="size-5" />
             </div>
             <DialogTitle className="text-xl font-semibold">
-              Set up Master List PDF
+              Set up Master List {documentType}
             </DialogTitle>
             <DialogDescription>
-              Choose the congregation name and paper size for your directory.
+              Choose the congregation name and paper size for your document.
             </DialogDescription>
           </DialogHeader>
 
@@ -179,7 +181,7 @@ export function MasterListPdfSetupDialog({
             disabled={isExporting}
           >
             <FileDown className="size-4" />
-            {isExporting ? 'Preparing PDF…' : 'Export PDF'}
+            {isExporting ? `Preparing ${documentType}…` : `Export ${documentType}`}
           </Button>
         </DialogFooter>
       </DialogContent>

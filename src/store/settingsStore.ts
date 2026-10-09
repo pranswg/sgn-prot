@@ -2,23 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { ServiceType, VoicePosition, DutyRole } from '@/core/types/suguan'
-import { DEFAULT_SERVICE_TYPES } from '@/core/constants/serviceTypes'
-import { DEFAULT_DUTY_ROLES } from '@/core/constants/dutyRoles'
-import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
 import { reorderList } from '@/lib/reorderList'
 
 export type StoredDutyRole = DutyRole & { custom: boolean }
 export type StoredServiceType = ServiceType & { custom: boolean }
 export type StoredVoice = VoicePosition & { custom: boolean }
-
-const seedServiceTypes = (): StoredServiceType[] =>
-  DEFAULT_SERVICE_TYPES.map((t) => ({ ...t, custom: false }))
-
-const seedDutyRoles = (): StoredDutyRole[] =>
-  DEFAULT_DUTY_ROLES.map((r) => ({ ...r, custom: false }))
-
-const seedVoices = (): StoredVoice[] =>
-  DEFAULT_VOICE_POSITIONS.map((v) => ({ ...v, custom: false }))
 
 interface SettingsState {
   serviceTypes: StoredServiceType[]
@@ -64,9 +52,9 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
-      serviceTypes: seedServiceTypes(),
-      dutyRoles: seedDutyRoles(),
-      voices: seedVoices(),
+      serviceTypes: [],
+      dutyRoles: [],
+      voices: [],
       localeName: 'Sta. Monica',
       defaultServiceTypeId: null,
 
@@ -186,15 +174,18 @@ export const useSettingsStore = create<SettingsState>()(
       allVoices: () => get().voices,
 
       importData: (serviceTypes, dutyRoles, voices) => {
+        const configuredServiceTypes = serviceTypes.filter((item) => item.custom !== false)
+        const configuredDutyRoles = dutyRoles.filter((item) => item.custom !== false)
+        const configuredVoices = voices.filter((item) => item.custom !== false)
         set((s) => ({
-          serviceTypes,
-          dutyRoles,
-          voices,
+          serviceTypes: configuredServiceTypes,
+          dutyRoles: configuredDutyRoles,
+          voices: configuredVoices,
           // A restored backup may not contain the current default service type;
           // keep the default only when it survives the import.
           defaultServiceTypeId:
             s.defaultServiceTypeId != null &&
-            serviceTypes.some((t) => t.id === s.defaultServiceTypeId)
+            configuredServiceTypes.some((t) => t.id === s.defaultServiceTypeId)
               ? s.defaultServiceTypeId
               : null,
         }))
@@ -212,13 +203,29 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'choir-settings',
-      version: 5,
+      version: 6,
       migrate: (persisted) => {
         const p = persisted as Partial<SettingsState> | undefined
+        const serviceTypes = (p?.serviceTypes ?? []).filter(
+          (item) => item.custom !== false,
+        )
+        const dutyRoles = (p?.dutyRoles ?? []).filter(
+          (item) => item.custom !== false,
+        )
+        const voices = (p?.voices ?? []).filter(
+          (item) => item.custom !== false,
+        )
         return {
           ...(p as Partial<SettingsState>),
           localeName: p?.localeName ?? 'Sta. Monica',
-          defaultServiceTypeId: p?.defaultServiceTypeId ?? null,
+          serviceTypes,
+          dutyRoles,
+          voices,
+          defaultServiceTypeId:
+            p?.defaultServiceTypeId &&
+            serviceTypes.some((item) => item.id === p.defaultServiceTypeId)
+              ? p.defaultServiceTypeId
+              : null,
         }
       },
     },

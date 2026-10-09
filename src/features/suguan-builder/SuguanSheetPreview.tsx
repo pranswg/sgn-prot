@@ -71,7 +71,7 @@ export function SuguanSheetPreview({
         <span>Font: {fs.label}</span>
         <span>
           {layout.sections.length} section{layout.sections.length !== 1 ? 's' : ''} ·{' '}
-          {layout.rowCount} member{layout.rowCount !== 1 ? 's' : ''} ·{' '}
+          {layout.assignedCount} member{layout.assignedCount !== 1 ? 's' : ''} ·{' '}
           {layout.pageCount} page{layout.pageCount > 1 ? 's' : ''}
         </span>
         {layout.scale < 1 && (

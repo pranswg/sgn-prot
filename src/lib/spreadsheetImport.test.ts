@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { inflateRawSync } from 'node:zlib'
 
 import {
   extractRosterFromSpreadsheet,
@@ -9,11 +10,22 @@ import {
   MEMBER_EXPORT_HEADERS,
   TRAINEE_EXPORT_HEADERS,
 } from './spreadsheetImport'
-import { membersToRows, traineesToRows } from './export'
-import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
+import {
+  createMasterListWordBlob,
+  masterListToSpreadsheetRows,
+  membersToRows,
+  traineesToRows,
+} from './export'
+import type { VoicePosition } from '@/core/types/suguan'
 import type { Member, Trainee } from '@/core/types/member'
 
-const VOICES = DEFAULT_VOICE_POSITIONS
+const VOICES: VoicePosition[] = [
+  { id: 'soprano-1', name: 'Soprano 1', shortName: 'S1', gender: 'female' },
+  { id: 'soprano-2', name: 'Soprano 2', shortName: 'S2', gender: 'female' },
+  { id: 'alto', name: 'Alto', shortName: 'A', gender: 'female' },
+  { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
+  { id: 'bass', name: 'Bass', shortName: 'B', gender: 'male' },
+]
 
 const EXISTING: Member[] = [
   {
@@ -45,6 +57,43 @@ const TRAINEES: Trainee[] = [
 function matrixFromRows(rows: Record<string, string>[]): unknown[][] {
   const headers = Object.keys(rows[0])
   return [headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))]
+}
+
+function unzipEntries(bytes: Uint8Array): Map<string, Buffer> {
+  const archive = Buffer.from(bytes)
+  const entries = new Map<string, Buffer>()
+  let offset = 0
+
+  while (offset + 46 <= archive.length) {
+    if (archive.readUInt32LE(offset) !== 0x02014b50) {
+      offset += 1
+      continue
+    }
+    const compression = archive.readUInt16LE(offset + 10)
+    const compressedSize = archive.readUInt32LE(offset + 20)
+    const fileNameLength = archive.readUInt16LE(offset + 28)
+    const extraLength = archive.readUInt16LE(offset + 30)
+    const commentLength = archive.readUInt16LE(offset + 32)
+    const localHeaderOffset = archive.readUInt32LE(offset + 42)
+    const fileName = archive
+      .subarray(offset + 46, offset + 46 + fileNameLength)
+      .toString('utf8')
+    const localFileNameLength = archive.readUInt16LE(localHeaderOffset + 26)
+    const localExtraLength = archive.readUInt16LE(localHeaderOffset + 28)
+    const compressedDataStart =
+      localHeaderOffset + 30 + localFileNameLength + localExtraLength
+    const compressedData = archive.subarray(
+      compressedDataStart,
+      compressedDataStart + compressedSize,
+    )
+    entries.set(
+      fileName,
+      compression === 8 ? inflateRawSync(compressedData) : compressedData,
+    )
+    offset += 46 + fileNameLength + extraLength + commentLength
+  }
+
+  return entries
 }
 
 test('a member CSV export round-trips back into the same members', () => {
@@ -106,6 +155,215 @@ test('a member CSV export round-trips back into the same members', () => {
   assert.equal(ben.membershipType, 'regular')
   assert.equal(ben.isActive, false)
   assert.deepEqual(ben.positions, [])
+})
+
+test('sectioned Master List exports re-import roster tables and merge leadership sections', () => {
+  const headers = [
+    'Blg.',
+    'First Name',
+    'Middle Name',
+    'Last Name',
+    'Suffix',
+    'Gender',
+    'Voice Position',
+    'Positions / Privileges',
+    'Duty Roles',
+    'Membership Type',
+    'Status',
+    'Date Added',
+    'Notes',
+  ]
+  const matrix = [
+    ['MASTER LIST'],
+    ['STA. MONICA CHOIR - Women'],
+    headers,
+    [
+      '1.',
+      'Rosa',
+      '',
+      'Villar',
+      '',
+      'Female',
+      'Soprano 2',
+      'Pangulong Mang-aawit',
+      '',
+      'Regular',
+      'Active',
+      '2024-07-07',
+      '',
+    ],
+    ['STA. MONICA CHOIR - Pangulong Mang-aawit'],
+    headers,
+    [
+      '1.',
+      'Rosa',
+      '',
+      'Villar',
+      '',
+      'Female',
+      'Soprano 2',
+      'Pangulong Mang-aawit',
+      'Pangulong Mang-aawit',
+      'Regular',
+      'Active',
+      '2024-07-07',
+      '',
+    ],
+    ['STA. MONICA CHOIR - Nagsasanay Women'],
+    headers,
+    [
+      '1.',
+      'Ana',
+      '',
+      'Reyes',
+      '',
+      'Female',
+      'Alto',
+      'Nagsasanay',
+      '',
+      '',
+      'Active',
+      '2024-08-01',
+      '',
+    ],
+  ]
+  const roles = [
+    {
+      id: 'pangulong-mang-aawit',
+      name: 'Pangulong Mang-aawit',
+      abbreviation: 'PM',
+    },
+  ]
+  const { candidates, rowCount } = rowsToCandidates(
+    matrix,
+    VOICES,
+    [],
+    [],
+    roles,
+  )
+
+  assert.equal(rowCount, 3)
+  assert.equal(candidates.length, 2)
+  const rosa = candidates.find((candidate) => candidate.firstName === 'Rosa')
+  const ana = candidates.find((candidate) => candidate.firstName === 'Ana')
+  assert.ok(rosa)
+  assert.ok(ana)
+  assert.equal(rosa.isTrainee, false)
+  assert.deepEqual(rosa.assignedDutyRoleIds, ['pangulong-mang-aawit'])
+  assert.equal(ana.isTrainee, true)
+  assert.equal(ana.membershipType, undefined)
+})
+
+test('Master List spreadsheet export includes PDF-order sections and imports them', () => {
+  const dutyRoles = [
+    {
+      id: 'custom-pangulong',
+      name: 'Pangulong Mang-aawit',
+      abbreviation: 'PM',
+    },
+  ]
+  const members: Member[] = [
+    {
+      ...EXISTING[0],
+      id: 'leader',
+      firstName: 'Juan',
+      lastName: 'Dela Cruz',
+      assignedDutyRoleIds: ['custom-pangulong'],
+    },
+  ]
+  const rows = masterListToSpreadsheetRows(
+    members,
+    TRAINEES,
+    VOICES,
+    dutyRoles,
+    'Sta. Monica',
+  )
+  assert.deepEqual(rows[0], ['MASTER LIST'])
+  assert.equal(
+    rows.some((row) => row[0] === 'STA. MONICA CHOIR - Men'),
+    true,
+  )
+  assert.equal(
+    rows.some(
+      (row) => row[0] === 'STA. MONICA CHOIR - Pangulong Mang-aawit',
+    ),
+    true,
+  )
+  assert.equal(
+    rows.some(
+      (row) => row[0] === 'STA. MONICA CHOIR - Nagsasanay Women',
+    ),
+    true,
+  )
+
+  const { candidates } = rowsToCandidates(rows, VOICES, [], [], dutyRoles)
+  assert.equal(candidates.length, 2)
+  const importedLeader = candidates.find(
+    (candidate) => candidate.firstName === 'Juan',
+  )
+  const importedTrainee = candidates.find(
+    (candidate) => candidate.firstName === 'Maria',
+  )
+  assert.ok(importedLeader)
+  assert.ok(importedTrainee)
+  assert.deepEqual(importedLeader.assignedDutyRoleIds, ['custom-pangulong'])
+  assert.equal(importedTrainee.isTrainee, true)
+})
+
+test('Master List Word export matches PDF sections, styling, page breaks, and paper size', async () => {
+  const leadershipMember: Member = {
+    ...EXISTING[0],
+    id: 'leader',
+    firstName: 'Pedro',
+    lastName: 'Santos',
+    positions: ['pangulong-mang-aawit'],
+  }
+  const inactiveMember: Member = {
+    ...EXISTING[0],
+    id: 'inactive',
+    firstName: 'Inactive',
+    isActive: false,
+  }
+  const dutyRoles = [
+    {
+      id: 'pangulong-mang-aawit',
+      name: 'Pangulong Mang-aawit',
+      abbreviation: 'PMA',
+    },
+  ]
+  const members = [...EXISTING, leadershipMember, inactiveMember]
+  const blob = await createMasterListWordBlob(
+    members,
+    TRAINEES,
+    VOICES,
+    dutyRoles,
+    'Sta. Monica',
+    'legal',
+  )
+  assert.equal(blob.type, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+  assert.ok(blob.size > 0)
+  const entries = unzipEntries(new Uint8Array(await blob.arrayBuffer()))
+  const document = entries.get('word/document.xml')?.toString('utf8') ?? ''
+  const footer = entries.get('word/footer1.xml')?.toString('utf8') ?? ''
+
+  assert.match(document, /MASTER LIST/)
+  assert.match(document, /STA\. MONICA CHOIR - Women/)
+  assert.match(document, /PANGULUHAN/)
+  assert.match(document, /STA\. MONICA CHOIR - Pangulong Mang-aawit/)
+  assert.match(document, /MASTER LIST SUMMARY/)
+  assert.match(document, /Pangalan/)
+  assert.match(document, /Position/)
+  assert.match(document, /Segoe Script/)
+  assert.match(document, /Book Antiqua/)
+  assert.match(document, /F2F2F2/)
+  assert.match(document, /166534/)
+  assert.match(document, /B91C1C/)
+  assert.equal((document.match(/w:pageBreakBefore/g) ?? []).length, 2)
+  assert.match(document, /w:w="12240" w:h="20160"/)
+  assert.match(footer, /As of/)
+  assert.match(footer, /PAGE/)
+  assert.match(footer, /NUMPAGES/)
+  assert.doesNotMatch(footer, /w:pgNum/)
 })
 
 test('a trainee export is detected as trainees even though it has no membership column', () => {

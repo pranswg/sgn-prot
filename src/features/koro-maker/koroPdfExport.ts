@@ -1,7 +1,6 @@
 import type { KoroDocument } from '@/core/types/koro'
 import type { Member } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
-import { DEFAULT_VOICE_POSITIONS } from '@/core/constants/voicePositions'
 import { FONT_SIZE_PRESETS, docPaperDimensionsMm } from '@/lib/suguanUtils'
 import { fitFontSizePt, suguanSheetAccent } from '@/lib/suguanExport'
 import {
@@ -25,7 +24,7 @@ function hexToRgb(hex: string): [number, number, number] {
 export async function exportKoroTablePdf(
   document: KoroDocument,
   members: Member[],
-  voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
+  voices: VoicePosition[] = [],
   filename?: string,
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
@@ -164,7 +163,7 @@ export async function exportKoroTablePdf(
 export async function exportKoroAsSuguanPdf(
   document: KoroDocument,
   members: Member[],
-  voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
+  voices: VoicePosition[] = [],
   output: 'download' | 'preview' = 'download',
   filename?: string,
 ): Promise<Blob | void> {

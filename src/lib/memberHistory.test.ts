@@ -182,8 +182,30 @@ test('returned detection and history membership', () => {
   assert.equal(memberIsReturned(active), false)
   assert.equal(belongsInMemberHistory(returned), true)
   assert.equal(belongsInMemberHistory(active), false)
-  // A legacy deactivated record predates events, so it still belongs.
-  assert.equal(belongsInMemberHistory(legacyInactive), true)
+  // A plain deactivation is not a membership change, so it is not archived.
+  assert.equal(belongsInMemberHistory(legacyInactive), false)
+})
+
+test('a plain-deactivated member is not archived', () => {
+  const deactivated = member({
+    isActive: false,
+    history: [event('joined', '2024-01-05')],
+  })
+  assert.equal(belongsInMemberHistory(deactivated), false)
+  // Someone who transferred out and later returned keeps their place.
+  assert.equal(
+    belongsInMemberHistory(
+      member({
+        isActive: false,
+        history: [
+          event('joined', '2024-01-05'),
+          event('transferred-out', '2025-03-10'),
+          event('returned', '2026-01-20'),
+        ],
+      }),
+    ),
+    true,
+  )
 })
 
 test('history years are distinct and newest first', () => {

@@ -12,7 +12,6 @@ import {
   MEMBERSHIP_LABELS,
 } from '@/core/constants/memberMembership'
 import {
-  DEFAULT_VOICE_POSITIONS,
   getVoiceName,
   UNASSIGNED_VOICE_LABEL,
 } from '@/core/constants/voicePositions'
@@ -97,7 +96,7 @@ export function organistPrivilegeLabel(
  */
 export function memberSubtitle(
   member: Pick<Member, 'membershipType' | 'positions' | 'voicePosition'>,
-  voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
+  voices: VoicePosition[] = [],
 ): string {
   const parts: string[] = []
   if (member.voicePosition) {

@@ -4,9 +4,11 @@ import {
   Check,
   Clock3,
   KeyRound,
+  Pencil,
   Plus,
   Shield,
   ShieldCheck,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -18,6 +20,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -53,9 +65,13 @@ import {
   ACCOUNT_ROLES,
   DEFAULT_ROLE_PERMISSIONS,
   PERMISSION_DEFINITIONS,
+  rolePermissionsFor,
 } from '@/lib/rbac'
-import { useAdminStore } from '@/store/adminStore'
-import { useAuthStore, type CreateManagedAccountInput } from '@/store/authStore'
+import { useAdminStore, type ManagedRole } from '@/store/adminStore'
+import {
+  useAuthStore,
+  type CreateManagedAccountInput,
+} from '@/store/authStore'
 
 type AdminSection = 'overview' | 'users' | 'roles' | 'audit' | 'logins' | 'sessions'
 
@@ -65,7 +81,7 @@ const EMPTY_NEW_USER: CreateManagedAccountInput = {
   email: '',
   username: '',
   password: '',
-  role: 'viewer',
+  role: '',
   customPermissions: null,
 }
 
@@ -79,7 +95,12 @@ const sectionItems: { id: AdminSection; label: string }[] = [
 ]
 
 function roleLabel(role: AccountRole) {
-  return ACCOUNT_ROLES.find((item) => item.id === role)?.label ?? role
+  const removedRoleIds = useAdminStore.getState().removedRoleIds
+  return (
+    [...ACCOUNT_ROLES, ...useAdminStore.getState().customRoles].find(
+      (item) => item.id === role && !removedRoleIds.includes(item.id),
+    )?.label ?? role
+  )
 }
 
 function statusLabel(status: AccountStatus | undefined) {
@@ -186,6 +207,11 @@ function CreateUserDialog({
 }) {
   const createManagedAccount = useAuthStore((state) => state.createManagedAccount)
   const rolePermissions = useAdminStore((state) => state.rolePermissions)
+  const customRoles = useAdminStore((state) => state.customRoles)
+  const removedRoleIds = useAdminStore((state) => state.removedRoleIds)
+  const roles = [...ACCOUNT_ROLES, ...customRoles].filter(
+    (role) => !removedRoleIds.includes(role.id),
+  )
   const [form, setForm] = useState(EMPTY_NEW_USER)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
@@ -203,7 +229,9 @@ function CreateUserDialog({
         setError(result.problems.map((problem) => problem.message).join(' '))
         return
       }
-      toast.success(`System account for ${result.account.fullName} created.`)
+      toast.success(
+        `System account for ${result.account.fullName} created. They must change the temporary password at first sign-in.`,
+      )
       setForm(EMPTY_NEW_USER)
       onOpenChange(false)
     } catch (cause) {
@@ -309,10 +337,10 @@ function CreateUserDialog({
                   onValueChange={(value) => updateRole(value as AccountRole)}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ACCOUNT_ROLES.map((role) => (
+                    {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id}>
                         {role.label}
                       </SelectItem>
@@ -321,7 +349,7 @@ function CreateUserDialog({
                 </Select>
               </div>
               <p className="text-xs text-muted-foreground">
-                {ACCOUNT_ROLES.find((role) => role.id === form.role)?.description}
+                {roles.find((role) => role.id === form.role)?.description}
               </p>
             </div>
             <div className="grid gap-2">
@@ -336,8 +364,7 @@ function CreateUserDialog({
                 <PermissionChecks
                   value={
                     form.customPermissions ??
-                    rolePermissions[form.role] ??
-                    DEFAULT_ROLE_PERMISSIONS[form.role]
+                    rolePermissionsFor(form.role, rolePermissions)
                   }
                   onChange={(permissions) => set('customPermissions', permissions)}
                 />
@@ -364,6 +391,88 @@ function CreateUserDialog({
   )
 }
 
+function ManagedRoleDialog({
+  actorId,
+  role,
+  onClose,
+}: {
+  actorId: string
+  role: ManagedRole | null
+  onClose: () => void
+}) {
+  const createManagedRole = useAuthStore((state) => state.createManagedRole)
+  const updateManagedRole = useAuthStore((state) => state.updateManagedRole)
+  const [label, setLabel] = useState(role?.label ?? '')
+  const [description, setDescription] = useState(role?.description ?? '')
+  const [permissions, setPermissions] = useState<Permission[]>([])
+  const [error, setError] = useState('')
+  const [pending, setPending] = useState(false)
+
+  const save = () => {
+    setPending(true)
+    setError('')
+    const result = role
+      ? updateManagedRole(actorId, role.id, { label, description })
+      : createManagedRole(actorId, { label, description, permissions })
+    if ('problems' in result) {
+      setError(result.problems.map((problem) => problem.message).join(' '))
+    } else {
+      toast.success(role ? 'Role updated.' : 'Role created.')
+      onClose()
+    }
+    setPending(false)
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{role ? 'Edit Role' : 'Create Role'}</DialogTitle>
+          <DialogDescription>
+            Set the role name and description. You can assign permissions in
+            the role matrix after creating it.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="managed-role-name">Role name</Label>
+            <Input
+              id="managed-role-name"
+              maxLength={48}
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="managed-role-description">Description</Label>
+            <Input
+              id="managed-role-description"
+              maxLength={160}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </div>
+          {!role && (
+            <section className="grid gap-2">
+              <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">
+                INITIAL PERMISSIONS
+              </h3>
+              <PermissionChecks value={permissions} onChange={setPermissions} />
+            </section>
+          )}
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={pending}>
+            {pending ? 'Saving…' : role ? 'Save Role' : 'Create Role'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function UserProfileDialog({
   account,
   onClose,
@@ -376,16 +485,23 @@ function UserProfileDialog({
   const updateManagedAccount = useAuthStore((state) => state.updateManagedAccount)
   const resetManagedPassword = useAuthStore((state) => state.resetManagedPassword)
   const rolePermissions = useAdminStore((state) => state.rolePermissions)
+  const customRoles = useAdminStore((state) => state.customRoles)
+  const removedRoleIds = useAdminStore((state) => state.removedRoleIds)
+  const roles = [...ACCOUNT_ROLES, ...customRoles].filter(
+    (role) => !removedRoleIds.includes(role.id),
+  )
   const [editing, setEditing] = useState(false)
   const [newPassword, setNewPassword] = useState('')
+  const [requirePasswordChange, setRequirePasswordChange] = useState(true)
   const [passwordError, setPasswordError] = useState('')
   const [permissions, setPermissions] = useState<Permission[]>([])
+  const [permissionsCustomized, setPermissionsCustomized] = useState(false)
   const [disableReason, setDisableReason] = useState('')
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    role: 'viewer' as AccountRole,
+    role: '' as AccountRole,
     status: 'active' as AccountStatus,
     statusReason: '',
   })
@@ -402,16 +518,16 @@ function UserProfileDialog({
     })
     setPermissions(
       account.customPermissions ??
-        rolePermissions[account.role] ??
-        DEFAULT_ROLE_PERMISSIONS[account.role],
+        rolePermissionsFor(account.role, rolePermissions),
     )
+    setPermissionsCustomized(account.customPermissions != null)
     setEditing(true)
   }
 
   const save = () => {
     if (!account) return
     const nextPermissions =
-      form.role === 'admin' ? null : [...permissions]
+      form.role === 'admin' || !permissionsCustomized ? null : [...permissions]
     const result = updateManagedAccount(actorId, account.id, {
       ...form,
       customPermissions: nextPermissions,
@@ -428,13 +544,23 @@ function UserProfileDialog({
     if (!account) return
     setPasswordError('')
     try {
-      const result = await resetManagedPassword(actorId, account.id, newPassword)
+      const result = await resetManagedPassword(
+        actorId,
+        account.id,
+        newPassword,
+        requirePasswordChange,
+      )
       if ('problems' in result) {
         setPasswordError(result.problems.map((problem) => problem.message).join(' '))
         return
       }
-      toast.success('Password reset. Share the temporary password securely.')
+      toast.success(
+        requirePasswordChange
+          ? 'Temporary password set. The user must change it at next sign-in.'
+          : 'Permanent password set. Share it securely with the user.',
+      )
       setNewPassword('')
+      setRequirePasswordChange(true)
     } catch (cause) {
       console.error(cause)
       setPasswordError('Could not reset the password.')
@@ -562,17 +688,17 @@ function UserProfileDialog({
                               role: nextRole,
                             }))
                             setPermissions(
-                              rolePermissions[nextRole] ??
-                                DEFAULT_ROLE_PERMISSIONS[nextRole],
+                              rolePermissionsFor(nextRole, rolePermissions),
                             )
+                            setPermissionsCustomized(false)
                           }
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="Select a role" />
                         </SelectTrigger>
                         <SelectContent>
-                          {ACCOUNT_ROLES.map((role) => (
+                          {roles.map((role) => (
                             <SelectItem key={role.id} value={role.id}>
                               {role.label}
                             </SelectItem>
@@ -632,7 +758,10 @@ function UserProfileDialog({
                   ) : (
                     <PermissionChecks
                       value={permissions}
-                      onChange={setPermissions}
+                      onChange={(next) => {
+                        setPermissions(next)
+                        setPermissionsCustomized(true)
+                      }}
                     />
                   )}
                   <div className="flex justify-end gap-2">
@@ -669,8 +798,7 @@ function UserProfileDialog({
                         account.role === 'admin'
                           ? DEFAULT_ROLE_PERMISSIONS.admin
                           : account.customPermissions ??
-                            rolePermissions[account.role] ??
-                            DEFAULT_ROLE_PERMISSIONS[account.role]
+                            rolePermissionsFor(account.role, rolePermissions)
                       ).map((permission) => (
                         <p key={permission} className="flex items-center gap-2 text-sm">
                           <Check className="size-4 text-emerald-600" />
@@ -680,13 +808,13 @@ function UserProfileDialog({
                     </div>
                   </section>
                   <section className="grid gap-2 rounded-lg border p-3">
-                    <Label htmlFor="admin-reset-password">Reset Password</Label>
+                    <Label htmlFor="admin-reset-password">Set a new password</Label>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Input
                         id="admin-reset-password"
                         type="password"
                         autoComplete="new-password"
-                        placeholder="New temporary password"
+                        placeholder="Enter the new password"
                         value={newPassword}
                         onChange={(event) => setNewPassword(event.target.value)}
                       />
@@ -695,6 +823,15 @@ function UserProfileDialog({
                         Reset Password
                       </Button>
                     </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={requirePasswordChange}
+                        onCheckedChange={(checked) =>
+                          setRequirePasswordChange(checked === true)
+                        }
+                      />
+                      Require this user to change it at next sign-in (temporary)
+                    </label>
                     {passwordError && (
                       <p role="alert" className="text-xs text-destructive">
                         {passwordError}
@@ -784,13 +921,22 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   const terminateManagedSession = useAuthStore(
     (state) => state.terminateManagedSession,
   )
+  const deleteManagedRole = useAuthStore((state) => state.deleteManagedRole)
   const auditLogs = useAdminStore((state) => state.auditLogs)
   const loginHistory = useAdminStore((state) => state.loginHistory)
   const activeSessions = useAdminStore((state) => state.activeSessions)
   const rolePermissions = useAdminStore((state) => state.rolePermissions)
+  const customRoles = useAdminStore((state) => state.customRoles)
+  const removedRoleIds = useAdminStore((state) => state.removedRoleIds)
+  const roles = [...ACCOUNT_ROLES, ...customRoles].filter(
+    (role) => !removedRoleIds.includes(role.id),
+  )
   const [section, setSection] = useState<AdminSection>('overview')
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false)
+  const [roleBeingEdited, setRoleBeingEdited] = useState<ManagedRole | null>(null)
+  const [rolePendingDelete, setRolePendingDelete] = useState<ManagedRole | null>(null)
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -825,7 +971,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     enabled: boolean,
   ) => {
     if (role === 'admin') return
-    const before = rolePermissions[role] ?? DEFAULT_ROLE_PERMISSIONS[role]
+    const before = rolePermissionsFor(role, rolePermissions)
     const after = enabled
       ? [...new Set([...before, permission])]
       : before.filter((item) => item !== permission)
@@ -842,6 +988,17 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       return
     }
     toast.success(`Session for ${result.session.userName} ended.`)
+  }
+
+  const confirmDeleteRole = () => {
+    if (!rolePendingDelete) return
+    const result = deleteManagedRole(actorId, rolePendingDelete.id)
+    if ('problems' in result) {
+      toast.error(result.problems.map((problem) => problem.message).join(' '))
+    } else {
+      toast.success(`${rolePendingDelete.label} role deleted.`)
+    }
+    setRolePendingDelete(null)
   }
 
   const changeTab = (target: AdminSection) => setSection(target)
@@ -909,7 +1066,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Roles</SelectItem>
-                  {ACCOUNT_ROLES.map((role) => (
+                  {roles.map((role) => (
                     <SelectItem key={role.id} value={role.id}>{role.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1041,11 +1198,25 @@ export function AdminManagement({ actorId }: { actorId: string }) {
 
       {section === 'roles' && (
         <div className="grid gap-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Create roles for your organization and assign them to system accounts.
+            </p>
+            <Button
+              onClick={() => {
+                setRoleBeingEdited(null)
+                setRoleDialogOpen(true)
+              }}
+            >
+              <Plus className="size-4" />
+              Create Role
+            </Button>
+          </div>
           <Card className="rounded-xl border-slate-200 shadow-none">
             <CardHeader>
               <CardTitle className="text-base">Roles & Permissions</CardTitle>
               <CardDescription>
-                Set the default permissions inherited by each role. Admin always retains full access.
+                Configure the permissions inherited by each role. Admin always retains full access.
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -1053,7 +1224,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 <TableHeader>
                   <TableRow className="bg-slate-50 hover:bg-slate-50">
                     <TableHead className="min-w-56">Permission</TableHead>
-                    {ACCOUNT_ROLES.map((role) => (
+                    {roles.map((role) => (
                       <TableHead key={role.id} className="min-w-36 text-center">
                         {role.label}
                       </TableHead>
@@ -1067,10 +1238,10 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                         <p className="font-medium">{permission.label}</p>
                         <p className="text-xs text-muted-foreground">{permission.module}</p>
                       </TableCell>
-                      {ACCOUNT_ROLES.map((role) => {
-                        const granted = (
-                          rolePermissions[role.id] ??
-                          DEFAULT_ROLE_PERMISSIONS[role.id]
+                      {roles.map((role) => {
+                        const granted = rolePermissionsFor(
+                          role.id,
+                          rolePermissions,
                         ).includes(permission.id)
                         return (
                           <TableCell key={role.id} className="text-center">
@@ -1099,7 +1270,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             </CardContent>
           </Card>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {ACCOUNT_ROLES.map((role) => (
+            {roles.map((role) => (
               <Card key={role.id} className="rounded-xl border-slate-200 shadow-none">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-sm">
@@ -1108,8 +1279,41 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                   </CardTitle>
                   <CardDescription>{role.description}</CardDescription>
                 </CardHeader>
-                <CardContent className="text-xs text-muted-foreground">
-                  {(rolePermissions[role.id] ?? DEFAULT_ROLE_PERMISSIONS[role.id]).length} permissions granted
+                <CardContent className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {rolePermissionsFor(role.id, rolePermissions).length} permissions granted
+                  </span>
+                  {role.id !== 'admin' && (
+                    <div className="flex gap-1">
+                      {role.id.startsWith('custom-') && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Edit ${role.label}`}
+                        onClick={() => {
+                          setRoleBeingEdited(role)
+                          setRoleDialogOpen(true)
+                        }}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${role.label}`}
+                        title={
+                          accounts.some((account) => account.role === role.id)
+                            ? 'Reassign users before deleting this role'
+                            : 'Delete role'
+                        }
+                        disabled={accounts.some((account) => account.role === role.id)}
+                        onClick={() => setRolePendingDelete(role)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -1198,6 +1402,40 @@ export function AdminManagement({ actorId }: { actorId: string }) {
         onOpenChange={setCreateOpen}
         actorId={actorId}
       />
+      {roleDialogOpen && (
+        <ManagedRoleDialog
+          key={roleBeingEdited?.id ?? 'new-role'}
+          actorId={actorId}
+          role={roleBeingEdited}
+          onClose={() => setRoleDialogOpen(false)}
+        />
+      )}
+      <AlertDialog
+        open={rolePendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setRolePendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this role?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {rolePendingDelete
+                ? `${rolePendingDelete.label} and its permission setup will be removed. The Admin role is protected, and roles assigned to users cannot be deleted.`
+                : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white"
+              onClick={confirmDeleteRole}
+            >
+              Delete Role
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <UserProfileDialog
         account={selectedAccount}
         onClose={() => setSelectedAccountId(null)}

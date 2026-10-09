@@ -37,7 +37,12 @@ import { formatPHTDateTime } from '@/lib/phDate'
 import type { ChoirPosition, Member } from '@/core/types/member'
 import { CHOIR_POSITIONS, POSITION_LABELS } from '@/core/constants/choirPositions'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
-import { exportCSV, exportExcel, membersToRows } from '@/lib/export'
+import {
+  exportCSVRows,
+  exportMasterListExcel,
+  exportMasterListWord,
+  masterListToSpreadsheetRows,
+} from '@/lib/export'
 import { exportMasterListPdf } from './masterListPdfExport'
 import {
   EMPTY_DIRECTORY_FILTERS,
@@ -194,6 +199,7 @@ export function MasterListPage() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [pdfSetupOpen, setPdfSetupOpen] = useState(false)
+  const [wordSetupOpen, setWordSetupOpen] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [profileTarget, setProfileTarget] = useState<Member | null>(null)
@@ -319,7 +325,10 @@ export function MasterListPage() {
       toast.error('No members to export.')
       return
     }
-    const fileName = exportFileName(masterListExportDocumentName(filters.gender), format)
+    const fileName = exportFileName(
+      masterListExportDocumentName(filters.gender),
+      format,
+    )
     requestExport({
       filename: fileName,
       onConfirm: () => void runSpreadsheetExport(format, fileName),
@@ -330,21 +339,32 @@ export function MasterListPage() {
     format: 'csv' | 'excel',
     fileName: string,
   ) => {
-    const rows = membersToRows(filteredMembers) as unknown as Record<
-      string,
-      string | number
-    >[]
+    const rows = masterListToSpreadsheetRows(
+      filteredMembers,
+      trainees.filter(
+        (trainee) =>
+          trainee.status === 'active' || trainee.status === 'inactive',
+      ),
+      voices,
+      dutyRoles,
+      localeName,
+    )
     try {
       if (format === 'csv') {
-        exportCSV(rows, fileName)
+        exportCSVRows(rows, fileName)
       } else {
-        await exportExcel(rows, fileName)
+        await exportMasterListExcel(rows, fileName)
       }
       toast.success(
-        `Exported ${filteredCount} members as ${format.toUpperCase()}.`,
+        `Exported the Master List as ${format.toUpperCase()}.`,
       )
-    } catch {
-      toast.error('Export failed.')
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error
+          ? `Export failed: ${error.message}`
+          : 'Export failed.',
+      )
     }
   }
 
@@ -380,6 +400,45 @@ export function MasterListPage() {
     } catch (error) {
       console.error(error)
       toast.error('Could not export the Master List PDF.')
+    }
+  }
+
+  const handleWordExport = async (
+    name: string,
+    paperSize: MasterListPaperSize,
+  ) => {
+    setWordSetupOpen(false)
+    setLocaleName(name)
+    const fileName = exportFileName('Master List', 'docx')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runWordExport(name, paperSize, fileName),
+    })
+  }
+
+  const runWordExport = async (
+    name: string,
+    paperSize: MasterListPaperSize,
+    fileName: string,
+  ) => {
+    try {
+      await exportMasterListWord(
+        directoryMembers,
+        trainees,
+        voices,
+        dutyRoles,
+        name,
+        paperSize,
+        fileName,
+      )
+      toast.success('Master List exported as Word.')
+    } catch (error) {
+      console.error(error)
+      toast.error(
+        error instanceof Error
+          ? `Word export failed: ${error.message}`
+          : 'Could not export the Master List Word document.',
+      )
     }
   }
 
@@ -446,6 +505,10 @@ export function MasterListPage() {
                 <DropdownMenuItem onClick={() => handleExport('excel')}>
                   <Download className="size-4" />
                   Excel (current view)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setWordSetupOpen(true)}>
+                  <Download className="size-4" />
+                  Word (full Master List)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setPdfSetupOpen(true)}>
                   <FileDown className="size-4" />
@@ -980,6 +1043,14 @@ export function MasterListPage() {
           onOpenChange={setPdfSetupOpen}
           savedLocaleName={localeName}
           onExport={handlePdfExport}
+        />
+      )}
+      {wordSetupOpen && (
+        <MasterListPdfSetupDialog
+          documentType="Word"
+          onOpenChange={setWordSetupOpen}
+          savedLocaleName={localeName}
+          onExport={handleWordExport}
         />
       )}
 

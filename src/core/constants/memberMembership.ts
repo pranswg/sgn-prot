@@ -1,9 +1,6 @@
 import type { ChoirPosition, Member, MembershipType } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
-import {
-  DEFAULT_VOICE_POSITIONS,
-  getVoiceName,
-} from '@/core/constants/voicePositions'
+import { getVoiceName } from '@/core/constants/voicePositions'
 
 /**
  * The membership categories the member forms offer. Order here is the order
@@ -77,7 +74,7 @@ export function memberEffectivePositions(
  */
 export function memberPositionLabel(
   member: Pick<Member, 'membershipType' | 'voicePosition'>,
-  voices: VoicePosition[] = DEFAULT_VOICE_POSITIONS,
+  voices: VoicePosition[] = [],
 ): string {
   return isOrganistMembership(member.membershipType)
     ? MEMBERSHIP_SHORT_LABELS[member.membershipType]

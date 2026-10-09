@@ -7,6 +7,12 @@ import {
   DEFAULT_ROLE_PERMISSIONS,
 } from '@/lib/rbac'
 
+export interface ManagedRole {
+  id: AccountRole
+  label: string
+  description: string
+}
+
 export interface AuditLogEntry {
   id: string
   actorId: string | null
@@ -47,6 +53,8 @@ interface AdminState {
   auditLogs: AuditLogEntry[]
   loginHistory: LoginHistoryEntry[]
   activeSessions: ActiveSession[]
+  customRoles: ManagedRole[]
+  removedRoleIds: AccountRole[]
   rolePermissions: Partial<Record<AccountRole, Permission[]>>
   addAuditLog: (entry: Omit<AuditLogEntry, 'id' | 'createdAt'>) => void
   recordLogin: (entry: Omit<LoginHistoryEntry, 'id' | 'createdAt'>) => void
@@ -54,6 +62,9 @@ interface AdminState {
   endSession: (id: string) => void
   endUserSessions: (userId: string) => void
   updateRolePermissions: (role: AccountRole, permissions: Permission[]) => void
+  addCustomRole: (role: ManagedRole, permissions: Permission[]) => void
+  updateCustomRole: (role: ManagedRole) => void
+  removeRole: (role: AccountRole) => void
 }
 
 export const useAdminStore = create<AdminState>()(
@@ -62,6 +73,8 @@ export const useAdminStore = create<AdminState>()(
       auditLogs: [],
       loginHistory: [],
       activeSessions: [],
+      customRoles: [],
+      removedRoleIds: [],
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
       addAuditLog: (entry) =>
         set((state) => ({
@@ -110,12 +123,62 @@ export const useAdminStore = create<AdminState>()(
                   ),
           },
         })),
+      addCustomRole: (role, permissions) =>
+        set((state) => ({
+          customRoles: [...state.customRoles, role],
+          rolePermissions: {
+            ...state.rolePermissions,
+            [role.id]: [...new Set(permissions)].filter(
+              (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
+            ),
+          },
+        })),
+      updateCustomRole: (role) =>
+        set((state) => ({
+          customRoles: state.customRoles.map((item) =>
+            item.id === role.id ? role : item,
+          ),
+        })),
+      removeRole: (role) =>
+        set((state) => {
+          const rolePermissions = { ...state.rolePermissions }
+          delete rolePermissions[role]
+          return {
+            customRoles: state.customRoles.filter((item) => item.id !== role),
+            removedRoleIds: state.removedRoleIds.includes(role)
+              ? state.removedRoleIds
+              : [...state.removedRoleIds, role],
+            rolePermissions,
+          }
+        }),
     }),
     {
       name: 'choir-admin-security',
-      version: 1,
+      version: 4,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<AdminState>
+        const customRoles = Array.isArray(state.customRoles)
+          ? state.customRoles.filter(
+              (role) =>
+                typeof role.id === 'string' &&
+                role.id.startsWith('custom-') &&
+                typeof role.label === 'string' &&
+                typeof role.description === 'string',
+            )
+          : []
+        const permissions: Partial<Record<AccountRole, Permission[]>> = {
+          ...(state.rolePermissions ?? {}),
+          admin: DEFAULT_ROLE_PERMISSIONS.admin,
+        }
+        for (const role of Object.keys(permissions)) {
+          if (role !== 'admin' && !customRoles.some((item) => item.id === role)) {
+            delete permissions[role]
+          } else if (role !== 'admin') {
+            permissions[role] = (permissions[role] ?? []).filter(
+              (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
+            )
+          }
+        }
         return {
           auditLogs: Array.isArray(state.auditLogs) ? state.auditLogs : [],
           loginHistory: Array.isArray(state.loginHistory)
@@ -124,25 +187,14 @@ export const useAdminStore = create<AdminState>()(
           activeSessions: Array.isArray(state.activeSessions)
             ? state.activeSessions
             : [],
-          rolePermissions: {
-            ...DEFAULT_ROLE_PERMISSIONS,
-            ...(state.rolePermissions ?? {}),
-            admin: DEFAULT_ROLE_PERMISSIONS.admin,
-            ...Object.fromEntries(
-              (['suguan-manager', 'choir-manager', 'viewer'] as const).map(
-                (role) => [
-                  role,
-                  (
-                    state.rolePermissions?.[role] ??
-                    DEFAULT_ROLE_PERMISSIONS[role]
-                  ).filter(
-                    (permission) =>
-                      !ADMIN_ONLY_PERMISSIONS.includes(permission),
-                  ),
-                ],
-              ),
-            ),
-          },
+          customRoles,
+          removedRoleIds: Array.isArray(state.removedRoleIds)
+            ? state.removedRoleIds.filter(
+                (role): role is AccountRole =>
+                  typeof role === 'string' && role !== 'admin',
+              )
+            : [],
+          rolePermissions: permissions,
         }
       },
     },

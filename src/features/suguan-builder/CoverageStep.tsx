@@ -325,6 +325,11 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
                 ))}
               </SelectContent>
             </Select>
+            {allServiceTypes().length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No service types are configured. Add one in Settings to continue.
+              </p>
+            )}
           </div>
         </div>
       </section>

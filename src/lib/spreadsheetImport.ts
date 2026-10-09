@@ -23,6 +23,7 @@ import type {
   Trainee,
 } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
+import type { DutyRole } from '@/core/types/suguan'
 import {
   CHOIR_POSITIONS,
   POSITION_LABELS,
@@ -89,6 +90,7 @@ const MEMBERSHIP_KEYS = ['membershiptype', 'membership']
 const STATUS_KEYS = ['status', 'active']
 const DATE_ADDED_KEYS = ['dateadded', 'datejoined', 'date', 'joined']
 const NOTES_KEYS = ['notes', 'note', 'remarks', 'comments']
+const DUTY_ROLE_KEYS = ['dutyroles', 'assignedroles', 'dutyrole']
 
 /** Normalizes a header for comparison: lowercase, alphanumeric only. */
 function headerKey(header: string): string {
@@ -289,6 +291,51 @@ function looksLikeMemberExport(headers: Map<string, number>): boolean {
   return false
 }
 
+function isHeaderRow(row: unknown[]): boolean {
+  const keys = row.map((cell) => headerKey(cellToString(cell)))
+  return (
+    keys.some((key) => FIRST_NAME_KEYS.includes(key)) &&
+    keys.some((key) => LAST_NAME_KEYS.includes(key))
+  )
+}
+
+function normalizeRoleLabel(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function resolveDutyRoleIds(
+  value: string,
+  section: string,
+  dutyRoles: DutyRole[],
+): string[] {
+  const ids = new Set<string>()
+  const values = value
+    .split(/[,;|]/)
+    .map(normalizeRoleLabel)
+    .filter(Boolean)
+
+  for (const role of dutyRoles) {
+    const roleName = normalizeRoleLabel(role.name)
+    const roleId = normalizeRoleLabel(role.id)
+    if (values.some((item) => item === roleName || item === roleId)) {
+      ids.add(role.id)
+    }
+    if (
+      section &&
+      roleName &&
+      normalizeRoleLabel(section).includes(roleName)
+    ) {
+      ids.add(role.id)
+    }
+  }
+
+  return [...ids]
+}
+
 function sectionLabelFor(
   isTrainee: boolean,
   voices: VoicePosition[],
@@ -308,14 +355,19 @@ export function rowsToCandidates(
   voices: VoicePosition[],
   members: Member[],
   trainees: Trainee[],
+  dutyRoles: DutyRole[] = [],
 ): SpreadsheetParseResult {
   const headerIndex = findHeaderRow(matrix)
   if (headerIndex < 0) {
     return { candidates: [], rowCount: matrix.length }
   }
 
-  const headers = indexHeaders(matrix[headerIndex].map(cellToString))
-  const isMemberSheet = looksLikeMemberExport(headers)
+  let headers = indexHeaders(matrix[headerIndex].map(cellToString))
+  let isMemberSheet = looksLikeMemberExport(headers)
+  let currentSection = ''
+  const sectionedExport = matrix.some((row) =>
+    isSectionMarker(cellToString(row?.[0]).trim()),
+  )
 
   const existing = new Set<string>()
   for (const m of members) existing.add(normalizeNameKey(m.lastName, m.firstName))
@@ -325,12 +377,25 @@ export function rowsToCandidates(
   }
 
   const seen = new Set<string>()
+  const sectionedCandidates = new Map<string, RosterCandidate>()
   const candidates: RosterCandidate[] = []
   let rowCount = 0
 
   for (let index = headerIndex + 1; index < matrix.length; index++) {
     const row = matrix[index]
     if (!row || row.every((cell) => cellToString(cell).trim() === '')) continue
+    const firstCell = cellToString(row[0]).trim()
+    if (isSectionMarker(firstCell)) {
+      currentSection = firstCell.toUpperCase().startsWith('SECTION:')
+        ? firstCell.slice('SECTION:'.length).trim()
+        : firstCell
+      continue
+    }
+    if (isHeaderRow(row)) {
+      headers = indexHeaders(row.map(cellToString))
+      isMemberSheet = looksLikeMemberExport(headers)
+      continue
+    }
 
     const firstName = pick(row, headers, FIRST_NAME_KEYS)
     const lastName = pick(row, headers, LAST_NAME_KEYS)
@@ -361,17 +426,24 @@ export function rowsToCandidates(
     const voicePosition = resolveVoiceId(voiceValue, voices, gender)
 
     const key = normalizeNameKey(resolvedLast, resolvedFirst)
-    const duplicate = existing.has(key) || seen.has(key)
-    seen.add(key)
-
     const statusValue = pick(row, headers, STATUS_KEYS)
     const isActive = resolveActive(statusValue)
     const notes = pick(row, headers, NOTES_KEYS)
+    const isTrainee =
+      currentSection.toLowerCase().includes('nagsasanay') || !isMemberSheet
+    const identity = `${isTrainee ? 'trainee' : 'member'}:${key}`
+    const assignedDutyRoleIds = resolveDutyRoleIds(
+      pick(row, headers, DUTY_ROLE_KEYS),
+      currentSection,
+      dutyRoles,
+    )
 
-    candidates.push({
+    const candidate: RosterCandidate = {
       id: nanoid(),
-      section: sectionLabelFor(!isMemberSheet, voices, voicePosition),
-      isTrainee: !isMemberSheet,
+      section:
+        currentSection ||
+        sectionLabelFor(isTrainee, voices, voicePosition),
+      isTrainee,
       firstName: resolvedFirst,
       middleName: isMemberSheet
         ? pick(row, headers, MIDDLE_NAME_KEYS) || undefined
@@ -386,19 +458,52 @@ export function rowsToCandidates(
       voicePosition,
       isActive,
       notes,
-      duplicate,
-      selected: !duplicate,
-      membershipType: isMemberSheet
+      duplicate: false,
+      selected: true,
+      membershipType: !isTrainee && isMemberSheet
         ? resolveMembershipType(pick(row, headers, MEMBERSHIP_KEYS))
         : undefined,
-      positions: isMemberSheet
+      positions: !isTrainee && isMemberSheet
         ? resolvePositions(pick(row, headers, POSITIONS_KEYS))
         : undefined,
+      assignedDutyRoleIds,
       dateAdded: resolveDateAdded(pick(row, headers, DATE_ADDED_KEYS)),
-    })
+    }
+
+    const previous = sectionedExport
+      ? sectionedCandidates.get(identity)
+      : undefined
+    if (previous) {
+      previous.positions = [
+        ...new Set([...(previous.positions ?? []), ...(candidate.positions ?? [])]),
+      ]
+      previous.assignedDutyRoleIds = [
+        ...new Set([
+          ...(previous.assignedDutyRoleIds ?? []),
+          ...(candidate.assignedDutyRoleIds ?? []),
+        ]),
+      ]
+      previous.notes = previous.notes || candidate.notes
+      continue
+    }
+
+    const duplicate = existing.has(key) || seen.has(key)
+    seen.add(key)
+    candidate.duplicate = duplicate
+    candidate.selected = !duplicate
+    candidates.push(candidate)
+    if (sectionedExport) sectionedCandidates.set(identity, candidate)
   }
 
   return { candidates, rowCount }
+}
+
+function isSectionMarker(value: string): boolean {
+  const normalized = value.trim().toUpperCase()
+  return (
+    normalized.startsWith('SECTION:') ||
+    normalized.includes(' CHOIR - ')
+  )
 }
 
 export function isSpreadsheetFile(file: File): boolean {
@@ -442,10 +547,11 @@ export async function extractRosterFromSpreadsheet(
   voices: VoicePosition[],
   members: Member[],
   trainees: Trainee[],
+  dutyRoles: DutyRole[] = [],
 ): Promise<SpreadsheetParseResult> {
   const matrix = /\.csv$/i.test(file.name)
     ? parseCsvText(await file.text())
     : await readWorkbookMatrix(file)
 
-  return rowsToCandidates(matrix, voices, members, trainees)
+  return rowsToCandidates(matrix, voices, members, trainees, dutyRoles)
 }

@@ -376,13 +376,13 @@ export function Layout() {
             </DropdownMenu>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-5 p-4 pt-5 pb-24 md:p-6 md:pt-6 md:pb-6">
+        <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 pt-5 pb-24 md:p-6 md:pt-6 md:pb-6">
           {/* Keyed by page so every navigation mounts a fresh surface, giving
               the fade-and-rise transition something to run instead of a sudden
               swap. Respects reduced motion. */}
           <div
             key={page}
-            className="flex flex-1 animate-in fade-in slide-in-from-bottom-1 duration-200 ease-out motion-reduce:animate-none"
+            className="flex w-full min-w-0 flex-1 flex-col animate-in fade-in slide-in-from-bottom-1 duration-200 ease-out motion-reduce:animate-none"
           >
             <CurrentPage />
           </div>

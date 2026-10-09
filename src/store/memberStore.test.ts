@@ -24,16 +24,26 @@ test('Master List import requires the current active Admin at the store boundary
   })
   assert.equal('account' in adminResult, true)
   if (!('account' in adminResult)) return
+  const roleResult = useAuthStore.getState().createManagedRole(
+    adminResult.account.id,
+    {
+      label: 'Import Test Role',
+      description: '',
+      permissions: ['view-dashboard'],
+    },
+  )
+  assert.equal('role' in roleResult, true)
+  if (!('role' in roleResult)) return
 
   const userResult = await useAuthStore.getState().createManagedAccount(
     adminResult.account.id,
     {
-      firstName: 'Viewer',
+      firstName: 'Staff',
       lastName: 'User',
       email: '',
-      username: 'viewer.import',
-      password: 'viewer2026',
-      role: 'viewer',
+      username: 'staff.import',
+      password: 'staff2026',
+      role: roleResult.role.id,
       customPermissions: null,
     },
   )
@@ -43,7 +53,7 @@ test('Master List import requires the current active Admin at the store boundary
   useAuthStore.getState().signOut()
   const signInResult = await useAuthStore
     .getState()
-    .signIn('viewer.import', 'viewer2026')
+    .signIn('staff.import', 'staff2026')
   assert.equal('account' in signInResult, true)
   if (!('account' in signInResult)) return
 

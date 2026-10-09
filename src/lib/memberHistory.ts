@@ -108,11 +108,12 @@ export function memberIsReturned(member: Member): boolean {
 
 /**
  * Whether a member belongs on the Members History page: anyone who has ever
- * transferred out (including returned members) plus legacy inactive records
- * that predate event tracking.
+ * transferred out, including returned members. A plain deactivation is not a
+ * membership change — it stays on the Master List with an "Inactive" badge —
+ * so an inactive member who never transferred out is not archived here.
  */
 export function belongsInMemberHistory(member: Member): boolean {
-  return memberEverTransferredOut(member) || !member.isActive
+  return memberEverTransferredOut(member)
 }
 
 /**

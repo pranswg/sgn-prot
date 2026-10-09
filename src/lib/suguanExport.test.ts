@@ -168,17 +168,56 @@ test('legal portrait pages fit 17 members in each of three compact schedules', (
   }))
   const layout = computeSuguanLayout(suguan, members, legal)
 
-  assert.equal(layout.pages.length, 1)
+  assert.equal(layout.pages.length, 2)
   assert.equal(
-    layout.pages[0].filter((block) => block.kind === 'member').length,
-    51,
+    layout.pages.flat().filter((block) => block.kind === 'member').length,
+    57,
   )
   assert.ok(
-    layout.pages[0].filter((block) => block.kind === 'section-label').length === 3,
+    layout.pages.flat().filter((block) => block.kind === 'section-label').length >= 3,
   )
   assert.deepEqual(
-    layout.pages[0].slice(-3).map((block) => block.kind),
+    layout.pages.at(-1)?.slice(-3).map((block) => block.kind),
     ['sig-gap', 'sig-name', 'sig-title'],
+  )
+})
+
+test('each schedule includes exactly two numbered blank write-in rows', () => {
+  const members = makeMembers(3)
+  const suguan = makeSuguan(3, PRESETS[1])
+  suguan.schedules = [
+    {
+      id: 'schedule-a',
+      scheduleLabel: 'Schedule A',
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: suguan.assignments.slice(0, 1),
+    },
+    {
+      id: 'schedule-b',
+      scheduleLabel: 'Schedule B',
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: suguan.assignments.slice(1),
+    },
+  ]
+
+  const sections = buildSections(suguan, members)
+  assert.deepEqual(
+    sections.map((section) => section.rows.map((row) => [row.no, row.name])),
+    [
+      [
+        [1, 'Sales, Julie'],
+        [2, ''],
+        [3, ''],
+      ],
+      [
+        [1, 'Cruz, Ana'],
+        [2, 'Reyes, Maria'],
+        [3, ''],
+        [4, ''],
+      ],
+    ],
   )
 })
 
@@ -317,8 +356,8 @@ test('a signature name is never squeezed below the column it must fit', () => {
 
 test('an empty roster still lays out a full page without a phantom gap', () => {
   const layout = computeSuguanLayout(makeSuguan(0), [], PRESETS[1])
-  assert.equal(layout.rowCount, 0)
-  assert.equal(layout.sig.gapMm, 0)
+  assert.equal(layout.rowCount, 2)
+  assert.ok(layout.sig.gapMm > 0)
   assert.equal(layout.pages.length, 1)
   const tail = layout.pages[0].slice(-3).map((b) => b.kind)
   assert.deepEqual(tail, ['sig-gap', 'sig-name', 'sig-title'])

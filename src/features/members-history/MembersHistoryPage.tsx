@@ -42,9 +42,9 @@ import {
   type HistoryStatusFilter,
 } from '@/lib/memberHistoryFilter'
 import {
+  belongsInMemberHistory,
   memberHistoryYears,
   memberIsReturned,
-  memberLastActiveDateKey,
   memberLifecycleStatus,
   memberMembershipSummary,
 } from '@/lib/memberHistory'
@@ -53,7 +53,6 @@ import {
   formatMemberName,
   memberInitials,
 } from '@/lib/memberDirectory'
-import { formatDateKeyLongDate } from '@/lib/phDate'
 import { MemberHistoryDialog, MemberHistorySheet } from './MemberHistoryDetail'
 import {
   MemberLifecycleDialog,
@@ -82,7 +81,6 @@ function HistoryCard({
   onView,
   onRestore,
 }: HistoryCardProps) {
-  const lastActive = memberLastActiveDateKey(member)
   const restorable = isRestorable(member)
   return (
     <li className="pressable overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm motion-reduce:transform-none">
@@ -108,12 +106,6 @@ function HistoryCard({
         </span>
       </button>
       <div className="flex items-center gap-4 border-t border-border/60 px-4 py-2.5 text-xs">
-        <div className="min-w-0">
-          <p className="text-muted-foreground">Last active</p>
-          <p className="mt-0.5 truncate font-medium text-foreground">
-            {formatDateKeyLongDate(lastActive)}
-          </p>
-        </div>
         <div className="min-w-0 flex-1">
           <p className="text-muted-foreground">Membership</p>
           <p className="mt-0.5 truncate font-medium text-foreground">
@@ -135,10 +127,6 @@ function HistoryCard({
       </div>
     </li>
   )
-}
-
-function formatLastActive(member: Member): string {
-  return formatDateKeyLongDate(memberLastActiveDateKey(member))
 }
 
 const COLUMN_HEAD = 'text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
@@ -170,10 +158,20 @@ export function MembersHistoryPage() {
   }, [])
 
   const references = useMemo(() => buildMemberReferences(members), [members])
-  const years = useMemo(() => memberHistoryYears(members), [members])
+  // The archive only holds members who have ever transferred out, so the year
+  // filter and the "nothing here yet" state read from it rather than the full
+  // roster (which still contains active and plain-inactive members).
+  const archivedMembers = useMemo(
+    () => members.filter(belongsInMemberHistory),
+    [members],
+  )
+  const years = useMemo(
+    () => memberHistoryYears(archivedMembers),
+    [archivedMembers],
+  )
   const historyMembers = useMemo(
-    () => filterMemberHistory(members, filters),
-    [members, filters],
+    () => filterMemberHistory(archivedMembers, filters),
+    [archivedMembers, filters],
   )
   const setFilter = <K extends keyof typeof filters>(
     key: K,
@@ -186,7 +184,7 @@ export function MembersHistoryPage() {
   }
 
   const body =
-    members.length === 0 ? (
+    archivedMembers.length === 0 ? (
       <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
         <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <ArchiveRestore className="size-5" />
@@ -230,14 +228,13 @@ export function MembersHistoryPage() {
           ))}
         </ul>
 
-        <div className="hidden min-w-0 overflow-hidden rounded-xl border border-border/70 bg-card md:block">
+        <div className="hidden min-w-0 max-w-full overflow-x-auto rounded-xl border border-border/70 bg-card md:block">
           <Table className="min-w-[52rem]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className={`${COLUMN_HEAD} w-14 text-center`}>#</TableHead>
                 <TableHead className={COLUMN_HEAD}>Member</TableHead>
                 <TableHead className={COLUMN_HEAD}>Status</TableHead>
-                <TableHead className={COLUMN_HEAD}>Last Active</TableHead>
                 <TableHead className={COLUMN_HEAD}>Membership Period</TableHead>
                 <TableHead className={`${COLUMN_HEAD} w-56 text-right`}>
                   Actions
@@ -277,11 +274,6 @@ export function MembersHistoryPage() {
                       <MemberLifecycleBadge member={member} />
                     </TableCell>
                     <TableCell>
-                      <span className="text-[0.8125rem] tabular-nums text-foreground">
-                        {formatLastActive(member)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
                       <span className="text-[0.8125rem] text-foreground">
                         {memberMembershipSummary(member)}
                       </span>
@@ -314,7 +306,7 @@ export function MembersHistoryPage() {
     )
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex w-full min-w-0 flex-col gap-5">
       <MobileDirectoryHeader
         title="Members History"
         description="Membership changes"

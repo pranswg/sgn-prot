@@ -381,7 +381,7 @@ export function MemberHistoryDialog({
         <DialogHeader>
           <DialogTitle>Membership History</DialogTitle>
           <DialogDescription>
-            Milestones across {formatMemberName(member)}'s time in the choir.
+            Member history in the locale.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto pr-1">
@@ -420,7 +420,7 @@ export function MemberHistorySheet({
         <div className="px-5 pt-2 pb-3">
           <SheetTitle className="text-lg font-bold">Membership History</SheetTitle>
           <SheetDescription className="text-xs">
-            Milestones across {formatMemberName(member)}'s time in the choir.
+            Member history in the locale.
           </SheetDescription>
         </div>
         <div className="min-w-0 flex-1 overflow-y-auto border-t border-border/60 px-4 pt-4 pb-6">

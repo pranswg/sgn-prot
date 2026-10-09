@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { ACCOUNT_ROLES } from '@/lib/rbac'
 import { useMemberStore } from '@/store/memberStore'
+import { useAdminStore } from '@/store/adminStore'
 
 /**
  * Bottom card identifying the workspace and who is signed in.
@@ -16,6 +17,8 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
   const currentAccountId = useAuthStore((s) => s.currentAccountId)
   const accounts = useAuthStore((s) => s.accounts)
   const members = useMemberStore((s) => s.members)
+  const customRoles = useAdminStore((s) => s.customRoles)
+  const removedRoleIds = useAdminStore((s) => s.removedRoleIds)
 
   const account = accounts.find((candidate) => candidate.id === currentAccountId)
   const activeCount = members.filter((member) => member.isActive).length
@@ -51,8 +54,10 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
               {account?.fullName ?? 'Signed in'}
             </p>
             <p className="truncate text-[11px] text-sidebar-secondary">
-              {ACCOUNT_ROLES.find((role) => role.id === account?.role)?.label ??
-                'Staff account'}
+              {[...ACCOUNT_ROLES, ...customRoles].find((role) => role.id === account?.role && !removedRoleIds.includes(role.id))?.label ??
+                (account?.role
+                  ? `Unassigned role (${account.role})`
+                  : 'Staff account')}
             </p>
           </div>
         </div>

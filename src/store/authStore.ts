@@ -8,7 +8,10 @@ import type {
   NewAccountInput,
   Permission,
 } from '@/core/types/auth'
-import { DEFAULT_ROLE_PERMISSIONS } from '@/lib/rbac'
+import {
+  ACCOUNT_ROLES,
+  rolePermissionsFor,
+} from '@/lib/rbac'
 import {
   findAccountByUsername,
   hasActiveAdmin,
@@ -22,6 +25,7 @@ import {
   type FieldProblem,
 } from '@/lib/credentials'
 import { useAdminStore, type ActiveSession } from '@/store/adminStore'
+import type { ManagedRole } from '@/store/adminStore'
 
 /**
  * Default credentials for the seeded Admin. A fresh browser always has this
@@ -42,6 +46,12 @@ export interface CreateManagedAccountInput {
   password: string
   role: AccountRole
   customPermissions: Permission[] | null
+}
+
+export interface CreateManagedRoleInput {
+  label: string
+  description: string
+  permissions: Permission[]
 }
 
 function browserContext() {
@@ -123,7 +133,25 @@ interface AuthState {
     actorId: string,
     id: string,
     password: string,
+    requireChange?: boolean,
   ) => Promise<{ account: Account } | { problems: FieldProblem[] }>
+  changeOwnPassword: (
+    accountId: string,
+    password: string,
+  ) => Promise<{ account: Account } | { problems: FieldProblem[] }>
+  createManagedRole: (
+    actorId: string,
+    input: CreateManagedRoleInput,
+  ) => { role: ManagedRole } | { problems: FieldProblem[] }
+  updateManagedRole: (
+    actorId: string,
+    roleId: AccountRole,
+    patch: Pick<ManagedRole, 'label' | 'description'>,
+  ) => { role: ManagedRole } | { problems: FieldProblem[] }
+  deleteManagedRole: (
+    actorId: string,
+    roleId: AccountRole,
+  ) => { roleId: AccountRole } | { problems: FieldProblem[] }
   updateManagedRolePermissions: (
     actorId: string,
     role: AccountRole,
@@ -172,13 +200,14 @@ function addAudit(
   action: string,
   affected?: Account,
   details?: string,
+  module = 'User Management',
 ) {
   useAdminStore.getState().addAuditLog({
     actorId: actor?.id ?? null,
     actorName: actor?.fullName ?? 'System Setup',
     actorUsername: actor?.username ?? 'system',
     action,
-    module: 'User Management',
+    module,
     affectedUserId: affected?.id,
     affectedUserName: affected?.fullName,
     details,
@@ -233,6 +262,15 @@ export const useAuthStore = create<AuthState>()(
           get().currentAccountId,
         )
         if (!isActiveAdmin(actor)) return { problems: authorizationProblem }
+        const knownRole =
+          (ACCOUNT_ROLES.some((role) => role.id === input.role) &&
+            !useAdminStore.getState().removedRoleIds.includes(input.role)) ||
+          useAdminStore.getState().customRoles.some((role) => role.id === input.role)
+        if (!knownRole) {
+          return {
+            problems: [{ field: 'form', message: 'Select a role that exists in Roles & Permissions.' }],
+          }
+        }
 
         const firstName = input.firstName.trim()
         const lastName = input.lastName.trim()
@@ -286,6 +324,7 @@ export const useAuthStore = create<AuthState>()(
           role: input.role,
           status: 'active',
           customPermissions: input.customPermissions,
+          mustChangePassword: true,
           createdAt: new Date().toISOString(),
         }
         set((state) => ({ accounts: [...state.accounts, account] }))
@@ -309,6 +348,15 @@ export const useAuthStore = create<AuthState>()(
 
         const nextRole = patch.role ?? account.role
         const nextStatus = patch.status ?? account.status ?? 'active'
+        const roleExists =
+          (ACCOUNT_ROLES.some((role) => role.id === nextRole) &&
+            !useAdminStore.getState().removedRoleIds.includes(nextRole)) ||
+          useAdminStore.getState().customRoles.some((role) => role.id === nextRole)
+        if (!roleExists) {
+          return {
+            problems: [{ field: 'form', message: 'Select a role that currently exists.' }],
+          }
+        }
         if (
           nextStatus !== 'active' &&
           nextStatus !== (account.status ?? 'active') &&
@@ -397,12 +445,10 @@ export const useAuthStore = create<AuthState>()(
           .join(', ')
         const oldPermissions =
           account.customPermissions ??
-          useAdminStore.getState().rolePermissions[account.role] ??
-          DEFAULT_ROLE_PERMISSIONS[account.role]
+          rolePermissionsFor(account.role, useAdminStore.getState().rolePermissions)
         const newPermissions =
           updated.customPermissions ??
-          useAdminStore.getState().rolePermissions[updated.role] ??
-          DEFAULT_ROLE_PERMISSIONS[updated.role]
+          rolePermissionsFor(updated.role, useAdminStore.getState().rolePermissions)
         const permissionChanges =
           patch.customPermissions === undefined && patch.role === undefined
             ? ''
@@ -428,7 +474,7 @@ export const useAuthStore = create<AuthState>()(
         return { account: updated }
       },
 
-      resetManagedPassword: async (actorId, id, password) => {
+      resetManagedPassword: async (actorId, id, password, requireChange = true) => {
         const actor = actorAccount(
           get().accounts,
           actorId,
@@ -446,7 +492,13 @@ export const useAuthStore = create<AuthState>()(
           }
         }
         const { passwordHash, passwordSalt, hashAlgo } = await hashPassword(password)
-        const updated = { ...account, passwordHash, passwordSalt, hashAlgo }
+        const updated = {
+          ...account,
+          passwordHash,
+          passwordSalt,
+          hashAlgo,
+          mustChangePassword: requireChange,
+        }
         set((state) => ({
           accounts: state.accounts.map((candidate) =>
             candidate.id === id ? updated : candidate,
@@ -456,8 +508,146 @@ export const useAuthStore = create<AuthState>()(
             : {}),
         }))
         useAdminStore.getState().endUserSessions(id)
-        addAudit(actor, 'Reset User Password', updated)
+        addAudit(
+          actor,
+          'Reset User Password',
+          updated,
+          requireChange
+            ? 'Temporary password set; change required at next sign-in.'
+            : 'Password set as permanent; no change required at next sign-in.',
+        )
         return { account: updated }
+      },
+
+      changeOwnPassword: async (accountId, password) => {
+        const account = get().accounts.find((candidate) => candidate.id === accountId)
+        if (
+          accountId !== get().currentAccountId ||
+          !account ||
+          (account.status ?? 'active') !== 'active'
+        ) {
+          return {
+            problems: [{ field: 'form', message: 'Sign in to change this account password.' }],
+          }
+        }
+        const passwordProblem = validatePassword(password)
+        if (passwordProblem) {
+          return { problems: [{ field: 'password', message: passwordProblem }] }
+        }
+        const { passwordHash, passwordSalt, hashAlgo } = await hashPassword(password)
+        const updated = {
+          ...account,
+          passwordHash,
+          passwordSalt,
+          hashAlgo,
+          mustChangePassword: false,
+        }
+        set((state) => ({
+          accounts: state.accounts.map((candidate) =>
+            candidate.id === accountId ? updated : candidate,
+          ),
+        }))
+        addAudit(account, 'Changed Account Password', account)
+        return { account: updated }
+      },
+
+      createManagedRole: (actorId, input) => {
+        const actor = actorAccount(get().accounts, actorId, get().currentAccountId)
+        if (!isActiveAdmin(actor)) return { problems: authorizationProblem }
+        const label = input.label.trim()
+        const description = input.description.trim()
+        if (!label || label.length > 48) {
+          return {
+            problems: [{ field: 'form', message: 'Enter a role name up to 48 characters.' }],
+          }
+        }
+        const roles = [
+          ...ACCOUNT_ROLES,
+          ...useAdminStore.getState().customRoles,
+        ]
+        if (roles.some((role) => role.label.toLowerCase() === label.toLowerCase())) {
+          return {
+            problems: [{ field: 'form', message: 'A role with that name already exists.' }],
+          }
+        }
+        if (description.length > 160) {
+          return {
+            problems: [{ field: 'form', message: 'Keep the role description under 160 characters.' }],
+          }
+        }
+        const role: ManagedRole = {
+          id: `custom-${nanoid()}`,
+          label,
+          description,
+        }
+        useAdminStore.getState().addCustomRole(role, input.permissions)
+        addAudit(actor, 'Created Role', undefined, `Role: ${label}`, 'Roles & Permissions')
+        return { role }
+      },
+
+      updateManagedRole: (actorId, roleId, patch) => {
+        const actor = actorAccount(get().accounts, actorId, get().currentAccountId)
+        if (!isActiveAdmin(actor)) return { problems: authorizationProblem }
+        const role = useAdminStore.getState().customRoles.find((item) => item.id === roleId)
+        if (!role) {
+          return {
+            problems: [{ field: 'form', message: 'Only custom roles can be edited here.' }],
+          }
+        }
+        const label = patch.label.trim()
+        const description = patch.description.trim()
+        if (!label || label.length > 48) {
+          return {
+            problems: [{ field: 'form', message: 'Enter a role name up to 48 characters.' }],
+          }
+        }
+        if (description.length > 160) {
+          return {
+            problems: [{ field: 'form', message: 'Keep the role description under 160 characters.' }],
+          }
+        }
+        if (
+          [...ACCOUNT_ROLES, ...useAdminStore.getState().customRoles].some(
+            (item) =>
+              item.id !== roleId && item.label.toLowerCase() === label.toLowerCase(),
+          )
+        ) {
+          return {
+            problems: [{ field: 'form', message: 'A role with that name already exists.' }],
+          }
+        }
+        const updated = { ...role, label, description }
+        useAdminStore.getState().updateCustomRole(updated)
+        addAudit(actor, 'Updated Role', undefined, `Role: ${label}`, 'Roles & Permissions')
+        return { role: updated }
+      },
+
+      deleteManagedRole: (actorId, roleId) => {
+        const actor = actorAccount(get().accounts, actorId, get().currentAccountId)
+        if (!isActiveAdmin(actor)) return { problems: authorizationProblem }
+        if (roleId === 'admin') {
+          return {
+            problems: [{ field: 'form', message: 'The Admin role cannot be deleted.' }],
+          }
+        }
+        const adminState = useAdminStore.getState()
+        const role = [...ACCOUNT_ROLES, ...adminState.customRoles].find(
+          (item) =>
+            item.id === roleId && !adminState.removedRoleIds.includes(item.id),
+        )
+        if (!role) {
+          return {
+            problems: [{ field: 'form', message: 'The selected role no longer exists.' }],
+          }
+        }
+        if (get().accounts.some((account) => account.role === roleId)) {
+          return {
+            problems: [{ field: 'form', message: 'Reassign all users before deleting this role.' }],
+          }
+        }
+        adminState.removeRole(roleId)
+        addAudit(actor, 'Deleted Role', undefined, `Role: ${role.label}`, 'Roles & Permissions')
+        return { roleId }
       },
 
       updateManagedRolePermissions: (actorId, role, permissions) => {
@@ -477,13 +667,19 @@ export const useAuthStore = create<AuthState>()(
             ],
           }
         }
-        const previous =
-          useAdminStore.getState().rolePermissions[role] ??
-          DEFAULT_ROLE_PERMISSIONS[role]
+        const roleExists =
+          (ACCOUNT_ROLES.some((item) => item.id === role) &&
+            !useAdminStore.getState().removedRoleIds.includes(role)) ||
+          useAdminStore.getState().customRoles.some((item) => item.id === role)
+        if (!roleExists) {
+          return {
+            problems: [{ field: 'form', message: 'The selected role no longer exists.' }],
+          }
+        }
+        const previous = rolePermissionsFor(role, useAdminStore.getState().rolePermissions)
         useAdminStore.getState().updateRolePermissions(role, permissions)
         const next =
-          useAdminStore.getState().rolePermissions[role] ??
-          DEFAULT_ROLE_PERMISSIONS[role]
+          rolePermissionsFor(role, useAdminStore.getState().rolePermissions)
         const added = next.filter((permission) => !previous.includes(permission))
         const removed = previous.filter((permission) => !next.includes(permission))
         useAdminStore.getState().addAuditLog({
@@ -648,9 +844,7 @@ export const useAuthStore = create<AuthState>()(
       version: 2,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as {
-          accounts?: (Omit<Account, 'role'> & {
-            role: AccountRole | 'member'
-          })[]
+          accounts?: Account[]
           currentAccountId?: string | null
           activeSessionId?: string | null
         }
@@ -659,7 +853,6 @@ export const useAuthStore = create<AuthState>()(
           accounts: Array.isArray(state.accounts)
             ? state.accounts.map((account) => ({
                 ...account,
-                role: account.role === 'member' ? 'viewer' : account.role,
                 status: account.status ?? ('active' satisfies AccountStatus),
                 ...nameParts(account),
               }))

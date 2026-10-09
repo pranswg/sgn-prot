@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { VoicePosition } from '@/core/types/suguan'
 import {
   buildServiceHeading,
   categoryLabel,
@@ -8,6 +9,11 @@ import {
   organistPrivilegeLabel,
   servicesFromCategories,
 } from './organistaSuguanService.ts'
+
+const VOICES: VoicePosition[] = [
+  { id: 'soprano-1', name: 'Soprano 1', shortName: 'S1', gender: 'female' },
+  { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
+]
 import { DEFAULT_SCHEDULE_CATEGORIES } from '@/core/constants/worshipSchedules'
 
 test('category label names the two worship blocks', () => {
@@ -86,18 +92,21 @@ test('memberSubtitle joins voice and privilege, omitting each when absent', () =
   assert.equal(
     memberSubtitle(
       { membershipType: 'organista', positions: [], voicePosition: 'soprano-1' },
+      VOICES,
     ),
     'Soprano 1 · Organista',
   )
   assert.equal(
     memberSubtitle(
       { membershipType: 'organista', positions: [], voicePosition: '' },
+      VOICES,
     ),
     'Organista',
   )
   assert.equal(
     memberSubtitle(
       { membershipType: 'regular', positions: ['organista'], voicePosition: 'tenor' },
+      VOICES,
     ),
     'Tenor · Organista',
   )
@@ -107,6 +116,7 @@ test('memberSubtitle hides the placeholder voice for unassigned voices', () => {
   assert.equal(
     memberSubtitle(
       { membershipType: 'organista', positions: [], voicePosition: 'unassigned' },
+      VOICES,
     ),
     'Organista',
   )

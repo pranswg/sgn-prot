@@ -67,7 +67,7 @@ export function DashboardPage() {
   ]
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex w-full min-w-0 flex-col gap-4">
       <PageHeader
         title="Dashboard"
         description="Overview of the choir's current state."
@@ -85,14 +85,14 @@ export function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {stats.map((s) => (
           <button
             key={s.label}
             type="button"
             onClick={s.go}
             aria-label={`${s.label}: ${s.value}. Go to ${s.label}`}
-            className="pressable group cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
+            className="pressable group min-w-0 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
           >
             <Card className="h-full transition-colors group-hover:bg-accent/40 group-hover:shadow-md">
               <CardContent className="flex items-center gap-3 p-4">
@@ -109,7 +109,7 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid w-full min-w-0 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>Upcoming Suguan</CardTitle>

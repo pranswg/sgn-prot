@@ -140,7 +140,7 @@ migration function. **UI-only changes must not change a persisted shape.**
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
 | `authStore.ts` | `choir-auth` | 2 |
 | `sidebarStore.ts` | `sidebarExpanded` | 1 |
-| `navStore.ts` | not persisted | — |
+| `navStore.ts` | `choir-nav` | 1 |
 
 **The repo must stay data-free.** Everything the user types — locale congregation
 name, worship schedules, service types, members, Suguan records, accounts —
@@ -159,7 +159,8 @@ roles, and voice positions. Each stored item carries `custom: boolean`; entries
 without it came from constants and are labelled `(standard)` in the UI. If you
 add a field, bump the store `version` and extend its `migrate`.
 
-`navStore` is UI state only and is not persisted, but it is **not** free to
+`navStore` persists only `page`, `selectedSuguanId`, and `previousPage`, so a
+reload returns the user to the screen they were on. It is **not** free to
 change. There is no router, so `page` is the entire navigation model, and the
 "start a new Suguan" dialog depends on it:
 
@@ -176,6 +177,11 @@ change. There is no router, so `page` is the entire navigation model, and the
   fires later and yanks the user away from a builder they are working in.
 - `editSuguanInBuilder` deliberately leaves it `null`: editing a saved Suguan
   opens no dialog, so there is nothing to dismiss.
+- The one-shot flags (`directoryStart`, `selectedHistoryMemberId`,
+  `builderReturnPage`) and `builderSuguanId` are deliberately **not** persisted,
+  so a reload cannot re-open a dialog or replay a filtered directory. The
+  rehydrate `merge` also drops a persisted `suguan-builder` page to the dashboard,
+  because the builder's draft is in-memory and would come back empty.
 
 `StartModeDialog` receives the whole `suguan` list just to populate its copy
 list, and it is not keyed by page, so `SuguanBuilderPage` resets `startOpen`

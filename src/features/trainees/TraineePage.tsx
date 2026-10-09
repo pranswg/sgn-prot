@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   ArrowUpRight,
+  FileDown,
   GraduationCap,
   Mars,
   Pencil,
@@ -52,8 +53,10 @@ import {
 } from '@/components/StatusBadges'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { usePermissions } from '@/hooks/usePermissions'
 import { TraineeFormDialog } from './TraineeFormDialog'
 import { TraineeFormSheet } from './TraineeFormSheet'
+import { AttendanceSheetDialog } from './AttendanceSheetDialog'
 
 /** Matches the Master List table header styling. */
 const headClass =
@@ -72,10 +75,14 @@ const CHOIR_SEGMENTS = [
 
 export function TraineePage() {
   const isMobile = useIsMobile()
+  const { can } = usePermissions()
   const trainees = useMemberStore((s) => s.trainees)
   const promoteTrainee = useMemberStore((s) => s.promoteTrainee)
   const removeTrainee = useMemberStore((s) => s.removeTrainee)
+  const masterListMembers = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const localeName = useSettingsStore((s) => s.localeName)
+  const dutyRoles = useSettingsStore((s) => s.allDutyRoles())
   const voices = allVoices()
 
   const [query, setQuery] = useState('')
@@ -85,6 +92,7 @@ export function TraineePage() {
   )
 
   const [formOpen, setFormOpen] = useState(false)
+  const [attendanceOpen, setAttendanceOpen] = useState(false)
   const [editing, setEditing] = useState<Trainee | null>(null)
   const [promoteTarget, setPromoteTarget] = useState<Trainee | null>(null)
   const [removeTarget, setRemoveTarget] = useState<Trainee | null>(null)
@@ -169,16 +177,28 @@ export function TraineePage() {
             of {activeTrainees.length} trainees
           </p>
         </div>
-        <Button
-          className="shrink-0"
-          onClick={() => {
-            setEditing(null)
-            setFormOpen(true)
-          }}
-        >
-          <Plus className="size-4" />
-          Add Trainee
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          {can('export-documents') && (
+            <Button
+              variant="outline"
+              className="w-full shrink-0 sm:w-auto"
+              onClick={() => setAttendanceOpen(true)}
+            >
+              <FileDown className="size-4" />
+              Generate Attendance Sheet
+            </Button>
+          )}
+          <Button
+            className="w-full shrink-0 sm:w-auto"
+            onClick={() => {
+              setEditing(null)
+              setFormOpen(true)
+            }}
+          >
+            <Plus className="size-4" />
+            Add Trainee
+          </Button>
+        </div>
       </div>
 
       {/* Search & filter toolbar, styled like the Master List toolbar and
@@ -499,6 +519,15 @@ export function TraineePage() {
           trainee={editing}
         />
       )}
+
+      <AttendanceSheetDialog
+        open={attendanceOpen}
+        onOpenChange={setAttendanceOpen}
+        trainees={activeTrainees}
+        members={masterListMembers}
+        dutyRoles={dutyRoles}
+        localeName={localeName}
+      />
 
       <AlertDialog open={!!promoteTarget} onOpenChange={(o) => !o && setPromoteTarget(null)}>
         <AlertDialogContent>

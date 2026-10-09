@@ -93,7 +93,7 @@ function LifecycleFields({
           placeholder={
             kind === 'transfer'
               ? 'e.g. transferred to Manila locale, attending another locale'
-              : 'e.g. returned after the transfer term ended'
+              : 'e.g. returning member to the locale'
           }
         />
       </div>

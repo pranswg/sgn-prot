@@ -386,13 +386,13 @@ export function hasActiveAdmin(accounts: Account[]): boolean {
 }
 
 /**
- * Only the initial setup account is an Admin; later users must be created by
- * an administrator and cannot be granted access through public registration.
+ * Only the initial setup account is an Admin. Later accounts need an
+ * Administrator-created role before they can receive system permissions.
  */
 export function roleForNewAccount(
   existingAccounts: Account[],
 ): AccountRole {
-  return existingAccounts.length === 0 ? 'admin' : 'viewer'
+  return existingAccounts.length === 0 ? 'admin' : ''
 }
 
 /** Two-letter fallback used by the header avatar. */

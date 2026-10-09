@@ -8,7 +8,7 @@ import {
   snapshotsEqual,
   type CollectionSnapshot,
 } from '@/lib/workspaceDiff'
-import { resolveHydrationMode } from '@/lib/workspaceHydration'
+import { resolveHydrationMode, resolveSettingHydration } from '@/lib/workspaceHydration'
 import type { Member, Trainee } from '@/core/types/member'
 import type { Suguan } from '@/core/types/suguan'
 import type { OrganistaSuguanRecord } from '@/core/types/organistaSuguan'
@@ -92,6 +92,13 @@ interface WorshipDoc {
   weekend: StoredWorshipSchedule[]
 }
 
+/** The empty settings document, used to clear a workspace after a factory reset. */
+function emptySetting(key: WorkspaceSetting): SettingsDoc | WorshipDoc {
+  return key === 'settings'
+    ? { serviceTypes: [], dutyRoles: [], voices: [], localeName: '', defaultServiceTypeId: null }
+    : { midweek: [], weekend: [] }
+}
+
 const collectionPending = new Map<
   WorkspaceCollection,
   { upserts: Map<string, { id: string }>; deletes: Set<string> }
@@ -108,6 +115,7 @@ let settingBindings: Array<SettingBinding<unknown>> = []
 
 let started = false
 let applyingRemote = false
+let workspaceInitialized = false
 let channel: RealtimeChannel | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let statusListener: WorkspaceStatusListener | null = null
@@ -166,6 +174,29 @@ async function fetchSetting<T>(key: WorkspaceSetting): Promise<T | null> {
     .maybeSingle()
   if (error) throw error
   return (data?.data as T) ?? null
+}
+
+/**
+ * Whether the workspace has ever been initialised. While false the first device
+ * may seed empty collections; the marker is flipped true once seeding is done or
+ * a workspace already holds data, after which the server always wins.
+ */
+async function fetchWorkspaceInitialized(): Promise<boolean> {
+  const { error, data } = await getSupabase()
+    .from('workspace_meta')
+    .select('initialized')
+    .eq('id', 1)
+    .maybeSingle()
+  if (error) throw error
+  return data?.initialized ?? false
+}
+
+function markWorkspaceInitialized(): void {
+  void getSupabase()
+    .rpc('mark_workspace_initialized')
+    .then(({ error }) => {
+      if (error) reportError(error)
+    })
 }
 
 function scheduleCollection(collection: WorkspaceCollection): void {
@@ -291,11 +322,12 @@ async function refreshFromServer(): Promise<void> {
     }
     for (const binding of settingBindings) {
       const value = await fetchSetting(binding.key)
-      if (value === null) continue
-      const json = JSON.stringify(value)
+      if (value === null && !workspaceInitialized) continue
+      const next = value ?? emptySetting(binding.key)
+      const json = JSON.stringify(next)
       if (json === settingSnapshots.get(binding.key)) continue
       settingSnapshots.set(binding.key, json)
-      binding.set(value)
+      binding.set(next)
     }
     reportOk()
   } catch (error) {
@@ -425,10 +457,19 @@ export async function hydrateWorkspace(onStatus?: WorkspaceStatusListener): Prom
 
   try {
     applyingRemote = true
+    let initialized = false
+    try {
+      initialized = await fetchWorkspaceInitialized()
+    } catch (error) {
+      reportError(error)
+      initialized = false
+    }
+    workspaceInitialized = initialized
+
     for (const binding of collectionBindings) {
       const remote = await fetchCollection(binding.collection)
       const local = binding.get()
-      if (resolveHydrationMode(remote.length, local.length) === 'seed') {
+      if (resolveHydrationMode(remote.length, local.length, initialized) === 'seed') {
         collectionSnapshots.set(binding.collection, snapshotCollection(local))
         await writeRecords(binding.collection, local, [])
       } else {
@@ -439,16 +480,26 @@ export async function hydrateWorkspace(onStatus?: WorkspaceStatusListener): Prom
 
     for (const binding of settingBindings) {
       const remote = await fetchSetting(binding.key)
-      if (remote === null) {
+      const mode = resolveSettingHydration(remote !== null, initialized)
+      if (mode === 'seed') {
         settingSnapshots.set(binding.key, JSON.stringify(binding.get()))
         const { error } = await getSupabase()
           .from('workspace_settings')
           .upsert({ key: binding.key, data: binding.get() as Json }, { onConflict: 'key' })
         if (error) throw error
+      } else if (mode === 'clear') {
+        const empty = emptySetting(binding.key)
+        settingSnapshots.set(binding.key, JSON.stringify(empty))
+        binding.set(empty)
       } else {
         settingSnapshots.set(binding.key, JSON.stringify(remote))
         binding.set(remote)
       }
+    }
+
+    if (!initialized) {
+      markWorkspaceInitialized()
+      workspaceInitialized = true
     }
   } catch (error) {
     applyingRemote = false
@@ -466,6 +517,38 @@ export async function hydrateWorkspace(onStatus?: WorkspaceStatusListener): Prom
 
   startRealtime()
   reportOk()
+}
+
+/**
+ * Empty every mirrored store without pushing the deletions back to the server.
+ * Used by the factory reset after `admin-reset-workspace` has already wiped the
+ * server: the local cache would otherwise re-upload itself.
+ */
+export function clearLocalWorkspace(): void {
+  applyingRemote = true
+  try {
+    useMemberStore.getState().clear()
+    useSuguanStore.getState().clear()
+    useOrganistaSuguanStore.getState().clear()
+    useKoroStore.getState().reset()
+    useAssignmentPresetStore.getState().clear()
+    useSettingsStore.getState().clear()
+    useWorshipScheduleStore.getState().resetToEmpty()
+
+    collectionPending.clear()
+    for (const timer of collectionTimers.values()) clearTimeout(timer)
+    collectionTimers.clear()
+    for (const timer of settingTimers.values()) clearTimeout(timer)
+    settingTimers.clear()
+    if (refreshTimer) {
+      clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
+    collectionSnapshots.clear()
+    settingSnapshots.clear()
+  } finally {
+    applyingRemote = false
+  }
 }
 
 /** Detach every subscription and timer. Safe to call when not started. */
@@ -491,4 +574,5 @@ export function stopWorkspaceSync(): void {
   applyingRemote = false
   statusListener = null
   started = false
+  workspaceInitialized = false
 }

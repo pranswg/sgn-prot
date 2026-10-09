@@ -33,6 +33,7 @@ import { exportFileName } from '@/lib/exportNaming'
 import { MobileSettingsHeader } from './MobileSettingsHeader'
 import { SettingsList } from './SettingsList'
 import { WorshipSchedulesCard } from './WorshipSchedulesCard'
+import { ResetWorkspaceCard } from './ResetWorkspaceCard'
 import { deriveAbbreviation } from './referenceList'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
@@ -466,6 +467,12 @@ export function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {isAdmin && (
+            <div className="mt-4">
+              <ResetWorkspaceCard />
+            </div>
+          )}
 
           <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
             <AlertDialogContent>

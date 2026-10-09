@@ -142,6 +142,7 @@ interface AuthState {
     password: string,
   ) => Promise<{ account: Account } | { problems: FieldProblem[] }>
   signOut: () => void
+  factoryReset: () => Promise<{ ok: true } | { problems: FieldProblem[] }>
   currentAccount: () => Account | null
   refresh: () => Promise<void>
   bootstrap: () => Promise<void>
@@ -258,6 +259,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ accounts: [], currentAccountId: null })
     useAdminStore.getState().clear()
     if (isSupabaseConfigured) void getSupabase().auth.signOut()
+  },
+
+  factoryReset: async () => {
+    if (!isSupabaseConfigured) return { problems: configProblem }
+    const { error } = await getSupabase().functions.invoke('admin-reset-workspace', {
+      body: {},
+    })
+    if (error) return { problems: [{ field: 'form', message: await functionErrorMessage(error) }] }
+    return { ok: true }
   },
 
   changeOwnPassword: async (password) => {

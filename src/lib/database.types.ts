@@ -211,6 +211,24 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_meta: {
+        Row: {
+          id: number
+          initialized: boolean
+          reset_at: string | null
+        }
+        Insert: {
+          id?: number
+          initialized?: boolean
+          reset_at?: string | null
+        }
+        Update: {
+          id?: number
+          initialized?: boolean
+          reset_at?: string | null
+        }
+        Relationships: []
+      }
       workspace_records: {
         Row: {
           collection: string
@@ -297,11 +315,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_workspace_initialized: { Args: never; Returns: undefined }
       record_login: { Args: { p_device?: string }; Returns: undefined }
       record_login_failed: {
         Args: { p_device?: string; p_username: string }
         Returns: undefined
       }
+      reset_workspace: { Args: never; Returns: undefined }
       workspace_access: { Args: never; Returns: boolean }
     }
     Enums: {

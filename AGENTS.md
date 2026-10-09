@@ -174,13 +174,27 @@ the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
   `src/lib/workspaceDiff.ts`) and pushes only the changed rows/deletes, debounced
   350ms.
 - **The server wins on load.** Hydration replaces each store's contents with the
-  server's rows (`resolveHydrationMode` in `src/lib/workspaceHydration.ts`). To
-  keep the first upgrade from losing data, when a collection is **empty on the
-  server** and non-empty in the browser, the browser's rows are seeded up once.
-  There is no automatic merge: two devices that each held offline edits do not
-  reconcile, the later hydrate simply overwrites. The recovery path is the
-  Settings **"Upload This Browser's Data"** button, which replaces the server's
-  copy with this browser's (`uploadWorkspaceToServer`).
+  server's rows (`resolveHydrationMode` / `resolveSettingHydration` in
+  `src/lib/workspaceHydration.ts`). Seeding the browser's rows up is gated on the
+  workspace-wide `workspace_meta.initialized` marker, which is **false only before
+  the workspace has ever been initialised**. While it is false, a collection that
+  is **empty on the server** and non-empty in the browser is pushed up once (the
+  first-upgrade path); the client then calls `mark_workspace_initialized()`.
+  Once the marker is true the server always wins, so a stale device cannot seed
+  wiped data back. There is no automatic merge: two devices that each held offline
+  edits do not reconcile, the later hydrate simply overwrites. The recovery path
+  is the Settings **"Upload This Browser's Data"** button, which replaces the
+  server's copy with this browser's (`uploadWorkspaceToServer`).
+- **Factory reset.** Settings → Data Management → Factory Reset (Admin only) calls
+  the `admin-reset-workspace` Edge Function, which runs `reset_workspace()`
+  (`20261009090600_workspace_meta.sql`) to delete every `workspace_records` and
+  `workspace_settings` row plus `audit_logs` and `login_events`, then deletes every
+  auth user and recreates the default `admin`/`admin1234` with a forced password
+  change. It leaves `initialized = true`, so no device re-seeds. The client then
+  calls `clearLocalWorkspace()` (which empties every store behind the
+  `applyingRemote` guard so nothing is pushed) and signs out. The migration
+  back-fills `initialized = true` for an already-populated workspace, closing the
+  re-seed window on deploy.
 - **Live across devices via Realtime.** `workspaceSync` subscribes to
   `postgres_changes` on both tables (published by
   `20261009090500_workspace_realtime.sql`) and re-reads on a remote change, with
@@ -214,6 +228,12 @@ the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
 - Collection names are `members`, `trainees`, `suguan-records`,
   `organista-suguan-records`, `koro-documents`, `assignment-presets`; setting keys
   are `settings` and `worship-schedules`. The string must match on both sides.
+- **Koro starts empty and can be emptied.** `koroStore` no longer fabricates a
+  blank document: its initial state and `reset()` are `documents: []`, and
+  `KoroMakerPage` renders a "No Koro yet" empty state (its New Koro button calls
+  `createDocument`) instead of returning `null`. `deleteDocument` may leave the
+  list empty. Do not reintroduce an auto-created document, or a factory reset
+  would resurrect a placeholder.
 - Under `node:test` `isSupabaseConfigured` is false, so hydration and the sync
   subscriptions do nothing; the pure diff logic is covered by
   `src/lib/workspaceDiff.test.ts` and the seed-vs-hydrate decision by
@@ -626,10 +646,12 @@ exists), and only if the user asked for the change.
   dashes into spaces, so `BALIK-TUNGKULIN` is stored as `Balik Tungkulin`.
 - **Excel import reads only the first worksheet.** There is no sheet picker.
 - **Workspace sync has no automatic merge.** The server wins on hydrate; the
-  browser only seeds a collection that is empty on the server. Two devices that
-  each edited offline do not reconcile — the later hydrate overwrites. The only
-  recovery is the Settings "Upload This Browser's Data" button. Do not add
-  clock-based or field-level merging without asking.
+  browser only seeds a collection that is empty on the server **and only while
+  `workspace_meta.initialized` is false** (before first setup, or before a factory
+  reset has ever run). Two devices that each edited offline do not reconcile — the
+  later hydrate overwrites. The only recovery is the Settings "Upload This
+  Browser's Data" button. Do not add clock-based or field-level merging without
+  asking.
 - **A forced password change is enforced server-side.**
   `workspace_access()` returns true only when the profile is active **and**
   `must_change_password = false`, and every workspace read/write and

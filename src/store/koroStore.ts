@@ -10,15 +10,15 @@ interface KoroState {
   selectDocument: (id: string) => void
   updateDocument: (id: string, patch: Partial<Omit<KoroDocument, 'id'>>) => void
   deleteDocument: (id: string) => void
+  reset: () => void
 }
 
 export const useKoroStore = create<KoroState>()(
   persist(
     (set, get) => {
-      const initialDocument = createKoroDocument()
       return {
-        documents: [initialDocument],
-        activeDocumentId: initialDocument.id,
+        documents: [],
+        activeDocumentId: '',
 
         createDocument: () => {
           const document = createKoroDocument()
@@ -48,14 +48,17 @@ export const useKoroStore = create<KoroState>()(
         deleteDocument: (id) => {
           set((state) => {
             const documents = state.documents.filter((document) => document.id !== id)
-            const replacement = documents[0] ?? createKoroDocument()
             return {
-              documents: documents.length > 0 ? documents : [replacement],
+              documents,
               activeDocumentId:
-                state.activeDocumentId === id ? replacement.id : state.activeDocumentId,
+                state.activeDocumentId === id
+                  ? documents[0]?.id ?? ''
+                  : state.activeDocumentId,
             }
           })
         },
+
+        reset: () => set({ documents: [], activeDocumentId: '' }),
       }
     },
     {
@@ -64,16 +67,12 @@ export const useKoroStore = create<KoroState>()(
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<KoroState>
         const documents = Array.isArray(state.documents) ? state.documents : []
-        const initial = documents[0] ?? createKoroDocument()
         const activeDocumentId = documents.some(
           (document) => document.id === state.activeDocumentId,
         )
           ? state.activeDocumentId!
-          : initial.id
-        return {
-          documents: documents.length > 0 ? documents : [initial],
-          activeDocumentId,
-        }
+          : documents[0]?.id ?? ''
+        return { documents, activeDocumentId }
       },
     },
   ),

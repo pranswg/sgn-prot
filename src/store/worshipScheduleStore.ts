@@ -46,6 +46,8 @@ interface WorshipScheduleState {
     weekend?: StoredWorshipSchedule[],
   ) => void
   clear: () => void
+  /** Empty every category. Used by the factory reset, unlike `clear` which reseeds. */
+  resetToEmpty: () => void
 }
 
 const seed = (): Pick<WorshipScheduleState, 'midweek' | 'weekend'> => ({
@@ -124,6 +126,8 @@ export const useWorshipScheduleStore = create<WorshipScheduleState>()(
         })),
 
       clear: () => set(seed()),
+
+      resetToEmpty: () => set({ midweek: [], weekend: [] }),
     }),
     {
       name: 'choir-worship-schedules',

@@ -66,7 +66,31 @@ export function KoroMakerPage() {
       )
   }, [availableMembers, memberQuery, memberVoice, memberGender])
 
-  if (!document) return null
+  if (!document) {
+    return (
+      <div className="flex flex-col gap-5 pb-8">
+        <PageHeader
+          title="Koro Maker"
+          description="Arrange members by seat and voice color for special occasions."
+        />
+        <section className="grid place-items-center gap-4 rounded-xl border border-dashed border-border/70 bg-card px-6 py-16 text-center">
+          <div className="grid size-12 place-items-center rounded-full bg-secondary text-muted-foreground">
+            <Grid2X2 className="size-6" />
+          </div>
+          <div className="grid gap-1">
+            <h2 className="text-base font-semibold">No Koro yet</h2>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Create a Koro to arrange members by seat and voice color.
+            </p>
+          </div>
+          <Button onClick={createDocument}>
+            <Plus className="size-4" />
+            New Koro
+          </Button>
+        </section>
+      </div>
+    )
+  }
 
   const patchTable = (tableId: string, patch: Partial<KoroTable>) => {
     updateDocument(document.id, {
@@ -285,7 +309,6 @@ export function KoroMakerPage() {
             type="button"
             variant="outline"
             className="w-full"
-            disabled={documents.length <= 1}
             onClick={() => {
               if (window.confirm(`Delete "${document.title || 'Untitled Koro'}"?`)) {
                 deleteDocument(document.id)

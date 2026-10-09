@@ -26,6 +26,7 @@ import { GenderBadge } from '@/components/StatusBadges'
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { phtInstantISO } from '@/lib/phDate'
 import { exportFileName } from '@/lib/exportNaming'
@@ -65,7 +66,9 @@ export function SettingsPage() {
   const addAuditLog = useAdminStore((state) => state.addAuditLog)
 
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmUpload, setConfirmUpload] = useState(false)
   const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
+  const lastSyncedAt = useWorkspaceStore((state) => state.lastSyncedAt)
   const [masterListImportOpen, setMasterListImportOpen] = useState(false)
   const [masterListPdfOpen, setMasterListPdfOpen] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
@@ -365,9 +368,9 @@ export function SettingsPage() {
             <CardHeader>
               <CardTitle>Data Management</CardTitle>
               <CardDescription>
-                All data is stored in this browser via LocalStorage. Export a
-                backup to move data between devices, or to prepare for cloud
-                migration.
+                Data is shared through the choir workspace and cached in this
+                browser. Export a backup to keep an offline copy, or upload this
+                browser's data to replace the shared copy.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -390,6 +393,15 @@ export function SettingsPage() {
                 <Label className="font-normal">
                   {settingsStore.voices.length} voices
                 </Label>
+                {lastSyncedAt && (
+                  <Label className="font-normal">
+                    Last synced{' '}
+                    {new Date(lastSyncedAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Label>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {isAdmin && (
@@ -430,6 +442,13 @@ export function SettingsPage() {
                     e.target.value = ''
                   }}
                 />
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmUpload(true)}
+                >
+                  <Upload className="size-4" />
+                  Upload This Browser's Data
+                </Button>
                 <Button
                   variant="destructive"
                   onClick={() => setConfirmClear(true)}
@@ -500,6 +519,37 @@ export function SettingsPage() {
                   }}
                 >
                   Clear Master List
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog open={confirmUpload} onOpenChange={setConfirmUpload}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Upload this browser's data?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This replaces the shared workspace copy with what is stored in
+                  this browser. Data saved from other devices that is not here
+                  will be removed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    void useWorkspaceStore
+                      .getState()
+                      .uploadBrowserData()
+                      .then(() => toast.success('Workspace updated from this browser.'))
+                      .catch(() =>
+                        toast.error("Could not upload this browser's data."),
+                      )
+                  }}
+                >
+                  Upload
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

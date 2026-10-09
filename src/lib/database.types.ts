@@ -302,6 +302,7 @@ export type Database = {
         Args: { p_device?: string; p_username: string }
         Returns: undefined
       }
+      workspace_access: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

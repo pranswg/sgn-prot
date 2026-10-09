@@ -4,6 +4,7 @@ import {
   diffCollection,
   resolveBatch,
   snapshotCollection,
+  snapshotsEqual,
 } from '@/lib/workspaceDiff'
 
 interface Row {
@@ -65,3 +66,15 @@ test('resolveBatch lets a delete win over an upsert of the same id', () => {
   )
   assert.deepEqual(removed, ['a'])
 })
+
+test('snapshotsEqual compares ids and values, tolerating an absent snapshot', () => {
+  const a = snapshotCollection([{ id: '1', name: 'A' }])
+  assert.equal(snapshotsEqual(undefined, a), false)
+  assert.equal(snapshotsEqual(a, snapshotCollection([{ id: '1', name: 'A' }])), true)
+  assert.equal(snapshotsEqual(a, snapshotCollection([{ id: '1', name: 'B' }])), false)
+  assert.equal(
+    snapshotsEqual(a, snapshotCollection([{ id: '1', name: 'A' }, { id: '2', name: 'B' }])),
+    false,
+  )
+})
+

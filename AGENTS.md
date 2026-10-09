@@ -31,9 +31,10 @@ extensionless relative imports. Two consequences:
 Test files that exist, all pure-logic: `suguanDates.test.ts`,
 `suguanExport.test.ts`, `spreadsheetImport.test.ts`, `rosterImport.test.ts`,
 `memberDirectory.test.ts`, `format.test.ts`, `credentials.test.ts`,
-`accountMapping.test.ts`, `workspaceDiff.test.ts`, `sidebarNav.test.ts`,
-`reorderList.test.ts`, `navStore.test.ts`, and
-`features/settings/referenceList.test.ts`. When you add a pure function worth protecting, add cases next to it rather than leaving
+`accountMapping.test.ts`, `workspaceDiff.test.ts`, `workspaceHydration.test.ts`,
+`sidebarNav.test.ts`, `reorderList.test.ts`, `navStore.test.ts`,
+`authStore.test.ts`, and `features/settings/referenceList.test.ts`. When you add
+a pure function worth protecting, add cases next to it rather than leaving
 behaviour implicit.
 
 `tsconfig.app.json` enables `noUnusedLocals` and `noUnusedParameters`, so a
@@ -173,10 +174,24 @@ the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
   `src/lib/workspaceDiff.ts`) and pushes only the changed rows/deletes, debounced
   350ms.
 - **The server wins on load.** Hydration replaces each store's contents with the
-  server's rows. To keep the first upgrade from losing data, when a collection is
-  **empty on the server** and non-empty in the browser, the browser's rows are
-  seeded up once. There is no merge: two devices that each held offline edits do
-  not reconcile, the later hydrate simply overwrites.
+  server's rows (`resolveHydrationMode` in `src/lib/workspaceHydration.ts`). To
+  keep the first upgrade from losing data, when a collection is **empty on the
+  server** and non-empty in the browser, the browser's rows are seeded up once.
+  There is no automatic merge: two devices that each held offline edits do not
+  reconcile, the later hydrate simply overwrites. The recovery path is the
+  Settings **"Upload This Browser's Data"** button, which replaces the server's
+  copy with this browser's (`uploadWorkspaceToServer`).
+- **Live across devices via Realtime.** `workspaceSync` subscribes to
+  `postgres_changes` on both tables (published by
+  `20261009090500_workspace_realtime.sql`) and re-reads on a remote change, with
+  an `applyingRemote` guard so the apply does not echo back out and a skip when
+  the browser has a write still queued. Content that already matches is left
+  untouched, so our own writes' echo causes no churn.
+- **A failed write surfaces, it does not swallow.** Flushes report through
+  `useWorkspaceStore` (`error` / `lastSyncedAt`), and
+  `src/components/WorkspaceSyncToast.tsx` shows a persistent retry toast. Its
+  Retry action calls `uploadBrowserData`, which re-pushes the current state and
+  clears the error.
 - **Rows are whole JSON documents.** Postgres owns identity (`id`), tenancy, and
   access; the client owns the document shape. `workspace_records(id, collection,
   data jsonb)` holds the collections, `workspace_settings(key, data jsonb)` holds
@@ -186,6 +201,13 @@ the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
   binding in `hydrateWorkspace`, add a `can_read_collection` / `can_write_collection`
   branch in `supabase/migrations/**`, and set the store field in the binding's
   `set`. Forget the SQL branch and reads fail closed (empty) rather than error.
+- **A forced password change blocks workspace access server-side.** Every
+  read/write predicate goes through `workspace_access()`
+  (`20261009090400_workspace_access.sql`), which is true only when the profile is
+  active **and** `must_change_password = false`. `App.tsx` therefore hydrates
+  only when `!mustChangePassword`; hydrating earlier would read empty. It is
+  separate from `is_active_user()` so the change-password screen can still read
+  its own profile.
 - **Sign-out tears the mirror down.** `App.tsx` calls
   `useWorkspaceStore.reset()` → `stopWorkspaceSync()` when `currentAccountId`
   clears, so no write fires without a session.
@@ -194,7 +216,8 @@ the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
   are `settings` and `worship-schedules`. The string must match on both sides.
 - Under `node:test` `isSupabaseConfigured` is false, so hydration and the sync
   subscriptions do nothing; the pure diff logic is covered by
-  `src/lib/workspaceDiff.test.ts`.
+  `src/lib/workspaceDiff.test.ts` and the seed-vs-hydrate decision by
+  `src/lib/workspaceHydration.test.ts`.
 
 `settingsStore` holds the three editable reference lists: service types, duty
 roles, and voice positions. Each stored item carries `custom: boolean`; entries
@@ -411,9 +434,11 @@ source of truth; regenerate `src/lib/database.types.ts` after changing them.
 
 - **Auth.** A username maps to a synthetic email `<username>@choir.internal`
   (`usernameToEmail` in `src/lib/accountMapping.ts`). Supabase Auth stores and
-  verifies passwords, so the client never hashes for login. The app's own
-  PBKDF2 code in `src/lib/credentials.ts` now backs only the offline-era
-  validation helpers, not sign-in.
+  verifies passwords, so the client never hashes. `src/lib/credentials.ts` now
+  holds only the pure form helpers (`validatePassword`,
+  `passwordStrengthProblems`, `initialsFor`), which the sign-in and
+  change-password screens still use. The hosted Auth password minimum must stay
+  at 8 to match `validatePassword` (set in `supabase/config.toml`).
 - **Profiles and roles.** `profiles` plus `roles` / `role_permissions` drive
   access. `authStore` and `adminStore` are non-persisted read-mirrors with the
   same shapes the old stores exposed; `refresh()` reads `profiles` (RLS shows a
@@ -444,6 +469,13 @@ Rules if you touch it:
   failure, or the app strands on the splash with no sign-in screen.
 - The service-role key is server-only, in Edge Function secrets. Never put it,
   or any secret, into a `VITE_` variable.
+- **`supabase config push` can silently disable Email sign-in.** The Email
+  provider is not representable in `supabase/config.toml`, so a push has flipped
+  `external_email_enabled` to `false`, which makes every sign-in fail with
+  `email_provider_disabled`. After any config push, re-enable Authentication →
+  Providers → Email (or `PATCH /v1/projects/{ref}/config/auth` with
+  `external_email_enabled: true`). Password minimum stays 8 to match
+  `validatePassword`.
 
 ## Feature map
 
@@ -570,8 +602,9 @@ inside the `onExport` handler) so the two dialogs are never open at once.
 
 ## Known limitations worth knowing before you "fix" them
 
-These are pinned by tests that assert current behaviour. Change the code only if
-you also update the test, and only if the user asked for the change.
+These are either pinned by tests that assert current behaviour or deliberate
+design choices. Change the code only if you also update the test (where one
+exists), and only if the user asked for the change.
 
 - **Roster PDF: leader rows with a banned role marker are dropped.**
   `looksLikeName` rejects any line containing a `BANNED_NAME_TOKENS` entry, and
@@ -592,3 +625,19 @@ you also update the test, and only if the user asked for the change.
 - **Roster notes flatten punctuation.** `cleanNote` turns hyphens and en/em
   dashes into spaces, so `BALIK-TUNGKULIN` is stored as `Balik Tungkulin`.
 - **Excel import reads only the first worksheet.** There is no sheet picker.
+- **Workspace sync has no automatic merge.** The server wins on hydrate; the
+  browser only seeds a collection that is empty on the server. Two devices that
+  each edited offline do not reconcile — the later hydrate overwrites. The only
+  recovery is the Settings "Upload This Browser's Data" button. Do not add
+  clock-based or field-level merging without asking.
+- **A forced password change is enforced server-side.**
+  `workspace_access()` returns true only when the profile is active **and**
+  `must_change_password = false`, and every workspace read/write and
+  `workspace_settings` policy goes through it. It is deliberately not part of
+  `is_active_user()`, because the change-password screen must still read its own
+  profile. Hydration is gated on `!mustChangePassword` in `App.tsx`; the effect
+  re-runs when the flag flips, so the workspace loads right after the change.
+- **Realtime is a notification, not a row apply.** A `postgres_changes` event
+  triggers a full re-read of every collection (`refreshFromServer`), guarded by
+  `applyingRemote` and deferred while a local write is still queued. Do not apply
+  the payload's row directly — the whole-JSON-document model assumes a re-read.

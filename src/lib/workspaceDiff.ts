@@ -46,9 +46,21 @@ export function diffCollection<T extends { id: string }>(
   return { diff: { upserts, deletes }, snapshot }
 }
 
+/** True when two snapshots describe the same ids and values. */
+export function snapshotsEqual(
+  a: CollectionSnapshot | undefined,
+  b: CollectionSnapshot,
+): boolean {
+  if (!a || a.size !== b.size) return false
+  for (const [id, json] of a) {
+    if (b.get(id) !== json) return false
+  }
+  return true
+}
+
 /**
  * Resolve a queued batch: a delete always wins over an upsert of the same id,
- * so a record created and removed between two flushes is only deleted.
+ * so a record created and removed between flushes is only a delete.
  */
 export function resolveBatch<T extends { id: string }>(
   upserts: Map<string, T>,

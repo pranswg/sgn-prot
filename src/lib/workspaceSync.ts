@@ -1,6 +1,14 @@
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Json } from '@/lib/database.types'
-import { diffCollection, resolveBatch, type CollectionSnapshot } from '@/lib/workspaceDiff'
+import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import {
+  diffCollection,
+  resolveBatch,
+  snapshotCollection,
+  snapshotsEqual,
+  type CollectionSnapshot,
+} from '@/lib/workspaceDiff'
+import { resolveHydrationMode } from '@/lib/workspaceHydration'
 import type { Member, Trainee } from '@/core/types/member'
 import type { Suguan } from '@/core/types/suguan'
 import type { OrganistaSuguanRecord } from '@/core/types/organistaSuguan'
@@ -31,7 +39,10 @@ import {
  * pushed up once, which is how existing local data moves into the cloud.
  *
  * Writes are coalesced per collection and pushed as a small diff. A delete
- * always wins over an upsert of the same id within a batch.
+ * always wins over an upsert of the same id within a batch. A Realtime
+ * subscription refreshes from the server when another device writes, and
+ * `uploadWorkspaceToServer` lets the user deliberately replace the server copy
+ * with this browser's.
  */
 
 export type WorkspaceCollection =
@@ -43,6 +54,13 @@ export type WorkspaceCollection =
   | 'assignment-presets'
 
 export type WorkspaceSetting = 'settings' | 'worship-schedules'
+
+export interface WorkspaceSyncStatus {
+  ok: boolean
+  error?: string
+}
+
+export type WorkspaceStatusListener = (status: WorkspaceSyncStatus) => void
 
 /** Debounce window for pushing a batch of changes, in milliseconds. */
 const FLUSH_DELAY = 350
@@ -82,7 +100,73 @@ const collectionTimers = new Map<WorkspaceCollection, ReturnType<typeof setTimeo
 const settingTimers = new Map<WorkspaceSetting, ReturnType<typeof setTimeout>>()
 const unsubscribes: Array<() => void> = []
 
+const collectionSnapshots = new Map<WorkspaceCollection, CollectionSnapshot>()
+const settingSnapshots = new Map<WorkspaceSetting, string>()
+
+let collectionBindings: Array<CollectionBinding<{ id: string }>> = []
+let settingBindings: Array<SettingBinding<unknown>> = []
+
 let started = false
+let applyingRemote = false
+let channel: RealtimeChannel | null = null
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+let statusListener: WorkspaceStatusListener | null = null
+
+function reportOk(): void {
+  statusListener?.({ ok: true })
+}
+
+function reportError(error: unknown): void {
+  console.error('[workspaceSync]', error)
+  statusListener?.({ ok: false, error: error instanceof Error ? error.message : String(error) })
+}
+
+async function writeRecords(
+  collection: WorkspaceCollection,
+  upserts: Array<{ id: string }>,
+  deletes: string[],
+): Promise<void> {
+  if (deletes.length > 0) {
+    const { error } = await getSupabase()
+      .from('workspace_records')
+      .delete()
+      .eq('collection', collection)
+      .in('id', deletes)
+    if (error) throw error
+  }
+  if (upserts.length > 0) {
+    const rows = upserts.map((record) => ({
+      id: record.id,
+      collection,
+      data: record as unknown as Json,
+    }))
+    const { error } = await getSupabase()
+      .from('workspace_records')
+      .upsert(rows, { onConflict: 'id' })
+    if (error) throw error
+  }
+}
+
+async function fetchCollection<T extends { id: string }>(
+  collection: WorkspaceCollection,
+): Promise<T[]> {
+  const { error, data } = await getSupabase()
+    .from('workspace_records')
+    .select('data')
+    .eq('collection', collection)
+  if (error) throw error
+  return (data ?? []).map((row) => row.data as T)
+}
+
+async function fetchSetting<T>(key: WorkspaceSetting): Promise<T | null> {
+  const { error, data } = await getSupabase()
+    .from('workspace_settings')
+    .select('data')
+    .eq('key', key)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.data as T) ?? null
+}
 
 function scheduleCollection(collection: WorkspaceCollection): void {
   const existing = collectionTimers.get(collection)
@@ -122,141 +206,156 @@ async function flushCollection(collection: WorkspaceCollection): Promise<void> {
   const { upserts, deletes } = resolveBatch(batch.upserts, batch.deletes)
   if (upserts.length === 0 && deletes.length === 0) return
   try {
-    if (deletes.length > 0) {
-      const { error } = await getSupabase()
-        .from('workspace_records')
-        .delete()
-        .eq('collection', collection)
-        .in('id', deletes)
-      if (error) throw error
-    }
-    if (upserts.length > 0) {
-      const rows = upserts.map((record) => ({
-        id: record.id,
-        collection,
-        data: record as unknown as Json,
-      }))
-      const { error } = await getSupabase()
-        .from('workspace_records')
-        .upsert(rows, { onConflict: 'id' })
-      if (error) throw error
-    }
-  } catch (cause) {
-    console.error(`Could not sync ${collection}:`, cause)
+    await writeRecords(collection, upserts, deletes)
+    reportOk()
+  } catch (error) {
+    reportError(error)
   }
 }
 
-async function fetchCollection<T extends { id: string }>(
-  collection: WorkspaceCollection,
-): Promise<T[]> {
-  const { data, error } = await getSupabase()
-    .from('workspace_records')
-    .select('data')
-    .eq('collection', collection)
-  if (error) throw error
-  return (data ?? []).map((row) => row.data as unknown as T)
-}
-
-async function startCollection<T extends { id: string }>(
-  binding: CollectionBinding<T>,
-): Promise<void> {
-  const remote = await fetchCollection<T>(binding.collection)
-  const local = binding.get()
-  const shouldSeed = remote.length === 0 && local.length > 0
-  const initial = shouldSeed ? local : remote
-
-  binding.set(initial)
-  if (shouldSeed) {
-    const rows = initial.map((record) => ({
-      id: record.id,
-      collection: binding.collection,
-      data: record as unknown as Json,
-    }))
-    const { error } = await getSupabase()
-      .from('workspace_records')
-      .upsert(rows, { onConflict: 'id' })
-    if (error) {
-      console.error(`Could not seed ${binding.collection}:`, error)
-      return
-    }
-  }
-
-  let snapshot: CollectionSnapshot = new Map(
-    initial.map((record) => [record.id, JSON.stringify(record)]),
-  )
-  const unsubscribe = binding.subscribe(() => {
-    const { diff, snapshot: next } = diffCollection(snapshot, binding.get())
-    snapshot = next
-    if (diff.upserts.length > 0 || diff.deletes.length > 0) {
-      queueDiff(binding.collection, diff)
-    }
-  })
-  unsubscribes.push(unsubscribe)
-}
-
-async function fetchSetting<T>(key: WorkspaceSetting): Promise<T | null> {
-  const { data, error } = await getSupabase()
-    .from('workspace_settings')
-    .select('data')
-    .eq('key', key)
-    .maybeSingle()
-  if (error) throw error
-  return (data?.data as unknown as T) ?? null
-}
-
-function scheduleSetting<T>(key: WorkspaceSetting, binding: SettingBinding<T>): void {
+function scheduleSetting(key: WorkspaceSetting, getValue: () => unknown): void {
   const existing = settingTimers.get(key)
   if (existing) clearTimeout(existing)
   settingTimers.set(
     key,
-    setTimeout(async () => {
-      settingTimers.delete(key)
-      try {
-        const { error } = await getSupabase()
-          .from('workspace_settings')
-          .upsert(
-            { key, data: binding.get() as unknown as Json },
-            { onConflict: 'key' },
-          )
-        if (error) throw error
-      } catch (cause) {
-        console.error(`Could not sync settings "${key}":`, cause)
-      }
-    }, FLUSH_DELAY),
+    setTimeout(() => void flushSetting(key, getValue), FLUSH_DELAY),
   )
 }
 
-async function startSetting<T>(binding: SettingBinding<T>): Promise<void> {
-  const remote = await fetchSetting<T>(binding.key)
-  const value = remote ?? binding.get()
-  binding.set(value)
-
-  if (remote === null) {
+async function flushSetting(key: WorkspaceSetting, getValue: () => unknown): Promise<void> {
+  settingTimers.delete(key)
+  try {
     const { error } = await getSupabase()
       .from('workspace_settings')
-      .upsert({ key: binding.key, data: value as unknown as Json }, { onConflict: 'key' })
-    if (error) {
-      console.error(`Could not seed settings "${binding.key}":`, error)
-      return
-    }
+      .upsert({ key, data: getValue() as Json }, { onConflict: 'key' })
+    if (error) throw error
+    reportOk()
+  } catch (error) {
+    reportError(error)
   }
-
-  let serialized = JSON.stringify(value)
-  const unsubscribe = binding.subscribe(() => {
-    const next = JSON.stringify(binding.get())
-    if (next === serialized) return
-    serialized = next
-    scheduleSetting(binding.key, binding)
-  })
-  unsubscribes.push(unsubscribe)
 }
 
-/** Load every collection and setting from the server, then start mirroring. */
-export async function hydrateWorkspace(): Promise<void> {
+function onCollectionStoreChange<T extends { id: string }>(binding: CollectionBinding<T>): void {
+  if (applyingRemote) return
+  const { diff, snapshot } = diffCollection(
+    collectionSnapshots.get(binding.collection) ?? new Map(),
+    binding.get(),
+  )
+  collectionSnapshots.set(binding.collection, snapshot)
+  if (diff.upserts.length > 0 || diff.deletes.length > 0) {
+    queueDiff(binding.collection, diff)
+  }
+}
+
+function onSettingStoreChange(binding: SettingBinding<unknown>): void {
+  if (applyingRemote) return
+  const json = JSON.stringify(binding.get())
+  if (json === settingSnapshots.get(binding.key)) return
+  settingSnapshots.set(binding.key, json)
+  scheduleSetting(binding.key, () => binding.get())
+}
+
+function scheduleRefresh(): void {
+  if (refreshTimer) clearTimeout(refreshTimer)
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null
+    void refreshFromServer()
+  }, FLUSH_DELAY)
+}
+
+/**
+ * Re-read every collection and setting from the server. If this browser has a
+ * queued write in flight, wait for it to flush first so the pull cannot clobber
+ * it. Content that already matches is skipped so echo events cause no churn.
+ */
+async function refreshFromServer(): Promise<void> {
+  if (!started || applyingRemote) return
+  if (collectionTimers.size > 0 || settingTimers.size > 0) {
+    const existing = refreshTimer
+    if (existing) clearTimeout(existing)
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null
+      void refreshFromServer()
+    }, FLUSH_DELAY)
+    return
+  }
+
+  applyingRemote = true
+  try {
+    for (const binding of collectionBindings) {
+      const rows = await fetchCollection(binding.collection)
+      const next = snapshotCollection(rows)
+      const changed = !snapshotsEqual(collectionSnapshots.get(binding.collection), next)
+      collectionSnapshots.set(binding.collection, next)
+      if (changed) binding.set(rows)
+    }
+    for (const binding of settingBindings) {
+      const value = await fetchSetting(binding.key)
+      if (value === null) continue
+      const json = JSON.stringify(value)
+      if (json === settingSnapshots.get(binding.key)) continue
+      settingSnapshots.set(binding.key, json)
+      binding.set(value)
+    }
+    reportOk()
+  } catch (error) {
+    reportError(error)
+  } finally {
+    applyingRemote = false
+  }
+}
+
+function startRealtime(): void {
+  const client = getSupabase()
+  channel = client
+    .channel('workspace-sync')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'workspace_records' },
+      () => scheduleRefresh(),
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'workspace_settings' },
+      () => scheduleRefresh(),
+    )
+    .subscribe()
+}
+
+/** Replace the server's copy of every collection and setting with this browser's. */
+export async function uploadWorkspaceToServer(): Promise<void> {
+  if (!isSupabaseConfigured || !started) return
+  try {
+    for (const binding of collectionBindings) {
+      const rows = binding.get()
+      const remote = await fetchCollection(binding.collection)
+      const localIds = new Set(rows.map((row) => row.id))
+      const deletes = remote.filter((row) => !localIds.has(row.id)).map((row) => row.id)
+      collectionSnapshots.set(binding.collection, snapshotCollection(rows))
+      await writeRecords(binding.collection, rows, deletes)
+    }
+    for (const binding of settingBindings) {
+      const value = binding.get()
+      settingSnapshots.set(binding.key, JSON.stringify(value))
+      const { error } = await getSupabase()
+        .from('workspace_settings')
+        .upsert({ key: binding.key, data: value as Json })
+      if (error) throw error
+    }
+    reportOk()
+  } catch (error) {
+    reportError(error)
+    throw error
+  }
+}
+
+/** Load the workspace from the server, then start mirroring both ways. */
+export async function hydrateWorkspace(onStatus?: WorkspaceStatusListener): Promise<void> {
   if (!isSupabaseConfigured || started) return
   started = true
+  statusListener = onStatus ?? null
 
-  const collections: Array<CollectionBinding<{ id: string }>> = [
+  collectionBindings = [
     {
       collection: 'members',
       get: () => useMemberStore.getState().members as Member[],
@@ -279,21 +378,13 @@ export async function hydrateWorkspace(): Promise<void> {
       collection: 'organista-suguan-records',
       get: () => useOrganistaSuguanStore.getState().records as OrganistaSuguanRecord[],
       set: (records) =>
-        useOrganistaSuguanStore.setState({
-          records: records as OrganistaSuguanRecord[],
-        }),
+        useOrganistaSuguanStore.setState({ records: records as OrganistaSuguanRecord[] }),
       subscribe: (listener) => useOrganistaSuguanStore.subscribe(listener),
     },
     {
       collection: 'koro-documents',
       get: () => useKoroStore.getState().documents as KoroDocument[],
-      set: (documents) => {
-        const state = useKoroStore.getState()
-        const activeDocumentId = documents.some((doc) => doc.id === state.activeDocumentId)
-          ? state.activeDocumentId
-          : (documents[0]?.id ?? state.activeDocumentId)
-        useKoroStore.setState({ documents: documents as KoroDocument[], activeDocumentId })
-      },
+      set: (documents) => useKoroStore.setState({ documents: documents as KoroDocument[] }),
       subscribe: (listener) => useKoroStore.subscribe(listener),
     },
     {
@@ -305,51 +396,99 @@ export async function hydrateWorkspace(): Promise<void> {
     },
   ]
 
-  const settingsBinding: SettingBinding<SettingsDoc> = {
-    key: 'settings',
-    get: () => {
-      const state = useSettingsStore.getState()
-      return {
-        serviceTypes: state.serviceTypes,
-        dutyRoles: state.dutyRoles,
-        voices: state.voices,
-        localeName: state.localeName,
-        defaultServiceTypeId: state.defaultServiceTypeId,
+  settingBindings = [
+    {
+      key: 'settings',
+      get: () => {
+        const state = useSettingsStore.getState()
+        return {
+          serviceTypes: state.serviceTypes,
+          dutyRoles: state.dutyRoles,
+          voices: state.voices,
+          localeName: state.localeName,
+          defaultServiceTypeId: state.defaultServiceTypeId,
+        }
+      },
+      set: (value) => useSettingsStore.setState(value as SettingsDoc),
+      subscribe: (listener) => useSettingsStore.subscribe(listener),
+    },
+    {
+      key: 'worship-schedules',
+      get: () => ({
+        midweek: useWorshipScheduleStore.getState().midweek,
+        weekend: useWorshipScheduleStore.getState().weekend,
+      }),
+      set: (value) => useWorshipScheduleStore.setState(value as WorshipDoc),
+      subscribe: (listener) => useWorshipScheduleStore.subscribe(listener),
+    },
+  ]
+
+  try {
+    applyingRemote = true
+    for (const binding of collectionBindings) {
+      const remote = await fetchCollection(binding.collection)
+      const local = binding.get()
+      if (resolveHydrationMode(remote.length, local.length) === 'seed') {
+        collectionSnapshots.set(binding.collection, snapshotCollection(local))
+        await writeRecords(binding.collection, local, [])
+      } else {
+        collectionSnapshots.set(binding.collection, snapshotCollection(remote))
+        binding.set(remote)
       }
-    },
-    set: (value) => useSettingsStore.setState(value),
-    subscribe: (listener) => useSettingsStore.subscribe(listener),
-  }
-
-  const worshipBinding: SettingBinding<WorshipDoc> = {
-    key: 'worship-schedules',
-    get: () => {
-      const state = useWorshipScheduleStore.getState()
-      return { midweek: state.midweek, weekend: state.weekend }
-    },
-    set: (value) => useWorshipScheduleStore.setState(value),
-    subscribe: (listener) => useWorshipScheduleStore.subscribe(listener),
-  }
-
-  const results = await Promise.allSettled([
-    ...collections.map((binding) => startCollection(binding)),
-    startSetting(settingsBinding),
-    startSetting(worshipBinding),
-  ])
-  for (const result of results) {
-    if (result.status === 'rejected') {
-      console.error('Workspace hydration step failed:', result.reason)
     }
+
+    for (const binding of settingBindings) {
+      const remote = await fetchSetting(binding.key)
+      if (remote === null) {
+        settingSnapshots.set(binding.key, JSON.stringify(binding.get()))
+        const { error } = await getSupabase()
+          .from('workspace_settings')
+          .upsert({ key: binding.key, data: binding.get() as Json }, { onConflict: 'key' })
+        if (error) throw error
+      } else {
+        settingSnapshots.set(binding.key, JSON.stringify(remote))
+        binding.set(remote)
+      }
+    }
+  } catch (error) {
+    applyingRemote = false
+    reportError(error)
+    throw error
   }
+  applyingRemote = false
+
+  for (const binding of collectionBindings) {
+    unsubscribes.push(binding.subscribe(() => onCollectionStoreChange(binding)))
+  }
+  for (const binding of settingBindings) {
+    unsubscribes.push(binding.subscribe(() => onSettingStoreChange(binding)))
+  }
+
+  startRealtime()
+  reportOk()
 }
 
-/** Detach every mirror, used on sign-out. Safe to call when never started. */
+/** Detach every subscription and timer. Safe to call when not started. */
 export function stopWorkspaceSync(): void {
-  for (const unsubscribe of unsubscribes.splice(0)) unsubscribe()
-  for (const timer of collectionTimers.values()) clearTimeout(timer)
-  for (const timer of settingTimers.values()) clearTimeout(timer)
-  collectionTimers.clear()
-  settingTimers.clear()
+  for (const off of unsubscribes.splice(0)) off()
+  collectionBindings = []
+  settingBindings = []
+  collectionSnapshots.clear()
+  settingSnapshots.clear()
   collectionPending.clear()
+  for (const timer of collectionTimers.values()) clearTimeout(timer)
+  collectionTimers.clear()
+  for (const timer of settingTimers.values()) clearTimeout(timer)
+  settingTimers.clear()
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+  if (channel) {
+    void channel.unsubscribe()
+    channel = null
+  }
+  applyingRemote = false
+  statusListener = null
   started = false
 }

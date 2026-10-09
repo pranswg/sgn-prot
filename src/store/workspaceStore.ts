@@ -1,47 +1,66 @@
 import { create } from 'zustand'
-import { hydrateWorkspace, stopWorkspaceSync } from '@/lib/workspaceSync'
-import { isSupabaseConfigured } from '@/lib/supabase'
+import {
+  hydrateWorkspace,
+  stopWorkspaceSync,
+  uploadWorkspaceToServer,
+} from '@/lib/workspaceSync'
 
 /**
- * Owns the one-time workspace hydration after sign-in.
+ * Tracks the health of the Postgres mirror.
  *
- * The data stores keep their synchronous APIs; this store just tracks whether
- * the server contents have been loaded and the mirror is live. `App` holds the
- * shell back until `ready`, the same way it waits on `authStore.ready`.
+ * The stores stay the synchronous working copy; this store only says whether the
+ * workspace has loaded yet and whether the last sync succeeded. The toast reads
+ * `error` to offer a retry, and Settings reads `lastSyncedAt` to show freshness.
  */
 interface WorkspaceState {
   ready: boolean
   hydrating: boolean
   error: string | null
+  lastSyncedAt: number | null
   hydrate: () => Promise<void>
+  uploadBrowserData: () => Promise<void>
   reset: () => void
 }
 
-export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
+export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   ready: false,
   hydrating: false,
   error: null,
+  lastSyncedAt: null,
 
   hydrate: async () => {
-    if (get().hydrating || get().ready) return
-    if (!isSupabaseConfigured) {
-      set({ ready: true })
-      return
-    }
+    if (get().hydrating) return
     set({ hydrating: true, error: null })
     try {
-      await hydrateWorkspace()
+      await hydrateWorkspace((status) => {
+        if (status.ok) {
+          set({ error: null, lastSyncedAt: Date.now() })
+        } else {
+          set({ error: status.error ?? 'The workspace could not be synced.' })
+        }
+      })
+    } catch (error) {
+      // Never strand the app on the splash: the stores still hold their
+      // localStorage cache, and the toast offers a retry.
+      set({ error: error instanceof Error ? error.message : String(error) })
+    } finally {
       set({ ready: true, hydrating: false })
-    } catch (cause) {
-      // Never strand the app on the splash; the stores fall back to their
-      // local cache and a later reload can retry.
-      console.error('Could not hydrate the workspace:', cause)
-      set({ ready: true, hydrating: false, error: String(cause) })
+    }
+  },
+
+  uploadBrowserData: async () => {
+    set({ error: null })
+    try {
+      await uploadWorkspaceToServer()
+      set({ lastSyncedAt: Date.now() })
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error) })
+      throw error
     }
   },
 
   reset: () => {
     stopWorkspaceSync()
-    set({ ready: false, hydrating: false, error: null })
+    set({ ready: false, hydrating: false, error: null, lastSyncedAt: null })
   },
 }))

@@ -41,8 +41,8 @@ function App() {
 
   // The auth screen replaces the whole shell rather than rendering inside it,
   // so an unauthenticated visitor never sees the sidebar or page chrome.
-  // `navStore` is persisted, so a reload returns the signed-in user to the page
-  // they were on rather than the dashboard.
+  // `navStore` restores where the user was on a same-tab reload, but opening the
+  // app again (or signing in) always lands on the dashboard.
   return (
     <ThemeProvider>
       <TooltipProvider delayDuration={0}>

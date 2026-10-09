@@ -200,7 +200,12 @@ the shell back (a second splash) until `useWorkspaceStore.ready`. The rules:
   `20261009090500_workspace_realtime.sql`) and re-reads on a remote change, with
   an `applyingRemote` guard so the apply does not echo back out and a skip when
   the browser has a write still queued. Content that already matches is left
-  untouched, so our own writes' echo causes no churn.
+  untouched, so our own writes' echo causes no churn. The channel topic is
+  **unique per subscription** (`workspace-sync-{n}`): supabase-js returns an
+  existing channel for a reused topic, and `.on('postgres_changes', …)` throws
+  `cannot add postgres_changes callbacks … after subscribe()` if a prior
+  `unsubscribe()` is still in flight (re-hydrating right after `reset()`, e.g.
+  the forced-password-change path). Do not pin it back to a fixed topic.
 - **A failed write surfaces, it does not swallow.** Flushes report through
   `useWorkspaceStore` (`error` / `lastSyncedAt`), and
   `src/components/WorkspaceSyncToast.tsx` shows a persistent retry toast. Its
@@ -244,8 +249,12 @@ roles, and voice positions. Each stored item carries `custom: boolean`; entries
 without it came from constants and are labelled `(standard)` in the UI. If you
 add a field, bump the store `version` and extend its `migrate`.
 
-`navStore` persists only `page`, `selectedSuguanId`, and `previousPage`, so a
-reload returns the user to the screen they were on. It is **not** free to
+`navStore` persists only `page`, `selectedSuguanId`, and `previousPage`. A
+**reload inside the same tab** returns the user to the screen they were on, but
+**opening the app again** (a new tab or a reopened browser) and any **sign-in or
+sign-out** land on the dashboard, never the previous session's screen. The split
+is the `sessionStorage.choir-nav-session` marker: it survives a reload but not a
+closed tab, so a missing marker means a fresh visit. It is **not** free to
 change. There is no router, so `page` is the entire navigation model, and the
 "start a new Suguan" dialog depends on it:
 
@@ -265,8 +274,13 @@ change. There is no router, so `page` is the entire navigation model, and the
 - The one-shot flags (`directoryStart`, `selectedHistoryMemberId`,
   `builderReturnPage`) and `builderSuguanId` are deliberately **not** persisted,
   so a reload cannot re-open a dialog or replay a filtered directory. The
-  rehydrate `merge` also drops a persisted `suguan-builder` page to the dashboard,
-  because the builder's draft is in-memory and would come back empty.
+  rehydrate `merge` runs `resolveHydratedNav`, which resets a fresh visit to the
+  dashboard, drops a persisted `suguan-builder` page (the draft is in-memory and
+  would come back empty), and clears `selectedSuguanId` unless `suguan-detail`
+  is the page being restored.
+- `reset()` returns the whole store to the dashboard and is called by
+  `authStore.signIn` and `authStore.signOut`, so a new login never resumes the
+  previous session's screen.
 
 `StartModeDialog` receives the whole `suguan` list just to populate its copy
 list, and it is not keyed by page, so `SuguanBuilderPage` resets `startOpen`

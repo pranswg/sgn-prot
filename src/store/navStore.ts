@@ -72,6 +72,55 @@ interface NavState {
   /** Forgets the remembered return page once the user has committed to a draft. */
   clearBuilderReturnPage: () => void
   editSuguanInBuilder: (id: string) => void
+  /**
+   * Returns the whole store to the dashboard, dropping every piece of
+   * navigation memory. Called on sign-in and sign-out so a new session never
+   * resumes an old screen, and used as the fresh-visit reset below.
+   */
+  reset: () => void
+}
+
+/**
+ * A tab session survives a reload but not a closed tab or browser, which is the
+ * line between "the user reloaded where they were" and "the user opened the app
+ * again". The remembered page is only restored inside a live session; a fresh
+ * visit must start on the dashboard. The marker is written the first time the
+ * store hydrates in a session.
+ */
+function isFreshVisit(): boolean {
+  try {
+    if (typeof sessionStorage === 'undefined') return false
+    if (sessionStorage.getItem('choir-nav-session')) return false
+    sessionStorage.setItem('choir-nav-session', '1')
+    return true
+  } catch {
+    // Private mode can throw on storage access; restore rather than crash.
+    return false
+  }
+}
+
+/**
+ * Pure hydration decision for the persisted halves of navigation. A fresh visit
+ * ignores the saved page entirely; otherwise the saved page is restored, except
+ * `suguan-builder`, whose draft is in-memory and would come back empty.
+ */
+export function resolveHydratedNav(
+  persisted: Partial<NavState> | undefined,
+  currentPage: Page,
+  freshVisit: boolean,
+): Pick<NavState, 'page' | 'selectedSuguanId' | 'previousPage'> {
+  if (freshVisit) {
+    return { page: 'dashboard', selectedSuguanId: null, previousPage: null }
+  }
+  const saved = persisted ?? {}
+  const page =
+    saved.page && saved.page !== 'suguan-builder' ? saved.page : currentPage
+  return {
+    page,
+    selectedSuguanId:
+      page === 'suguan-detail' ? (saved.selectedSuguanId ?? null) : null,
+    previousPage: saved.previousPage ?? null,
+  }
 }
 
 export const useNavStore = create<NavState>()(
@@ -186,6 +235,16 @@ export const useNavStore = create<NavState>()(
           builderReturnPage: null,
           directoryStart: null,
         }),
+      reset: () =>
+        set({
+          page: 'dashboard',
+          selectedSuguanId: null,
+          builderSuguanId: null,
+          selectedHistoryMemberId: null,
+          builderReturnPage: null,
+          previousPage: null,
+          directoryStart: null,
+        }),
     }),
     {
       name: 'choir-nav',
@@ -204,26 +263,19 @@ export const useNavStore = create<NavState>()(
         previousPage: state.previousPage,
       }),
       /**
-       * The Suguan builder holds an in-memory draft that is not persisted, so
-       * restoring `suguan-builder` would mount an empty step 0 with the start
-       * dialog already dismissed. Treat an interrupted build as a fresh visit
-       * and land on the dashboard, and drop `selectedSuguanId` unless the detail
-       * screen is the one being restored.
+       * A reload inside the same tab restores the screen the user was on, but a
+       * fresh visit (a new tab or a reopened browser) always lands on the
+       * dashboard. `resolveHydratedNav` owns the decision; see its comment for
+       * the `suguan-builder` and `selectedSuguanId` cases.
        */
-      merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as Partial<NavState>
-        const page =
-          saved.page && saved.page !== 'suguan-builder'
-            ? saved.page
-            : current.page
-        return {
-          ...current,
-          page,
-          selectedSuguanId:
-            page === 'suguan-detail' ? (saved.selectedSuguanId ?? null) : null,
-          previousPage: saved.previousPage ?? null,
-        }
-      },
+      merge: (persisted, current) => ({
+        ...current,
+        ...resolveHydratedNav(
+          (persisted ?? {}) as Partial<NavState>,
+          current.page,
+          isFreshVisit(),
+        ),
+      }),
     },
   ),
 )

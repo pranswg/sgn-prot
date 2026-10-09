@@ -16,6 +16,7 @@ import {
 } from '@/lib/accountMapping'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useAdminStore } from '@/store/adminStore'
+import { useNavStore } from '@/store/navStore'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 
@@ -248,6 +249,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return { problems: credentialsProblem }
     }
     await supabase.rpc('record_login', { p_device: currentUserAgent() })
+    // A fresh sign-in always starts on the dashboard, never the screen the
+    // previous session was left on.
+    useNavStore.getState().reset()
     set({ currentAccountId: account.id })
     await get().refresh()
     return {
@@ -258,6 +262,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signOut: () => {
     set({ accounts: [], currentAccountId: null })
     useAdminStore.getState().clear()
+    // Clear the remembered page so the next sign-in cannot resume this screen.
+    useNavStore.getState().reset()
     if (isSupabaseConfigured) void getSupabase().auth.signOut()
   },
 

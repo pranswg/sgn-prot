@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { useNavStore, type Page } from './navStore.ts'
+import { resolveHydratedNav, useNavStore, type Page } from './navStore.ts'
 
 function reset(page: Page = 'dashboard') {
   useNavStore.setState({
@@ -170,4 +170,68 @@ test('navigateToDirectory records the page left behind for the back button', () 
   reset('dashboard')
   useNavStore.getState().navigateToDirectory('all')
   assert.equal(useNavStore.getState().previousPage, 'dashboard')
+})
+
+test('reset returns every navigation field to its starting point', () => {
+  useNavStore.getState().navigate('settings')
+  useNavStore.getState().openSuguanDetail('sg9')
+  useNavStore.getState().reset()
+
+  const state = useNavStore.getState()
+  assert.equal(state.page, 'dashboard')
+  assert.equal(state.selectedSuguanId, null)
+  assert.equal(state.builderSuguanId, null)
+  assert.equal(state.selectedHistoryMemberId, null)
+  assert.equal(state.builderReturnPage, null)
+  assert.equal(state.previousPage, null)
+  assert.equal(state.directoryStart, null)
+})
+
+test('a fresh visit hydrates to the dashboard whatever was saved', () => {
+  // Opening the app again (a new tab or a reopened browser) must not resume the
+  // screen the previous session ended on.
+  const decision = resolveHydratedNav(
+    { page: 'settings', selectedSuguanId: null, previousPage: 'master-list' },
+    'dashboard',
+    true,
+  )
+  assert.deepEqual(decision, {
+    page: 'dashboard',
+    selectedSuguanId: null,
+    previousPage: null,
+  })
+})
+
+test('a reload inside the session restores the saved page and back target', () => {
+  const decision = resolveHydratedNav(
+    {
+      page: 'suguan-detail',
+      selectedSuguanId: 'sg1',
+      previousPage: 'suguan-history',
+    },
+    'dashboard',
+    false,
+  )
+  assert.equal(decision.page, 'suguan-detail')
+  assert.equal(decision.selectedSuguanId, 'sg1')
+  assert.equal(decision.previousPage, 'suguan-history')
+})
+
+test('a restored non-detail page drops the stale record id', () => {
+  const decision = resolveHydratedNav(
+    { page: 'master-list', selectedSuguanId: 'sg1', previousPage: 'dashboard' },
+    'dashboard',
+    false,
+  )
+  assert.equal(decision.page, 'master-list')
+  assert.equal(decision.selectedSuguanId, null)
+})
+
+test('an interrupted build is never restored; the dashboard is used instead', () => {
+  const decision = resolveHydratedNav(
+    { page: 'suguan-builder', selectedSuguanId: null, previousPage: 'dashboard' },
+    'dashboard',
+    false,
+  )
+  assert.equal(decision.page, 'dashboard')
 })

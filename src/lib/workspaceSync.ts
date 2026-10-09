@@ -117,6 +117,7 @@ let started = false
 let applyingRemote = false
 let workspaceInitialized = false
 let channel: RealtimeChannel | null = null
+let channelSeq = 0
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let statusListener: WorkspaceStatusListener | null = null
 
@@ -339,8 +340,18 @@ async function refreshFromServer(): Promise<void> {
 
 function startRealtime(): void {
   const client = getSupabase()
+  // `client.channel(topic)` hands back an existing channel for a reused topic,
+  // and `.on('postgres_changes', …)` throws if that channel is already
+  // subscribed. A previous `unsubscribe()` is async, so re-hydrating straight
+  // after a reset (the forced-password-change path does exactly this) could
+  // otherwise grab a stale channel. A per-subscription topic avoids the reuse,
+  // and we still drop any channel we still hold first.
+  if (channel) {
+    void channel.unsubscribe()
+    channel = null
+  }
   channel = client
-    .channel('workspace-sync')
+    .channel(`workspace-sync-${(channelSeq += 1)}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'workspace_records' },

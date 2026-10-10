@@ -36,6 +36,13 @@ The migration plan lives on the Desktop at `backend-plan.md`, not in this repo.
   per-`Permission` policies land with the write path. `roles` seeds the builtin
   `admin` role with all twenty permissions from `src/lib/rbac.ts`; the seeded
   login is `admin` / `admin1234` (published backstop, must change).
+- Seeding an Admin by raw SQL into `auth.users` is fragile: GoTrue scans its
+  token columns (`confirmation_token`, `recovery_token`, `email_change`,
+  `email_change_token_new/current`, `phone_change*`, `reauthentication_token`)
+  as non-nullable strings, and resolves email/password sign-in through
+  `auth.identities`. Both must be populated or every login fails with the app's
+  generic "do not match" message. `0003` sets the token columns to `''` and
+  inserts the identity; `0005` repairs a database provisioned before that fix.
 - Auth runs through Supabase Auth (see "Sign-in is server-backed" below). Admin
   account/role mutations are still deferred: the `authStore` methods exist but
   return a "temporarily unavailable" problem, and `AdministrationPage` renders

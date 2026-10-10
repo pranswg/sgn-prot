@@ -1,0 +1,7 @@
+-- Local `supabase db reset` seed.
+--
+-- There is nothing to seed here on purpose: the Admin backstop account and the
+-- builtin role/permissions are created by migration 0003, and the repository
+-- must stay data-free (no user input is ever committed). This file exists only
+-- because `[db.seed] sql_paths` in `config.toml` points at it, so a reset finds
+-- a file instead of a dangling reference.

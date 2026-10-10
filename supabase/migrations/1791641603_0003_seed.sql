@@ -70,9 +70,15 @@ begin
     select id into v_uid from auth.users where email = 'admin@choir.local';
     if v_uid is null then
       v_uid := gen_random_uuid();
+      -- Token columns must be empty strings, not NULL: GoTrue scans them into
+      -- non-nullable Go strings, so a NULL makes every password grant fail with
+      -- "converting NULL to string is unsupported".
       insert into auth.users (
         instance_id, id, aud, role, email, encrypted_password,
         email_confirmed_at, confirmation_sent_at,
+        confirmation_token, recovery_token,
+        email_change, email_change_token_new, email_change_token_current,
+        email_change_confirm_status,
         raw_app_meta_data, raw_user_meta_data, created_at, updated_at
       ) values (
         '00000000-0000-0000-0000-000000000000',
@@ -83,6 +89,12 @@ begin
         extensions.crypt('admin1234', extensions.gen_salt('bf')),
         now(),
         now(),
+        '',
+        '',
+        '',
+        '',
+        '',
+        0,
         '{"provider": "email", "providers": ["email"]}',
         '{}',
         now(),
@@ -93,5 +105,20 @@ begin
     values (v_uid, 'admin', 'Choir Administrator', 'admin@choir.local', 'admin')
     on conflict (id) do update
       set role = 'admin', status = 'active';
+  end if;
+
+  -- Companion email identity, required for email/password sign-in. `provider_id`
+  -- is NOT NULL since GoTrue 20231117164230 and is the user's id as text.
+  if v_uid is not null then
+    insert into auth.identities (
+      id, user_id, provider, provider_id, identity_data,
+      last_sign_in_at, created_at, updated_at
+    )
+    select gen_random_uuid(), v_uid, 'email', v_uid::text,
+           jsonb_build_object('sub', v_uid::text, 'email', 'admin@choir.local'),
+           now(), now(), now()
+    where not exists (
+      select 1 from auth.identities where user_id = v_uid and provider = 'email'
+    );
   end if;
 end $$;

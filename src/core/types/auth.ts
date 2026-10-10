@@ -1,11 +1,11 @@
 /**
- * Account types for the local sign-in gate.
+ * Account types for the sign-in gate.
  *
- * There is no server. Accounts live in `localStorage` under `choir-auth`, and a
- * password is only ever stored as a PBKDF2 digest plus its salt. That stops an
- * exported backup file from containing a plaintext password, but it is NOT
- * real security: anyone with devtools can read and rewrite the whole store.
- * Treat this as a way to keep the app's screens honest, not as protection.
+ * Accounts are backed by Supabase Auth and the `public.profiles` table. The app
+ * keeps a read-only `Account` cache of those profiles; passwords never reach
+ * the client, so the password fields below are vestigial from the local-only
+ * era and are only still produced by `credentials.ts`'s now-unused hashing
+ * helpers pending cleanup.
  */
 
 /** Role IDs are strings so Admin-created roles can be persisted and assigned. */
@@ -54,10 +54,10 @@ export interface Account {
   username: string
   /** As typed at registration. Display only; never used to log in. */
   fullName: string
-  /** Lower-case hex digest. Never a plaintext password. */
-  passwordHash: string
-  /** Lower-case hex salt, unique per account. */
-  passwordSalt: string
+  /** Lower-case hex digest. Never a plaintext password. Unset for server accounts. */
+  passwordHash?: string
+  /** Lower-case hex salt, unique per account. Unset for server accounts. */
+  passwordSalt?: string
   /** How `passwordHash` was produced; assumed `pbkdf2` when absent. */
   hashAlgo?: PasswordHashAlgo
   role: AccountRole

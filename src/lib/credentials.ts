@@ -373,10 +373,9 @@ export function isUsernameTaken(
 }
 
 /**
- * Whether any active Admin exists. The default-admin seed in `authStore` runs
- * whenever this is false, so a fresh browser (or one whose admins were all
- * disabled) always has a known login, while a real multi-account setup never
- * gets a surprise seed.
+ * Whether any active Admin exists. Left over from the local auth store; the
+ * server-seeded Admin (`0003_seed.sql`) means a fresh install always has a known
+ * login. Kept (and tested) as a pure predicate for callers that still gate on it.
  */
 export function hasActiveAdmin(accounts: Account[]): boolean {
   return accounts.some(
@@ -386,8 +385,9 @@ export function hasActiveAdmin(accounts: Account[]): boolean {
 }
 
 /**
- * Only the initial setup account is an Admin. Later accounts need an
- * Administrator-created role before they can receive system permissions.
+ * The role a brand-new account gets. Left over from local registration (now
+ * removed); retained (and tested) because the admin-account flow may reuse it.
+ * Only the very first account would be an Admin.
  */
 export function roleForNewAccount(
   existingAccounts: Account[],

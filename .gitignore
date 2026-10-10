@@ -23,6 +23,9 @@ backups/
 *.export.xlsx
 *.export.csv
 
+# Machine-specific backend setup notes: names the hosted project, never committed
+BACKEND-NOTES.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

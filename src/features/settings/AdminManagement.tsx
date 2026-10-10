@@ -74,6 +74,14 @@ import {
   type CreateManagedAccountInput,
 } from '@/store/authStore'
 
+/**
+ * Phase 2 keeps the Administration screens visible but read-only. Account and
+ * role writes now belong to the server (created/reset through the service-role
+ * Admin API), which ships with the Phase 5 write path; the store methods already
+ * reject, and this disables the controls so nothing looks interactive.
+ */
+const READ_ONLY = true
+
 type AdminSection = 'overview' | 'users' | 'roles' | 'audit' | 'logins' | 'sessions'
 
 const EMPTY_NEW_USER: CreateManagedAccountInput = {
@@ -612,7 +620,7 @@ function UserProfileDialog({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!editing && (
-                    <Button size="sm" variant="outline" onClick={beginEdit}>
+                    <Button size="sm" variant="outline" disabled={READ_ONLY} onClick={beginEdit}>
                       Edit Profile & Permissions
                     </Button>
                   )}
@@ -628,7 +636,7 @@ function UserProfileDialog({
                       <Button
                         size="sm"
                         variant="destructive"
-                        disabled={!disableReason.trim()}
+                        disabled={READ_ONLY || !disableReason.trim()}
                         loading={changingAccountStatus}
                         onClick={() => {
                           void changeAccountStatus('disabled', disableReason.trim())
@@ -642,6 +650,7 @@ function UserProfileDialog({
                     <Button
                       size="sm"
                       variant="outline"
+                      disabled={READ_ONLY}
                       onClick={() => void changeAccountStatus('active')}
                       loading={changingAccountStatus}
                     >
@@ -774,7 +783,7 @@ function UserProfileDialog({
                     <Button variant="outline" onClick={() => setEditing(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={saveProfile} loading={savingProfile}>Save Changes</Button>
+                    <Button onClick={saveProfile} loading={savingProfile} disabled={READ_ONLY}>Save Changes</Button>
                   </div>
                 </div>
               ) : (
@@ -826,6 +835,7 @@ function UserProfileDialog({
                       />
                       <Button
                         variant="outline"
+                        disabled={READ_ONLY}
                         onClick={() => void resetUserPassword()}
                         loading={resettingUserPassword}
                       >
@@ -905,7 +915,7 @@ function Overview({
           <CardDescription>Common system administration tasks.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <Button onClick={onCreate}>
+          <Button onClick={onCreate} disabled={READ_ONLY}>
             <Plus className="size-4" />
             Create User
           </Button>
@@ -1033,13 +1043,13 @@ export function AdminManagement({ actorId }: { actorId: string }) {
         title="Administration"
         description="Manage system accounts, roles, permissions, and security activity."
       />
-      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
-        <p className="font-medium">Browser-local administration</p>
-        <p className="mt-1 text-xs leading-relaxed text-blue-900/80">
-          Accounts, permissions, audit records, and sessions are stored only in
-          this browser. This local-only app cannot verify remote IP addresses or
-          revoke sessions on another device; server-side authentication is
-          required for production security.
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <p className="font-medium">Read-only while accounts move to the server</p>
+        <p className="mt-1 text-xs leading-relaxed text-amber-900/80">
+          Sign-in is now handled by the hosted backend. Creating users, resetting
+          passwords, and editing roles require server-side administration, which
+          is coming in the next phase — these screens are read-only until then.
+          Sign-in, sign-out, and changing your own password already work.
         </p>
       </div>
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
@@ -1112,7 +1122,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button onClick={() => setCreateOpen(true)} disabled={READ_ONLY}>
               <Plus className="size-4" />
               Create User
             </Button>
@@ -1227,6 +1237,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
               Create roles for your organization and assign them to system accounts.
             </p>
             <Button
+              disabled={READ_ONLY}
               onClick={() => {
                 setRoleBeingEdited(null)
                 setRoleDialogOpen(true)
@@ -1273,6 +1284,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                               aria-label={`${permission.label} for ${role.label}`}
                               checked={role.id === 'admin' || granted}
                               disabled={
+                                READ_ONLY ||
                                 role.id === 'admin' ||
                                 ADMIN_ONLY_PERMISSIONS.includes(permission.id)
                               }
@@ -1314,6 +1326,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                         size="icon"
                         variant="ghost"
                         aria-label={`Edit ${role.label}`}
+                        disabled={READ_ONLY}
                         onClick={() => {
                           setRoleBeingEdited(role)
                           setRoleDialogOpen(true)
@@ -1331,7 +1344,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                             ? 'Reassign users before deleting this role'
                             : 'Delete role'
                         }
-                        disabled={accounts.some((account) => account.role === role.id)}
+                        disabled={READ_ONLY || accounts.some((account) => account.role === role.id)}
                         onClick={() => setRolePendingDelete(role)}
                       >
                         <Trash2 className="size-4" />
@@ -1408,6 +1421,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={READ_ONLY}
                     onClick={() => endSession(session.id)}
                     loading={terminatingId === session.id}
                   >

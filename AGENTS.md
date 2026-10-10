@@ -21,19 +21,28 @@ interactive terminal here.
 
 ### Backend: Supabase
 
-The app is gaining a backend, phased in from easiest to hardest (scaffold,
-backup import, auth swap, read-only pages, write-through stores, RBAC, offline).
+The app is gaining a backend, phased in from easiest to hardest. Phase 1
+(scaffold: schema, seed, read-only RLS) and Phase 2 (auth swap: sign-in/out,
+session restore, read-only profile cache) are done. Still to come: read-only data
+pages, write-through stores, RBAC, offline, and backup import (deferred to last).
 The migration plan lives on the Desktop at `backend-plan.md`, not in this repo.
 
 - The database schema and seed live in `supabase/migrations/`. `npm run db:push`
   applies them to the linked project (`supabase link`), `npm run db:lint` checks
   them. `npm run db:push` cannot run on an unlinked machine.
-- Phase 1 posture: one table per Zustand store, entries as whole JSONB docs in a
+- Schema posture: one table per Zustand store, entries as whole JSONB docs in a
   `data` column; admin/security tables are normalized. RLS allows any
-  authenticated user to read and only `service_role` to write — the per-`Permission`
-  policies land with the write path. `roles` seeds the builtin `admin` role with
-  all twenty permissions from `src/lib/rbac.ts`; the seeded login is
-  `admin` / `admin1234` (published backstop, must change).
+  authenticated user to read and only `service_role` to write — the
+  per-`Permission` policies land with the write path. `roles` seeds the builtin
+  `admin` role with all twenty permissions from `src/lib/rbac.ts`; the seeded
+  login is `admin` / `admin1234` (published backstop, must change).
+- Auth runs through Supabase Auth (see "Sign-in is server-backed" below). Admin
+  account/role mutations are still deferred: the `authStore` methods exist but
+  return a "temporarily unavailable" problem, and `AdministrationPage` renders
+  read-only while its `READ_ONLY` flag is set.
+- `.env.local` holds `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and is
+  gitignored (`*.local`). The service_role key must never be committed or
+  bundled; it is only used for one-off server-side checks.
 - The **repo stays data-free** rule still holds: choir data lives in the hosted
   Supabase database, never in a file in this repository.
 
@@ -156,21 +165,24 @@ migration function. **UI-only changes must not change a persisted shape.**
 | `suguanStore.ts` | `choir-suguan` | 6 |
 | `settingsStore.ts` | `choir-settings` | 3 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
-| `authStore.ts` | `choir-auth` | 2 |
 | `sidebarStore.ts` | `sidebarExpanded` | 1 |
 | `navStore.ts` | `choir-nav` | 1 |
 
+`authStore.ts` no longer appears here: it stopped using `localStorage` in the
+Phase 2 auth swap. Its session comes from Supabase Auth and its `accounts` cache
+is refetched from `public.profiles` on load (see below).
+
 **The repo must stay data-free.** Everything the user types — locale congregation
-name, worship schedules, service types, members, Suguan records, accounts —
-lives only in the browser's `localStorage`; none of it is ever written to a file
-in this repository. Pushing code never ships their input. The only user-account
-artefact that travels is the default-admin seed *logic* in `authStore.ts`, which
-recreates a known Admin login (`admin` / `admin1234`) on startup whenever no
-active Admin exists — that runtime seed is the lone exception and must remain.
-If a store or feature ever needs to persist user input to disk (a data file, an
-export written into the project, a local DB), stop and ask first: it would
-violate this rule. Drops and accidental files from Settings' backup/export
-belong in `.gitignore`, not in a commit.
+name, worship schedules, service types, members, Suguan records — lives in the
+browser's `localStorage` (or, increasingly, the hosted Supabase database); none
+of it is ever written to a file in this repository. Pushing code never ships
+their input. With the auth swap there is no longer any account artefact in the
+repo at all: the default Admin is seeded by `supabase/migrations/0003_seed.sql`,
+and its plaintext password (`admin1234`) is a published backstop documented here
+on purpose. If a store or feature ever needs to persist user input to disk (a
+data file, an export written into the project, a local DB), stop and ask first:
+it would violate this rule. Drops and accidental files from Settings'
+backup/export belong in `.gitignore`, not in a commit.
 
 `settingsStore` holds the three editable reference lists: service types, duty
 roles, and voice positions. Each stored item carries `custom: boolean`; entries
@@ -206,9 +218,9 @@ list, and it is not keyed by page, so `SuguanBuilderPage` resets `startOpen`
 from `existing` rather than remembering that the user already chose.
 
 Most persisted stores implement `importData()` so Settings' backup/restore can
-round-trip them. **`authStore` deliberately does not** — accounts are excluded
-from the backup file, because restoring a JSON file should never install someone
-else's password hashes on this machine. Do not add `importData` to it later
+round-trip them. **`authStore` deliberately does not** — accounts live in
+Supabase and are never written to the backup file, because restoring a JSON file
+should never install someone else's accounts. Do not add `importData` to it later
 without asking.
 
 ### Membership model
@@ -370,53 +382,55 @@ The sidebar has its own neutral scale rather than reusing `--background`:
 `--brand-gold` is a brand highlight only, currently the rule under the wordmark.
 It must never colour a nav row, a button, or a state.
 
-## Sign-in is local, and that is a deliberate limitation
+## Sign-in is server-backed (Supabase Auth)
 
 `App.tsx` renders `features/auth/AuthPage.tsx` instead of `Layout` until
-`authStore.currentAccountId` is set. Login and registration live on one screen
-because there is no router in this app; the mode is local state.
+`authStore.currentAccountId` is set, and holds a `AuthLoading` view while
+`authStore.initializing` is true so a reload with a valid session never flashes
+the sign-in form. There is no router, so the sign-in screen is the whole
+pre-shell UI; it is sign-in only (public registration was removed with the swap).
 
-**There is no server.** Accounts live in `localStorage` under `choir-auth`, and a
-password is stored only as a PBKDF2-SHA256 digest (210k iterations) plus a
-per-account salt. On insecure origins (a phone hitting the dev server over
-plain http, where `crypto.subtle` does not exist) hashing falls back to an
-iterated pure-JS SHA-256 KDF instead of throwing; the account records which
-`hashAlgo` produced it and verification must use the same one. That keeps
-plaintext out of the backup file. It is not
-security: anyone with devtools can read the store, or overwrite it to sign in as
-anyone. Do not describe this to the user as protecting their data, and do not
-build features that assume it does — there is no real authorisation anywhere.
+**Login is by username, but Supabase Auth keys on email**, so every account
+carries a synthetic `<username>@choir.local` address (`src/lib/authIdentity.ts`).
+The seeded backstop Admin is `admin` / `admin1234` → `admin@choir.local`.
+`supabase-js` persists the session itself; the app stores no password material.
 
 Rules if you touch it:
 
-- Keep rules in `src/lib/credentials.ts`, not in the component. The page renders
-  `FieldProblem[]` returned by `validateRegistration`; it must not re-check a
-  rule locally or the two will drift.
-- Never log, toast, or render a password or hash. `AuthPage` deliberately has no
-  password in any error message.
-- `signIn` returns the same message for an unknown username and a wrong
-  password, and hashes anyway in the unknown-username case so the two take
-  similar time. Do not "helpfully" split those cases.
-- `roleForNewAccount` grants `admin` to the first registration only because a
-  fresh install needs someone to see that an admin exists. It is not an
-  authorisation check.
-- `authStore` seeds a default Admin (`admin` / `admin1234`) on startup whenever
-  `hasActiveAdmin(accounts)` is false — a fresh browser always has a known
-  login, and a setup whose admins were all disabled recovers automatically. It
-  never signs itself in and never runs while any active Admin exists, so it is
-  not a backdoor into a real multi-account setup. `seedDefaultAdmin` is invoked
-  once from `App.tsx` on mount and memoised at module scope so StrictMode's
-  double mount cannot race two `${hashPassword}` calls into duplicate `admin`
-  accounts. The seed builds the account directly (it bypasses the welcome/
-  registration form), so do not route it through `validateRegistration`.
+- Keep username/password rules in `src/lib/credentials.ts`, not in the
+  component. `AuthPage` renders the `FieldProblem[]` those validators return; do
+  not re-check a rule locally or the two will drift. Its hashing helpers
+  (`hashPassword`/`verifyPassword`/`sha256Hex`) are now **unused by the app** but
+  still pinned by `credentials.test.ts`; do not reintroduce client-side hashing.
+- Never log, toast, or render a password.
+- `signIn` calls `supabase.auth.signInWithPassword` (username → email), refuses a
+  profile whose `status` is not `active` (and signs straight back out), and
+  returns the same message for an unknown username and a wrong password. Do not
+  "helpfully" split those cases.
+- `authStore.initialize()` restores the Supabase session once on load (memoised
+  so StrictMode's double mount is harmless), refetches `public.profiles` into
+  `accounts`, and subscribes to `onAuthStateChange` to clear the current account
+  when the session ends.
+- The rest of the app still reads `accounts` + `currentAccountId` synchronously,
+  so `usePermissions` and the member-store admin checks did not change.
+- **Admin account/role mutations are deferred** (see the backend section):
+  `createManagedAccount`, `resetManagedPassword`, the role methods, and
+  `terminateManagedSession` return a "temporarily unavailable" problem, and
+  `AdministrationPage`'s `READ_ONLY` flag disables their controls. Wiring them up
+  needs the service-role Admin API, which is the Phase 5 write path.
+- `changeOwnPassword` calls `supabase.auth.updateUser({ password })` then the
+  narrow `public.mark_password_changed()` RPC (migration `0004`) to clear the
+  profile's `must_change_password` flag, because RLS otherwise blocks the client
+  from writing `profiles`.
 
 ## Feature map
 
 Seven features under `src/features/`. Only the imports below cross feature
 boundaries, so a change in one feature rarely reaches another.
 
-- **auth** — `AuthPage.tsx`, the pre-shell sign-in and registration screen.
-  Bypasses `Layout` entirely; see the sign-in section above.
+- **auth** — `AuthPage.tsx`, the pre-shell sign-in screen, plus
+  `PasswordChangePage.tsx` for a forced/self-service password change. Bypasses
+  `Layout`; see the sign-in section above.
 - **dashboard** — `DashboardPage.tsx`, read-only summaries.
 - **master-list** — members and trainees. The largest feature. Directory table
   and grid, mobile sheets, roster import, and CSV/Excel export.

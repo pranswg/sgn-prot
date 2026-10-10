@@ -7,21 +7,40 @@ import { PasswordChangePage } from '@/features/auth/PasswordChangePage'
 import { useAuthStore } from '@/store/authStore'
 import { ThemeProvider } from '@/components/sidebar/ThemeProvider'
 
+function AuthLoading() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-muted/40 text-sm text-muted-foreground">
+      Loading…
+    </div>
+  )
+}
+
 function App() {
   // Reading the id rather than the account object keeps this component from
   // re-rendering when an unrelated field of the signed-in account changes.
   const currentAccountId = useAuthStore((s) => s.currentAccountId)
+  const initializing = useAuthStore((s) => s.initializing)
   const mustChangePassword = useAuthStore((s) =>
     s.accounts.find((account) => account.id === s.currentAccountId)?.mustChangePassword
       ?? false,
   )
 
-  // Guarantee a known Admin login on a fresh browser (or one whose admins were
-  // all disabled). Idempotent: a store that already has an active Admin is
-  // untouched. Never signs the visitor in.
+  // Restore the persisted Supabase session (and refresh the profile cache) once
+  // on load. The store memoises this so StrictMode's double mount is harmless.
   useEffect(() => {
-    void useAuthStore.getState().seedDefaultAdmin()
+    void useAuthStore.getState().initialize()
   }, [])
+
+  // Hold the auth screen until the session has been restored, so a reload with
+  // a valid session never flashes the sign-in form.
+  const content =
+    initializing && !currentAccountId ? (
+      <AuthLoading />
+    ) : currentAccountId ? (
+      mustChangePassword ? <PasswordChangePage /> : <Layout />
+    ) : (
+      <AuthPage />
+    )
 
   // The auth screen replaces the whole shell rather than rendering inside it,
   // so an unauthenticated visitor never sees the sidebar or page chrome.
@@ -30,11 +49,7 @@ function App() {
   return (
     <ThemeProvider>
       <TooltipProvider delayDuration={0}>
-        {currentAccountId
-          ? mustChangePassword
-            ? <PasswordChangePage />
-            : <Layout />
-          : <AuthPage />}
+        {content}
         <Toaster richColors position="top-center" />
       </TooltipProvider>
     </ThemeProvider>

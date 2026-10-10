@@ -11,6 +11,7 @@ import {
 } from '@/lib/phDate'
 import type { jsPDF } from 'jspdf'
 import { createAttendanceDatePanels } from './attendanceSheetDates'
+import { sortTraineesForAttendanceSheet } from './attendanceSheetSort'
 
 export type AttendancePaperSize = 'a4' | 'letter' | 'legal'
 export type AttendanceOrientation = 'portrait' | 'landscape'
@@ -150,11 +151,7 @@ export async function exportTraineeAttendancePdf(options: {
       (pageHeight - footerReserve - tableTop - tableHeaderHeight) / rowHeight,
     ),
   )
-  const sortedTrainees = [...trainees].sort((left, right) =>
-    `${left.lastName} ${left.firstName}`.localeCompare(
-      `${right.lastName} ${right.firstName}`,
-    ),
-  )
+  const sortedTrainees = sortTraineesForAttendanceSheet(trainees)
   const tableRows = [
     ...sortedTrainees.map((trainee) => traineeFullName(trainee)),
     '',
@@ -191,7 +188,7 @@ export async function exportTraineeAttendancePdf(options: {
       doc.setFont('SegoeScript', 'normal')
       doc.setFontSize(17)
       doc.text(
-        'ATTENDANCE NG MGA NAGSASANAY SA MANG-AWIT',
+        'ATTENDANCE NG MGA NAGSASANAY SA MANG-AAWIT',
         pageWidth / 2,
         titleTop + 23,
         { align: 'center', maxWidth: pageWidth - 50 },
@@ -263,7 +260,7 @@ export async function exportTraineeAttendancePdf(options: {
       lastTableBottom = tableTop + tableHeaderHeight + names.length * rowHeight
       doc.setFont('BookAntiqua', 'normal')
       doc.setFontSize(10)
-      doc.text(`As of ${asOfDate}`, left, lastTableBottom + 12)
+      doc.text(`printed as of ${asOfDate}`, left, lastTableBottom + 12)
 
       if (finalPage) {
         const signatureTop = Math.max(lastTableBottom + 65, pageHeight - 155)

@@ -67,26 +67,28 @@ declare
 begin
   select id into v_uid from public.profiles where username = 'admin';
   if v_uid is null then
-    v_uid := gen_random_uuid();
-    insert into auth.users (
-      instance_id, id, aud, role, email, encrypted_password,
-      email_confirmed_at, confirmation_sent_at,
-      raw_app_meta_data, raw_user_meta_data, created_at, updated_at
-    ) values (
-      '00000000-0000-0000-0000-000000000000',
-      v_uid,
-      'authenticated',
-      'authenticated',
-      'admin@choir.local',
-      crypt('admin1234', gen_salt('bf')),
-      now(),
-      now(),
-      '{"provider": "email", "providers": ["email"]}',
-      '{}',
-      now(),
-      now()
-    )
-    on conflict (email) do nothing;
+    select id into v_uid from auth.users where email = 'admin@choir.local';
+    if v_uid is null then
+      v_uid := gen_random_uuid();
+      insert into auth.users (
+        instance_id, id, aud, role, email, encrypted_password,
+        email_confirmed_at, confirmation_sent_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+      ) values (
+        '00000000-0000-0000-0000-000000000000',
+        v_uid,
+        'authenticated',
+        'authenticated',
+        'admin@choir.local',
+        extensions.crypt('admin1234', extensions.gen_salt('bf')),
+        now(),
+        now(),
+        '{"provider": "email", "providers": ["email"]}',
+        '{}',
+        now(),
+        now()
+      );
+    end if;
     insert into public.profiles (id, username, full_name, email, role)
     values (v_uid, 'admin', 'Choir Administrator', 'admin@choir.local', 'admin')
     on conflict (id) do update

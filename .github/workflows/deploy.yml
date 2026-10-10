@@ -25,12 +25,16 @@ jobs:
           cache: npm
       - run: npm ci
       # The URL and anon key are public-safe (RLS protects the data), so they
-      # are repository *variables*, not secrets. Configure them under
-      # Settings → Secrets and variables → Actions → Variables.
+      # are not secrets. Set repository *variables* under
+      # Settings → Secrets and variables → Actions → Variables to override the
+      # committed defaults below. The fallbacks keep the deployed site
+      # connected to its backend even when the variables are unset; both values
+      # already ship in the public client bundle, so committing them leaks
+      # nothing an anon key is not designed to expose.
       - run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://mwtpfsmrrpdcommremkx.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13dHBmc21ycnBkY29tbXJlbWt4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1MjEyNDMsImV4cCI6MjEwNzA5NzI0M30.A9m2v2Q5uJH9ciH0l5npO3qo20Xzba8XfyRtZDdO5i0' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

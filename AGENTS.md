@@ -19,6 +19,24 @@ The whole cycle is about six seconds, so re-run it after every edit rather than
 batching checks at the end. Do **not** run `npm run dev`; there is no
 interactive terminal here.
 
+### Backend: Supabase
+
+The app is gaining a backend, phased in from easiest to hardest (scaffold,
+backup import, auth swap, read-only pages, write-through stores, RBAC, offline).
+The migration plan lives on the Desktop at `backend-plan.md`, not in this repo.
+
+- The database schema and seed live in `supabase/migrations/`. `npm run db:push`
+  applies them to the linked project (`supabase link`), `npm run db:lint` checks
+  them. `npm run db:push` cannot run on an unlinked machine.
+- Phase 1 posture: one table per Zustand store, entries as whole JSONB docs in a
+  `data` column; admin/security tables are normalized. RLS allows any
+  authenticated user to read and only `service_role` to write — the per-`Permission`
+  policies land with the write path. `roles` seeds the builtin `admin` role with
+  all twenty permissions from `src/lib/rbac.ts`; the seeded login is
+  `admin` / `admin1234` (published backstop, must change).
+- The **repo stays data-free** rule still holds: choir data lives in the hosted
+  Supabase database, never in a file in this repository.
+
 Tests use `node:test` with the glob `src/**/*.test.ts`, loaded through
 `scripts/test-aliases.mjs`, which teaches Node to resolve the `@/` alias and
 extensionless relative imports. Two consequences:

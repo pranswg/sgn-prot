@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "test": "node --import ./scripts/test-aliases.mjs --test src/**/*.test.ts",
-    "verify": "npm run typecheck && npm run test && npm run lint"
+    "verify": "npm run typecheck && npm run test && npm run lint",
+    "db:push": "supabase db push",
+    "db:lint": "supabase db lint"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

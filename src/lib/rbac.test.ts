@@ -84,3 +84,15 @@ test('page access follows the permission matrix; System pages open with their pe
     true,
   )
 })
+
+test('Koro Maker opens with manage-koro, or the legacy edit-members', () => {
+  assert.equal(canAccessPage('koro-maker', staff, {}), false)
+  assert.equal(
+    canAccessPage('koro-maker', staff, { 'custom-staff': ['manage-koro'] }),
+    true,
+  )
+  assert.equal(
+    canAccessPage('koro-maker', staff, { 'custom-staff': ['edit-members'] }),
+    true,
+  )
+})

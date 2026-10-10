@@ -18,6 +18,7 @@ export const PERMISSION_DEFINITIONS: {
   { id: 'assign-members', label: 'Assign Members', module: 'Suguan' },
   { id: 'delete-suguan', label: 'Delete Suguan', module: 'Suguan' },
   { id: 'export-documents', label: 'Export Documents', module: 'Suguan' },
+  { id: 'manage-koro', label: 'Access Koro Maker', module: 'Koro' },
   { id: 'manage-users', label: 'Manage Users', module: 'Administration' },
   { id: 'manage-roles', label: 'Manage Roles', module: 'Administration' },
   { id: 'view-audit-logs', label: 'View Audit Logs', module: 'Security' },
@@ -108,12 +109,17 @@ export function canAccessPage(
       hasPermission(account, 'edit-suguan', rolePermissions)
     )
   }
+  if (page === 'koro-maker') {
+    return (
+      hasPermission(account, 'manage-koro', rolePermissions) ||
+      hasPermission(account, 'edit-members', rolePermissions)
+    )
+  }
   const pagePermission: Record<string, Permission> = {
     dashboard: 'view-dashboard',
     'master-list': 'view-master-list',
     'members-history': 'view-master-list',
     trainees: 'manage-trainees',
-    'koro-maker': 'edit-members',
     'organista-suguan-maker': 'create-suguan',
 
     'suguan-history': 'view-suguan',

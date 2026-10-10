@@ -28,6 +28,7 @@ export type Permission =
   | 'assign-members'
   | 'delete-suguan'
   | 'export-documents'
+  | 'manage-koro'
   | 'manage-users'
   | 'manage-roles'
   | 'view-audit-logs'

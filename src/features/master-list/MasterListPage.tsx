@@ -161,6 +161,9 @@ export function MasterListPage() {
   const canManageHistory = can('manage-membership-history')
   const canAssignMembers = can('assign-members')
   const canExportDocuments = can('export-documents')
+  // Only a settings-editor may persist the congregation name; for everyone else
+  // it is used for this export alone, so their denied write never fires.
+  const canChangeSettings = can('change-settings')
   const updatedAt = new Date(lastUpdatedAt)
   const lastUpdatedLabel = `${formatPHTDateTime(updatedAt, {
     month: 'long',
@@ -373,7 +376,7 @@ export function MasterListPage() {
     paperSize: MasterListPaperSize,
   ) => {
     setPdfSetupOpen(false)
-    setLocaleName(name)
+    if (canChangeSettings) setLocaleName(name)
     const fileName = exportFileName('Master List', 'pdf')
     requestExport({
       filename: fileName,
@@ -408,7 +411,7 @@ export function MasterListPage() {
     paperSize: MasterListPaperSize,
   ) => {
     setWordSetupOpen(false)
-    setLocaleName(name)
+    if (canChangeSettings) setLocaleName(name)
     const fileName = exportFileName('Master List', 'docx')
     requestExport({
       filename: fileName,

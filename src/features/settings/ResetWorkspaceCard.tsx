@@ -105,7 +105,8 @@ export function ResetWorkspaceCard() {
             <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
             <Button
               variant="destructive"
-              disabled={busy || confirmation !== CONFIRM_PHRASE}
+              disabled={confirmation !== CONFIRM_PHRASE}
+              loading={busy}
               onClick={() => {
                 void reset()
               }}

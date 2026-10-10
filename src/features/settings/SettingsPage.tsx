@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Download, FileDown, FileUp, Trash2, Upload } from 'lucide-react'
+import { Download, FileDown, FileUp, Loader2, Trash2, Upload } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -42,6 +42,7 @@ import { MasterListPdfSetupDialog } from '@/features/master-list/MasterListPdfSe
 import { exportMasterListPdf } from '@/features/master-list/masterListPdfExport'
 import type { MasterListPaperSize } from '@/features/master-list/masterListPaperSizes'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface BackupFile {
   app: string
@@ -65,9 +66,11 @@ export function SettingsPage() {
   const suguanStore = useSuguanStore()
   const settingsStore = useSettingsStore()
   const addAuditLog = useAdminStore((state) => state.addAuditLog)
+  const { can } = usePermissions()
 
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmUpload, setConfirmUpload] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [confirmClearMasterList, setConfirmClearMasterList] = useState(false)
   const lastSyncedAt = useWorkspaceStore((state) => state.lastSyncedAt)
   const [masterListImportOpen, setMasterListImportOpen] = useState(false)
@@ -134,7 +137,7 @@ export function SettingsPage() {
     paperSize: MasterListPaperSize,
   ) => {
     setMasterListPdfOpen(false)
-    settingsStore.setLocaleName(name)
+    if (can('change-settings')) settingsStore.setLocaleName(name)
     const fileName = exportFileName('Master List', 'pdf')
     requestExport({
       filename: fileName,
@@ -546,7 +549,10 @@ export function SettingsPage() {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
+                  disabled={uploading}
                   onClick={() => {
+                    if (uploading) return
+                    setUploading(true)
                     void useWorkspaceStore
                       .getState()
                       .uploadBrowserData()
@@ -554,8 +560,10 @@ export function SettingsPage() {
                       .catch(() =>
                         toast.error("Could not upload this browser's data."),
                       )
+                      .finally(() => setUploading(false))
                   }}
                 >
+                  {uploading && <Loader2 className="size-4 animate-spin" />}
                   Upload
                 </AlertDialogAction>
               </AlertDialogFooter>

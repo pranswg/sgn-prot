@@ -4,6 +4,7 @@ import {
   Check,
   Clock3,
   KeyRound,
+  Loader2,
   Pencil,
   Plus,
   Shield,
@@ -374,8 +375,8 @@ function CreateUserDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void createAccount()} disabled={pending}>
-            <Plus className="size-4" />
+          <Button onClick={() => void createAccount()} loading={pending}>
+            {!pending && <Plus className="size-4" />}
             {pending ? 'Creating…' : 'Create Account'}
           </Button>
         </DialogFooter>
@@ -463,7 +464,7 @@ function ManagedRoleDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => void save()} disabled={pending}>
+          <Button onClick={() => void save()} loading={pending}>
             {pending ? 'Saving…' : role ? 'Save Role' : 'Create Role'}
           </Button>
         </DialogFooter>
@@ -536,7 +537,7 @@ function RolePermissionsDialog({
             {isAdmin ? 'Close' : 'Cancel'}
           </Button>
           {!isAdmin && (
-            <Button onClick={() => void save()} disabled={pending}>
+            <Button onClick={() => void save()} loading={pending}>
               {pending ? 'Saving…' : 'Save Permissions'}
             </Button>
           )}
@@ -570,6 +571,9 @@ function UserProfileDialog({
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [permissionsCustomized, setPermissionsCustomized] = useState(false)
   const [disableReason, setDisableReason] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [statusPending, setStatusPending] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -598,9 +602,10 @@ function UserProfileDialog({
   }
 
   const save = async () => {
-    if (!account) return
+    if (!account || saving) return
     const nextPermissions =
       form.role === 'admin' || !permissionsCustomized ? null : [...permissions]
+    setSaving(true)
     try {
       const result = await updateManagedAccount(actorId, account.id, {
         ...form,
@@ -615,12 +620,15 @@ function UserProfileDialog({
     } catch (cause) {
       console.error(cause)
       toast.error('Could not update the account. Please try again.')
+    } finally {
+      setSaving(false)
     }
   }
 
   const resetPassword = async () => {
-    if (!account) return
+    if (!account || resetting) return
     setPasswordError('')
+    setResetting(true)
     try {
       const result = await resetManagedPassword(
         actorId,
@@ -642,11 +650,14 @@ function UserProfileDialog({
     } catch (cause) {
       console.error(cause)
       setPasswordError('Could not reset the password.')
+    } finally {
+      setResetting(false)
     }
   }
 
   const changeStatus = async (status: AccountStatus, reason = '') => {
-    if (!account) return
+    if (!account || statusPending) return
+    setStatusPending(true)
     try {
       const result = await updateManagedAccount(actorId, account.id, {
         status,
@@ -661,6 +672,8 @@ function UserProfileDialog({
     } catch (cause) {
       console.error(cause)
       toast.error('Could not change the account status. Please try again.')
+    } finally {
+      setStatusPending(false)
     }
   }
 
@@ -708,6 +721,7 @@ function UserProfileDialog({
                         size="sm"
                         variant="destructive"
                         disabled={!disableReason.trim()}
+                        loading={statusPending}
                         onClick={() => {
                           void changeStatus('disabled', disableReason.trim())
                           setDisableReason('')
@@ -720,6 +734,7 @@ function UserProfileDialog({
                     <Button
                       size="sm"
                       variant="outline"
+                      loading={statusPending}
                       onClick={() => void changeStatus('active')}
                     >
                       Reactivate
@@ -848,10 +863,10 @@ function UserProfileDialog({
                     />
                   )}
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setEditing(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={() => void save()}>Save Changes</Button>
+            <Button variant="outline" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void save()} loading={saving}>Save Changes</Button>
                   </div>
                 </div>
               ) : (
@@ -902,8 +917,8 @@ function UserProfileDialog({
                           onChange={(event) => setNewPassword(event.target.value)}
                         />
                       </div>
-                      <Button variant="outline" onClick={() => void resetPassword()}>
-                        <KeyRound className="size-4" />
+                      <Button variant="outline" onClick={() => void resetPassword()} loading={resetting}>
+                        {!resetting && <KeyRound className="size-4" />}
                         Reset Password
                       </Button>
                     </div>
@@ -1019,6 +1034,8 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   const [roleBeingEdited, setRoleBeingEdited] = useState<ManagedRole | null>(null)
   const [permissionsRole, setPermissionsRole] = useState<ManagedRole | null>(null)
   const [rolePendingDelete, setRolePendingDelete] = useState<ManagedRole | null>(null)
+  const [sessionPendingId, setSessionPendingId] = useState<string | null>(null)
+  const [deletingRole, setDeletingRole] = useState(false)
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -1048,6 +1065,8 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   }
 
   const terminateSession = async (id: string) => {
+    if (sessionPendingId) return
+    setSessionPendingId(id)
     try {
       const result = await terminateManagedSession(actorId, id)
       if ('problems' in result) {
@@ -1058,11 +1077,14 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     } catch (cause) {
       console.error(cause)
       toast.error('Could not end the session. Please try again.')
+    } finally {
+      setSessionPendingId(null)
     }
   }
 
   const confirmDeleteRole = async () => {
-    if (!rolePendingDelete) return
+    if (!rolePendingDelete || deletingRole) return
+    setDeletingRole(true)
     try {
       const result = await deleteManagedRole(actorId, rolePendingDelete.id)
       if ('problems' in result) {
@@ -1074,6 +1096,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       console.error(cause)
       toast.error('Could not delete the role. Please try again.')
     } finally {
+      setDeletingRole(false)
       setRolePendingDelete(null)
     }
   }
@@ -1429,8 +1452,13 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                     </p>
                   </div>
                   <span className="text-xs font-medium text-emerald-700">Active now</span>
-                  <Button size="sm" variant="outline" onClick={() => void terminateSession(session.id)}>
-                    <X className="size-4" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={sessionPendingId === session.id}
+                    onClick={() => void terminateSession(session.id)}
+                  >
+                    {sessionPendingId !== session.id && <X className="size-4" />}
                     Logout Device
                   </Button>
                 </div>
@@ -1486,8 +1514,10 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white"
+              disabled={deletingRole}
               onClick={() => void confirmDeleteRole()}
             >
+              {deletingRole && <Loader2 className="size-4 animate-spin" />}
               Delete Role
             </AlertDialogAction>
           </AlertDialogFooter>

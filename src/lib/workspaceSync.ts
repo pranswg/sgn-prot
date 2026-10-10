@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Json } from '@/lib/database.types'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { describeError } from '@/lib/describeError'
 import {
   diffCollection,
   resolveBatch,
@@ -127,7 +128,7 @@ function reportOk(): void {
 
 function reportError(error: unknown): void {
   console.error('[workspaceSync]', error)
-  statusListener?.({ ok: false, error: error instanceof Error ? error.message : String(error) })
+  statusListener?.({ ok: false, error: describeError(error) })
 }
 
 async function writeRecords(

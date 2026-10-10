@@ -87,7 +87,7 @@ export function PasswordChangePage() {
           </p>
         )}
         <div className="grid gap-2">
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" loading={pending}>
             {pending ? 'Updating…' : 'Change Password'}
           </Button>
           <Button type="button" variant="ghost" onClick={signOut}>

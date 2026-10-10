@@ -4,6 +4,7 @@ import {
   stopWorkspaceSync,
   uploadWorkspaceToServer,
 } from '@/lib/workspaceSync'
+import { describeError } from '@/lib/describeError'
 
 /**
  * Tracks the health of the Postgres mirror.
@@ -42,7 +43,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (error) {
       // Never strand the app on the splash: the stores still hold their
       // localStorage cache, and the toast offers a retry.
-      set({ error: error instanceof Error ? error.message : String(error) })
+      set({ error: describeError(error) })
     } finally {
       set({ ready: true, hydrating: false })
     }
@@ -54,7 +55,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       await uploadWorkspaceToServer()
       set({ lastSyncedAt: Date.now() })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) })
+      set({ error: describeError(error) })
       throw error
     }
   },

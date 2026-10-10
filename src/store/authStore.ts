@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Account, AccountRole, Permission } from '@/core/types/auth'
 import { normalizeUsername, validatePassword, type FieldProblem } from '@/lib/credentials'
-import { profileToAccount, usernameToEmail, type ProfileRow } from '@/lib/authIdentity'
+import { profileToAccount, resolveSignInEmail, type ProfileRow } from '@/lib/authIdentity'
 import { getSupabase } from '@/lib/supabase'
 import { useAdminStore, type ActiveSession } from '@/store/adminStore'
 import type { ManagedRole } from '@/store/adminStore'
@@ -230,20 +230,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ accounts: (data as ProfileRow[] | null)?.map(profileToAccount) ?? [] })
   },
 
-  signIn: async (username, password) => {
+  signIn: async (identifier, password) => {
     const browser = browserContext()
-    const key = normalizeUsername(username)
+    const normalized = normalizeUsername(identifier)
+    const email = resolveSignInEmail(identifier)
     try {
       const client = getSupabase()
       const { data, error } = await client.auth.signInWithPassword({
-        email: usernameToEmail(key),
+        email,
         password,
       })
       if (error || !data.user) {
-        recordFailedLogin(key, browser)
+        recordFailedLogin(normalized, browser)
         return {
           problems: [
-            { field: 'form', message: 'That username and password do not match.' },
+            { field: 'form', message: 'That username/email and password do not match.' },
           ],
         }
       }
@@ -256,7 +257,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
       if (profileError || !profile) {
         await client.auth.signOut()
-        recordFailedLogin(key, browser)
+        recordFailedLogin(normalized, browser)
         return {
           problems: [
             {
@@ -270,10 +271,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const account = profileToAccount(profile as ProfileRow)
       if ((account.status ?? 'active') !== 'active') {
         await client.auth.signOut()
-        recordFailedLogin(key, browser)
+        recordFailedLogin(normalized, browser)
         return {
           problems: [
-            { field: 'form', message: 'That username and password do not match.' },
+            { field: 'form', message: 'That username/email and password do not match.' },
           ],
         }
       }
@@ -303,7 +304,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return { account: signedIn }
     } catch (cause) {
       console.error('Sign-in failed:', cause)
-      recordFailedLogin(key, browser)
+      recordFailedLogin(normalized, browser)
       return {
         problems: [
           {

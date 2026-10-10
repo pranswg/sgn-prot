@@ -20,6 +20,15 @@ export function emailToUsername(email: string | null | undefined): string {
   return email.split('@')[0] ?? ''
 }
 
+export function isEmail(input: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.trim())
+}
+
+export function resolveSignInEmail(input: string): string {
+  const trimmed = input.trim().toLowerCase()
+  return isEmail(trimmed) ? trimmed : usernameToEmail(trimmed)
+}
+
 /** The columns the client reads from `public.profiles`. */
 export interface ProfileRow {
   id: string

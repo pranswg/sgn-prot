@@ -18,7 +18,7 @@ import { useAuthStore } from '@/store/authStore'
  */
 export function AuthPage() {
   const signIn = useAuthStore((s) => s.signIn)
-  const [username, setUsername] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
@@ -31,7 +31,7 @@ export function AuthPage() {
     setPending(true)
     setError('')
     try {
-      const result = await signIn(username, password)
+      const result = await signIn(identifier, password)
       if ('problems' in result) {
         setError(result.problems.map((problem) => problem.message).join(' '))
         return
@@ -61,18 +61,18 @@ export function AuthPage() {
             className="grid gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm"
           >
             <div className="grid gap-2">
-              <Label htmlFor={`${fieldId}-username`}>Username</Label>
+              <Label htmlFor={`${fieldId}-identifier`}>Username or Email</Label>
               <Input
-                id={`${fieldId}-username`}
-                name="username"
+                id={`${fieldId}-identifier`}
+                name="identifier"
                 autoComplete="username"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 className="h-10"
-                placeholder="Enter Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username or email"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
               />
             </div>
 

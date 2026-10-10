@@ -919,7 +919,7 @@ function UserProfileDialog({
                       </div>
                       <Button variant="outline" onClick={() => void resetPassword()} loading={resetting}>
                         {!resetting && <KeyRound className="size-4" />}
-                        Reset Password
+                        {resetting ? 'Resetting…' : 'Reset Password'}
                       </Button>
                     </div>
                     <label className="flex items-center gap-2 text-sm">

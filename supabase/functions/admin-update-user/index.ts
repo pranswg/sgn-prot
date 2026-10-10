@@ -1,5 +1,5 @@
 import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts'
-import { parseBody, requireAdmin, writeAudit } from '../_shared/auth.ts'
+import { parseBody, requirePermission, writeAudit } from '../_shared/auth.ts'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const STATUSES = ['active', 'disabled', 'suspended', 'pending-activation']
@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
     return errorResponse('Method not allowed.', 405)
   }
 
-  const guard = await requireAdmin(req)
+  const guard = await requirePermission(req, 'manage-users')
   if (guard instanceof Response) return guard
   const { profile: actor, admin } = guard
 
@@ -28,6 +28,23 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (!target) {
     return errorResponse('The selected account no longer exists.', 404)
+  }
+
+  // The Auth email is always the synthetic login key. Accounts created before
+  // that rule was enforced can carry a real address as their Auth email, which
+  // makes username sign-in impossible; realign the key on any edit. The contact
+  // address stays on the profile row.
+  const loginEmail = `${target.username.toLowerCase()}@choir.internal`
+  try {
+    const { data: authAccount } = await admin.auth.admin.getUserById(id)
+    if (authAccount?.user && authAccount.user.email !== loginEmail) {
+      await admin.auth.admin.updateUserById(id, {
+        email: loginEmail,
+        email_confirm: true,
+      })
+    }
+  } catch {
+    // A failure here must not block the profile edit the admin asked for.
   }
 
   const has = (key: string) => Object.prototype.hasOwnProperty.call(patch, key)

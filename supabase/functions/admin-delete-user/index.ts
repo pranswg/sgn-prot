@@ -1,5 +1,5 @@
 import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts'
-import { parseBody, requireAdmin, writeAudit } from '../_shared/auth.ts'
+import { parseBody, requirePermission, writeAudit } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
     return errorResponse('Method not allowed.', 405)
   }
 
-  const guard = await requireAdmin(req)
+  const guard = await requirePermission(req, 'manage-users')
   if (guard instanceof Response) return guard
   const { caller, profile: actor, admin } = guard
 

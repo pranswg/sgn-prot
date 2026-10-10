@@ -478,14 +478,20 @@ source of truth; regenerate `src/lib/database.types.ts` after changing them.
   same shapes the old stores exposed; `refresh()` reads `profiles` (RLS shows a
   non-admin only its own row) and the admin tables, so ~20 read-only consumers
   need no change.
-- **Mutations.** Admin user operations go through the Edge Functions
+- **Mutations.** User-account operations go through the Edge Functions
   (`admin-create-user`, `admin-update-user`, `admin-reset-password`,
-  `admin-delete-user`) because they need the service role; role and permission
-  writes go straight to `roles` / `role_permissions` under RLS.
+  `admin-delete-user`) because they need the service role; each requires the
+  `manage-users` permission, and `admin-reset-workspace` requires `restore-data`.
+  Role and permission writes go straight to `roles` / `role_permissions` under
+  RLS.
 - **Authorisation is RLS.** `is_active_user()`, `is_admin()`, and
   `has_permission()` in SQL are the real gate. The TS matrix in
-  `src/lib/rbac.ts` must mirror them (admin-only permissions are enforced in
-  both), but anything a signed-in client can read is ultimately decided by RLS.
+  `src/lib/rbac.ts` must mirror them, but anything a signed-in client can read is
+  ultimately decided by RLS. **Custom roles may hold any permission**, including
+  the ones once reserved for Admins; `ADMIN_ONLY_PERMISSIONS` is gone. An Admin
+  role still short-circuits to full access, and the Settings/Administration pages
+  open per permission rather than being Admin-only (`change-settings` or
+  `restore-data` for Settings, any Administration permission for Administration).
 - **Default admin.** `seedDefaultAdmin()` invokes the `seed-default-admin`
   Edge Function (deployed with `verify_jwt = false`, idempotent) once from
   `App.tsx`. It recreates `admin` / `admin1234` with `must_change_password =

@@ -1,5 +1,5 @@
 import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts'
-import { requireAdmin, writeAudit } from '../_shared/auth.ts'
+import { requirePermission, writeAudit } from '../_shared/auth.ts'
 
 const DEFAULT_ADMIN_USERNAME = 'admin'
 const DEFAULT_ADMIN_NAME = 'Choir Administrator'
@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     return errorResponse('Method not allowed.', 405)
   }
 
-  const guard = await requireAdmin(req)
+  const guard = await requirePermission(req, 'restore-data')
   if (guard instanceof Response) return guard
   const { profile, admin } = guard
 

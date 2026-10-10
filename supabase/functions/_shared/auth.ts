@@ -11,6 +11,7 @@ export interface ActorProfile {
   full_name: string
   role_id: string
   status: string
+  custom_permissions: string[] | null
 }
 
 export function serviceClient(): SupabaseClient {
@@ -25,11 +26,15 @@ export function serviceClient(): SupabaseClient {
 }
 
 /**
- * Validates the caller's JWT and requires an active Admin profile. Returns the
- * service-role client plus the caller, or a Response to return as-is.
+ * Validates the caller's JWT and requires an active profile holding
+ * `permission`. An Admin always passes. A non-admin passes when the permission
+ * is in their explicit `custom_permissions`, or, when that is null, in their
+ * role's `role_permissions`. Returns the service-role client plus the caller, or
+ * a Response to return as-is.
  */
-export async function requireAdmin(
+export async function requirePermission(
   req: Request,
+  permission: string,
 ): Promise<{ caller: User; profile: ActorProfile; admin: SupabaseClient } | Response> {
   const token = (req.headers.get('Authorization') ?? '').replace(
     /^Bearer\s+/i,
@@ -45,15 +50,38 @@ export async function requireAdmin(
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('id, username, full_name, role_id, status')
+    .select('id, username, full_name, role_id, status, custom_permissions')
     .eq('id', data.user.id)
     .maybeSingle<ActorProfile>()
 
-  if (!profile || profile.role_id !== 'admin' || profile.status !== 'active') {
-    return errorResponse('You are not authorized to manage system users.', 403)
+  if (!profile || profile.status !== 'active') {
+    return errorResponse('Your account is not active.', 403)
+  }
+
+  const allowed = await actorHasPermission(admin, profile, permission)
+  if (!allowed) {
+    return errorResponse('You do not have permission to perform this action.', 403)
   }
 
   return { caller: data.user, profile, admin }
+}
+
+async function actorHasPermission(
+  admin: SupabaseClient,
+  profile: ActorProfile,
+  permission: string,
+): Promise<boolean> {
+  if (profile.role_id === 'admin') return true
+  if (profile.custom_permissions !== null) {
+    return profile.custom_permissions.includes(permission)
+  }
+  const { data } = await admin
+    .from('role_permissions')
+    .select('permission')
+    .eq('role_id', profile.role_id)
+    .eq('permission', permission)
+    .maybeSingle()
+  return Boolean(data)
 }
 
 export async function writeAudit(

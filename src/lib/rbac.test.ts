@@ -35,7 +35,14 @@ test('explicit account permissions override role permissions while Admin stays f
   }
   assert.equal(hasPermission(customized, 'edit-members', {}), true)
   assert.equal(hasPermission(customized, 'view-master-list', {}), false)
-  assert.equal(hasPermission({ ...customized, customPermissions: ['manage-users'] }, 'manage-users', {}), false)
+  assert.equal(
+    hasPermission(
+      { ...customized, customPermissions: ['manage-users'] },
+      'manage-users',
+      {},
+    ),
+    true,
+  )
   assert.equal(
     hasPermission(
       { ...customized, role: 'admin' },
@@ -46,21 +53,32 @@ test('explicit account permissions override role permissions while Admin stays f
   )
 })
 
-test('Admin-created role permissions resolve dynamically and stay below Admin access', () => {
+test('Admin-created role permissions resolve dynamically, including admin-tier ones', () => {
   const account: Account = { ...staff, role: 'custom-auditor' }
   const permissions = {
     'custom-auditor': ['view-dashboard', 'view-audit-logs'] as Permission[],
   }
-  assert.deepEqual(effectivePermissions(account, permissions), ['view-dashboard'])
+  assert.deepEqual(effectivePermissions(account, permissions), [
+    'view-dashboard',
+    'view-audit-logs',
+  ])
   assert.equal(hasPermission(account, 'view-dashboard', permissions), true)
+  assert.equal(hasPermission(account, 'view-audit-logs', permissions), true)
   assert.equal(hasPermission(account, 'view-master-list', permissions), false)
 })
 
-test('page access follows the permission matrix and Settings stays Admin-only', () => {
+test('page access follows the permission matrix; System pages open with their permission', () => {
   const roles = { 'custom-staff': ['view-master-list'] as Permission[] }
   assert.equal(canAccessPage('master-list', staff, roles), true)
   assert.equal(canAccessPage('suguan-builder', staff, roles), false)
   assert.equal(canAccessPage('settings', staff, roles), false)
+  assert.equal(canAccessPage('administration', staff, roles), false)
+
+  const systemRoles = {
+    'custom-staff': ['change-settings', 'view-audit-logs'] as Permission[],
+  }
+  assert.equal(canAccessPage('settings', staff, systemRoles), true)
+  assert.equal(canAccessPage('administration', staff, systemRoles), true)
   assert.equal(
     canAccessPage('settings', { ...staff, role: 'admin' }, roles),
     true,

@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -61,7 +62,6 @@ import type {
 } from '@/core/types/auth'
 import { initialsFor } from '@/lib/credentials'
 import {
-  ADMIN_ONLY_PERMISSIONS,
   ACCOUNT_ROLES,
   DEFAULT_ROLE_PERMISSIONS,
   PERMISSION_DEFINITIONS,
@@ -169,14 +169,8 @@ function PermissionChecks({
               (permission) => (
                 <label key={permission.id} className="flex items-center gap-2 text-sm">
                   <Checkbox
-                    checked={
-                      value.includes(permission.id) &&
-                      !ADMIN_ONLY_PERMISSIONS.includes(permission.id)
-                    }
-                    disabled={
-                      disabled ||
-                      ADMIN_ONLY_PERMISSIONS.includes(permission.id)
-                    }
+                    checked={value.includes(permission.id)}
+                    disabled={disabled}
                     onCheckedChange={(checked) =>
                       onChange(
                         checked
@@ -318,9 +312,8 @@ function CreateUserDialog({
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="admin-new-password">Temporary password</Label>
-                <Input
+                <PasswordInput
                   id="admin-new-password"
-                  type="password"
                   autoComplete="new-password"
                   value={form.password}
                   onChange={(event) => set('password', event.target.value)}
@@ -435,8 +428,8 @@ function ManagedRoleDialog({
         <DialogHeader>
           <DialogTitle>{role ? 'Edit Role' : 'Create Role'}</DialogTitle>
           <DialogDescription>
-            Set the role name and description. You can assign permissions in
-            the role matrix after creating it.
+            Set the role name and description, then choose the permissions this
+            role grants. You can revisit them any time by opening the role.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -473,6 +466,80 @@ function ManagedRoleDialog({
           <Button onClick={() => void save()} disabled={pending}>
             {pending ? 'Saving…' : role ? 'Save Role' : 'Create Role'}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function RolePermissionsDialog({
+  actorId,
+  role,
+  current,
+  onClose,
+}: {
+  actorId: string
+  role: ManagedRole
+  current: Permission[]
+  onClose: () => void
+}) {
+  const updateManagedRolePermissions = useAuthStore(
+    (state) => state.updateManagedRolePermissions,
+  )
+  const isAdmin = role.id === 'admin'
+  const [permissions, setPermissions] = useState<Permission[]>(current)
+  const [error, setError] = useState('')
+  const [pending, setPending] = useState(false)
+
+  const save = async () => {
+    setPending(true)
+    setError('')
+    try {
+      const result = await updateManagedRolePermissions(
+        actorId,
+        role.id,
+        permissions,
+      )
+      if ('problems' in result) {
+        setError(result.problems.map((problem) => problem.message).join(' '))
+        return
+      }
+      toast.success(`${role.label} permissions updated.`)
+      onClose()
+    } catch (cause) {
+      console.error(cause)
+      setError('Could not save the permissions. Please try again.')
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{role.label} permissions</DialogTitle>
+          <DialogDescription>
+            {isAdmin
+              ? 'Admin always has full access and cannot be restricted.'
+              : 'Check the permissions this role grants. Changes apply to every user assigned this role.'}
+          </DialogDescription>
+        </DialogHeader>
+        <PermissionChecks
+          value={isAdmin ? DEFAULT_ROLE_PERMISSIONS.admin : permissions}
+          onChange={setPermissions}
+          disabled={isAdmin}
+        />
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            {isAdmin ? 'Close' : 'Cancel'}
+          </Button>
+          {!isAdmin && (
+            <Button onClick={() => void save()} disabled={pending}>
+              {pending ? 'Saving…' : 'Save Permissions'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -826,14 +893,15 @@ function UserProfileDialog({
                   <section className="grid gap-2 rounded-lg border p-3">
                     <Label htmlFor="admin-reset-password">Set a new password</Label>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
-                        id="admin-reset-password"
-                        type="password"
-                        autoComplete="new-password"
-                        placeholder="Enter the new password"
-                        value={newPassword}
-                        onChange={(event) => setNewPassword(event.target.value)}
-                      />
+                      <div className="flex-1">
+                        <PasswordInput
+                          id="admin-reset-password"
+                          autoComplete="new-password"
+                          placeholder="Enter the new password"
+                          value={newPassword}
+                          onChange={(event) => setNewPassword(event.target.value)}
+                        />
+                      </div>
                       <Button variant="outline" onClick={() => void resetPassword()}>
                         <KeyRound className="size-4" />
                         Reset Password
@@ -931,9 +999,6 @@ function Overview({
 
 export function AdminManagement({ actorId }: { actorId: string }) {
   const accounts = useAuthStore((state) => state.accounts)
-  const updateManagedRolePermissions = useAuthStore(
-    (state) => state.updateManagedRolePermissions,
-  )
   const terminateManagedSession = useAuthStore(
     (state) => state.terminateManagedSession,
   )
@@ -952,6 +1017,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
   const [roleBeingEdited, setRoleBeingEdited] = useState<ManagedRole | null>(null)
+  const [permissionsRole, setPermissionsRole] = useState<ManagedRole | null>(null)
   const [rolePendingDelete, setRolePendingDelete] = useState<ManagedRole | null>(null)
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
@@ -979,22 +1045,6 @@ export function AdminManagement({ actorId }: { actorId: string }) {
 
   const inspectUser = (account: Account) => {
     setSelectedAccountId(account.id)
-  }
-
-  const changeRolePermission = async (
-    role: AccountRole,
-    permission: Permission,
-    enabled: boolean,
-  ) => {
-    if (role === 'admin') return
-    const before = rolePermissionsFor(role, rolePermissions)
-    const after = enabled
-      ? [...new Set([...before, permission])]
-      : before.filter((item) => item !== permission)
-    const result = await updateManagedRolePermissions(actorId, role, after)
-    if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
-    }
   }
 
   const terminateSession = async (id: string) => {
@@ -1243,108 +1293,79 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             <CardHeader>
               <CardTitle className="text-base">Roles & Permissions</CardTitle>
               <CardDescription>
-                Configure the permissions inherited by each role. Admin always retains full access.
+                Open a role to choose the permissions it grants. Admin always retains full access.
               </CardDescription>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50 hover:bg-slate-50">
-                    <TableHead className="min-w-56">Permission</TableHead>
-                    {roles.map((role) => (
-                      <TableHead key={role.id} className="min-w-36 text-center">
-                        {role.label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {PERMISSION_DEFINITIONS.map((permission) => (
-                    <TableRow key={permission.id}>
-                      <TableCell>
-                        <p className="font-medium">{permission.label}</p>
-                        <p className="text-xs text-muted-foreground">{permission.module}</p>
-                      </TableCell>
-                      {roles.map((role) => {
-                        const granted = rolePermissionsFor(
-                          role.id,
-                          rolePermissions,
-                        ).includes(permission.id)
-                        return (
-                          <TableCell key={role.id} className="text-center">
-                            <Checkbox
-                              aria-label={`${permission.label} for ${role.label}`}
-                              checked={role.id === 'admin' || granted}
-                              disabled={
-                                role.id === 'admin' ||
-                                ADMIN_ONLY_PERMISSIONS.includes(permission.id)
-                              }
-                              onCheckedChange={(checked) =>
-                                void changeRolePermission(
-                                  role.id,
-                                  permission.id,
-                                  checked === true,
-                                )
-                              }
-                            />
-                          </TableCell>
-                        )
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {roles.map((role) => {
+                  const count = rolePermissionsFor(role.id, rolePermissions).length
+                  return (
+                    <div
+                      key={role.id}
+                      className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4 transition-colors hover:border-slate-300"
+                    >
+                      <button
+                        type="button"
+                        className="flex flex-1 flex-col items-start gap-2 text-left"
+                        onClick={() => setPermissionsRole(role)}
+                      >
+                        <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                          {role.id === 'admin' ? (
+                            <ShieldCheck className="size-4 text-blue-600" />
+                          ) : (
+                            <Shield className="size-4 text-slate-500" />
+                          )}
+                          {role.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {role.description}
+                        </span>
+                        <span className="text-xs font-medium text-slate-600">
+                          {role.id === 'admin'
+                            ? 'Full access'
+                            : `${count} permission${count === 1 ? '' : 's'} granted`}
+                        </span>
+                      </button>
+                      {role.id !== 'admin' && (
+                        <div className="flex justify-end gap-1">
+                          {role.id.startsWith('custom-') && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Edit ${role.label}`}
+                              onClick={() => {
+                                setRoleBeingEdited(role)
+                                setRoleDialogOpen(true)
+                              }}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Delete ${role.label}`}
+                            title={
+                              accounts.some((account) => account.role === role.id)
+                                ? 'Reassign users before deleting this role'
+                                : 'Delete role'
+                            }
+                            disabled={accounts.some(
+                              (account) => account.role === role.id,
+                            )}
+                            onClick={() => setRolePendingDelete(role)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </CardContent>
           </Card>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {roles.map((role) => (
-              <Card key={role.id} className="rounded-xl border-slate-200 shadow-none">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    {role.id === 'admin' ? <ShieldCheck className="size-4 text-blue-600" /> : <Shield className="size-4 text-slate-500" />}
-                    {role.label}
-                  </CardTitle>
-                  <CardDescription>{role.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {rolePermissionsFor(role.id, rolePermissions).length} permissions granted
-                  </span>
-                  {role.id !== 'admin' && (
-                    <div className="flex gap-1">
-                      {role.id.startsWith('custom-') && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`Edit ${role.label}`}
-                        onClick={() => {
-                          setRoleBeingEdited(role)
-                          setRoleDialogOpen(true)
-                        }}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      )}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={`Delete ${role.label}`}
-                        title={
-                          accounts.some((account) => account.role === role.id)
-                            ? 'Reassign users before deleting this role'
-                            : 'Delete role'
-                        }
-                        disabled={accounts.some((account) => account.role === role.id)}
-                        onClick={() => setRolePendingDelete(role)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </div>
       )}
 
@@ -1435,6 +1456,15 @@ export function AdminManagement({ actorId }: { actorId: string }) {
           actorId={actorId}
           role={roleBeingEdited}
           onClose={() => setRoleDialogOpen(false)}
+        />
+      )}
+      {permissionsRole && (
+        <RolePermissionsDialog
+          key={permissionsRole.id}
+          actorId={actorId}
+          role={permissionsRole}
+          current={rolePermissionsFor(permissionsRole.id, rolePermissions)}
+          onClose={() => setPermissionsRole(null)}
         />
       )}
       <AlertDialog

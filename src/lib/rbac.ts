@@ -27,17 +27,6 @@ export const PERMISSION_DEFINITIONS: {
   { id: 'manage-sessions', label: 'Manage Active Sessions', module: 'Security' },
 ]
 
-export const ADMIN_ONLY_PERMISSIONS: Permission[] = [
-  'manage-users',
-  'manage-roles',
-  'view-audit-logs',
-  'change-settings',
-  'restore-data',
-  'view-login-history',
-  'manage-sessions',
-  'manage-membership-history',
-]
-
 export const ACCOUNT_ROLES: {
   id: AccountRole
   label: string
@@ -49,6 +38,18 @@ export const ACCOUNT_ROLES: {
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   admin: PERMISSION_DEFINITIONS.map((permission) => permission.id),
 }
+
+/**
+ * Permissions that make the Administration page worth opening. Any one of them
+ * grants entry; the page's sections are further gated by RLS server-side.
+ */
+export const ADMIN_SECTION_PERMISSIONS: Permission[] = [
+  'manage-users',
+  'manage-roles',
+  'view-audit-logs',
+  'view-login-history',
+  'manage-sessions',
+]
 
 export function isAccountRole(value: unknown): value is AccountRole {
   return typeof value === 'string' && value.trim().length > 0
@@ -70,9 +71,9 @@ export function effectivePermissions(
   rolePermissions: Partial<Record<AccountRole, Permission[]>>,
 ): Permission[] {
   if (account.role === 'admin') return DEFAULT_ROLE_PERMISSIONS.admin
-  return (account.customPermissions ??
-    rolePermissionsFor(account.role, rolePermissions)).filter(
-    (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
+  return (
+    account.customPermissions ??
+    rolePermissionsFor(account.role, rolePermissions)
   )
 }
 
@@ -90,8 +91,16 @@ export function canAccessPage(
   account: Pick<Account, 'role' | 'customPermissions'> | null | undefined,
   rolePermissions: Partial<Record<AccountRole, Permission[]>>,
 ): boolean {
-  if (page === 'settings' || page === 'administration') {
-    return account?.role === 'admin'
+  if (page === 'settings') {
+    return (
+      hasPermission(account, 'change-settings', rolePermissions) ||
+      hasPermission(account, 'restore-data', rolePermissions)
+    )
+  }
+  if (page === 'administration') {
+    return ADMIN_SECTION_PERMISSIONS.some((permission) =>
+      hasPermission(account, permission, rolePermissions),
+    )
   }
   if (page === 'suguan-builder') {
     return (

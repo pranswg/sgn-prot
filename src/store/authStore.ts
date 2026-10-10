@@ -7,7 +7,7 @@ import type {
 } from '@/core/types/auth'
 import type { Database } from '@/lib/database.types'
 import type { ActiveSession, ManagedRole } from '@/core/types/admin'
-import { ADMIN_ONLY_PERMISSIONS, ACCOUNT_ROLES } from '@/lib/rbac'
+import { ACCOUNT_ROLES } from '@/lib/rbac'
 import { validatePassword, type FieldProblem } from '@/lib/credentials'
 import {
   currentUserAgent,
@@ -354,9 +354,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       .from('roles')
       .insert({ id, label, description, is_system: false })
     if (error) return { problems: [{ field: 'form', message: error.message }] }
-    const permissions = [...new Set(input.permissions)].filter(
-      (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-    )
+    const permissions = [...new Set(input.permissions)]
     if (permissions.length > 0) {
       const { error: permissionError } = await supabase
         .from('role_permissions')
@@ -455,9 +453,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       }
     }
     const supabase = getSupabase()
-    const next = [...new Set(permissions)].filter(
-      (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-    )
+    const next = [...new Set(permissions)]
     const { error: deleteError } = await supabase
       .from('role_permissions')
       .delete()

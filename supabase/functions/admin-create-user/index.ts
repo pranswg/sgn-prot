@@ -2,7 +2,7 @@ import { corsHeaders, jsonResponse, errorResponse } from '../_shared/cors.ts'
 import {
   normalizeUsername,
   parseBody,
-  requireAdmin,
+  requirePermission,
   writeAudit,
 } from '../_shared/auth.ts'
 
@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     return errorResponse('Method not allowed.', 405)
   }
 
-  const guard = await requireAdmin(req)
+  const guard = await requirePermission(req, 'manage-users')
   if (guard instanceof Response) return guard
   const { profile, admin } = guard
 
@@ -64,8 +64,11 @@ Deno.serve(async (req) => {
     return errorResponse('That username is already taken.', 409)
   }
 
+  // The Auth email is always the synthetic `<username>@choir.internal` login
+  // key. A real address is contact info only and travels on the profile via
+  // metadata; using it as the login email would break username sign-in.
   const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email: email || `${username}@choir.internal`,
+    email: `${username}@choir.internal`,
     password,
     email_confirm: true,
     user_metadata: {
@@ -73,6 +76,7 @@ Deno.serve(async (req) => {
       full_name: fullName,
       first_name: firstName,
       last_name: lastName,
+      email,
       role_id: role,
       custom_permissions: customPermissions,
       must_change_password: true,

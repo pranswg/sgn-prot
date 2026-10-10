@@ -45,6 +45,7 @@ import { formatMemberName, memberInitials } from '@/lib/memberDirectory'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { cn } from '@/lib/utils'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 interface MemberHistoryDetailProps {
   member: Member
@@ -132,7 +133,6 @@ export function MemberHistoryContent({
   const [deleting, setDeleting] = useState<MemberHistoryEvent | null>(null)
 
   const events = memberHistoryEvents(member)
-  if (member.isActive && events.length === 0) return null
   const timeline = [...events].reverse()
 
   const startEdit = (event: MemberHistoryEvent) => {
@@ -158,6 +158,10 @@ export function MemberHistoryContent({
     setEditingId(null)
     toast.success('History event updated.')
   }
+
+  const [saveHistoryEdit, savingHistoryEdit] = useAsyncAction(saveEdit)
+
+  if (member.isActive && events.length === 0) return null
 
   const confirmDelete = () => {
     if (!deleting) return
@@ -320,7 +324,12 @@ export function MemberHistoryContent({
                           <X className="size-3.5" />
                           Cancel
                         </Button>
-                        <Button size="sm" onClick={() => saveEdit(event)} className="flex-1">
+                        <Button
+                          size="sm"
+                          onClick={() => void saveHistoryEdit(event)}
+                          loading={savingHistoryEdit}
+                          className="flex-1"
+                        >
                           Save
                         </Button>
                       </div>

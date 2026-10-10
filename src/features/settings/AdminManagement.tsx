@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Activity,
   Check,
@@ -60,6 +60,7 @@ import type {
   Permission,
 } from '@/core/types/auth'
 import { initialsFor } from '@/lib/credentials'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import {
   ADMIN_ONLY_PERMISSIONS,
   ACCOUNT_ROLES,
@@ -381,9 +382,9 @@ function CreateUserDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void createAccount()} disabled={pending}>
+          <Button onClick={() => void createAccount()} loading={pending}>
             <Plus className="size-4" />
-            {pending ? 'Creating…' : 'Create Account'}
+            Create Account
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -406,10 +407,8 @@ function ManagedRoleDialog({
   const [description, setDescription] = useState(role?.description ?? '')
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [error, setError] = useState('')
-  const [pending, setPending] = useState(false)
 
   const save = () => {
-    setPending(true)
     setError('')
     const result = role
       ? updateManagedRole(actorId, role.id, { label, description })
@@ -420,8 +419,9 @@ function ManagedRoleDialog({
       toast.success(role ? 'Role updated.' : 'Role created.')
       onClose()
     }
-    setPending(false)
   }
+
+  const [saveRole, savingRole] = useAsyncAction(save)
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -464,8 +464,8 @@ function ManagedRoleDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={pending}>
-            {pending ? 'Saving…' : role ? 'Save Role' : 'Create Role'}
+          <Button onClick={saveRole} loading={savingRole}>
+            {role ? 'Save Role' : 'Create Role'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -581,6 +581,10 @@ function UserProfileDialog({
     onClose()
   }
 
+  const [saveProfile, savingProfile] = useAsyncAction(save)
+  const [resetUserPassword, resettingUserPassword] = useAsyncAction(resetPassword)
+  const [changeAccountStatus, changingAccountStatus] = useAsyncAction(changeStatus)
+
   return (
     <>
       <Dialog
@@ -625,8 +629,9 @@ function UserProfileDialog({
                         size="sm"
                         variant="destructive"
                         disabled={!disableReason.trim()}
+                        loading={changingAccountStatus}
                         onClick={() => {
-                          changeStatus('disabled', disableReason.trim())
+                          void changeAccountStatus('disabled', disableReason.trim())
                           setDisableReason('')
                         }}
                       >
@@ -637,7 +642,8 @@ function UserProfileDialog({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => changeStatus('active')}
+                      onClick={() => void changeAccountStatus('active')}
+                      loading={changingAccountStatus}
                     >
                       Reactivate
                     </Button>
@@ -768,7 +774,7 @@ function UserProfileDialog({
                     <Button variant="outline" onClick={() => setEditing(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={save}>Save Changes</Button>
+                    <Button onClick={saveProfile} loading={savingProfile}>Save Changes</Button>
                   </div>
                 </div>
               ) : (
@@ -818,7 +824,11 @@ function UserProfileDialog({
                         value={newPassword}
                         onChange={(event) => setNewPassword(event.target.value)}
                       />
-                      <Button variant="outline" onClick={() => void resetPassword()}>
+                      <Button
+                        variant="outline"
+                        onClick={() => void resetUserPassword()}
+                        loading={resettingUserPassword}
+                      >
                         <KeyRound className="size-4" />
                         Reset Password
                       </Button>
@@ -988,6 +998,20 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       return
     }
     toast.success(`Session for ${result.session.userName} ended.`)
+  }
+
+  const [terminatingId, setTerminatingId] = useState<string | null>(null)
+  const terminatingRef = useRef(false)
+  const endSession = (id: string) => {
+    if (terminatingRef.current) return
+    terminatingRef.current = true
+    setTerminatingId(id)
+    try {
+      terminateSession(id)
+    } finally {
+      terminatingRef.current = false
+      setTerminatingId(null)
+    }
   }
 
   const confirmDeleteRole = () => {
@@ -1381,7 +1405,12 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                     </p>
                   </div>
                   <span className="text-xs font-medium text-emerald-700">Active now</span>
-                  <Button size="sm" variant="outline" onClick={() => terminateSession(session.id)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => endSession(session.id)}
+                    loading={terminatingId === session.id}
+                  >
                     <X className="size-4" />
                     Logout Device
                   </Button>

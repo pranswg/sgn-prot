@@ -26,6 +26,7 @@ import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { phtInstantISO } from '@/lib/phDate'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { DuplicateMemberPanel } from './DuplicateMemberPanel'
 import { useDuplicateActions } from './useDuplicateActions'
 
@@ -167,6 +168,8 @@ export function MemberFormDialog({
     onOpenChange(false)
     onSaved?.()
   }
+
+  const [saveMember, savingMember] = useAsyncAction(handleSave)
 
   const duplicateFocused = duplicateCandidates.length > 0
 
@@ -351,7 +354,7 @@ export function MemberFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>{member ? 'Save Changes' : 'Add Member'}</Button>
+          <Button onClick={saveMember} loading={savingMember}>{member ? 'Save Changes' : 'Add Member'}</Button>
         </DialogFooter>
           </>
         )}

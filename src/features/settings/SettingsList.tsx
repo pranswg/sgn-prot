@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { cn } from '@/lib/utils'
 import { ReferenceForm } from './ReferenceForm'
 import {
@@ -161,6 +162,8 @@ export function SettingsList<T extends { id: string }>({
     closeForm()
   }
 
+  const [runSave, saving] = useAsyncAction(save)
+
   const confirmDelete = () => {
     if (!pendingDelete) return
     onDelete(pendingDelete.id)
@@ -176,7 +179,7 @@ export function SettingsList<T extends { id: string }>({
       values={values}
       onChange={(key, value) => setValues((prev) => ({ ...prev, [key]: value }))}
       problem={problem}
-      onSubmit={save}
+      onSubmit={runSave}
     >
       {isMobile ? (
         <div className="flex flex-col gap-3 border-t border-border/60 pt-4">
@@ -228,7 +231,7 @@ export function SettingsList<T extends { id: string }>({
             >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1" disabled={!!problem}>
+            <Button type="submit" className="flex-1" disabled={!!problem} loading={saving}>
               Save
             </Button>
           </div>
@@ -238,7 +241,7 @@ export function SettingsList<T extends { id: string }>({
           <Button type="button" variant="outline" onClick={closeForm}>
             Cancel
           </Button>
-          <Button type="submit" disabled={!!problem}>
+          <Button type="submit" disabled={!!problem} loading={saving}>
             Save
           </Button>
         </DialogFooter>

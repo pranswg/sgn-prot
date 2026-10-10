@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
@@ -45,21 +46,58 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    loading?: boolean
   }) {
-  const Comp = asChild ? Slot.Root : "button"
+  if (asChild) {
+    return (
+      <Slot.Root
+        data-slot="button"
+        data-variant={variant}
+        data-size={size}
+        className={cn(buttonVariants({ variant, size, className }))}
+        {...props}
+      >
+        {children}
+      </Slot.Root>
+    )
+  }
 
   return (
-    <Comp
+    <button
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      data-loading={loading ? "" : undefined}
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        loading && "relative",
+      )}
       {...props}
-    />
+    >
+      <span
+        className={cn(
+          "inline-flex items-center [gap:inherit]",
+          loading && "invisible",
+        )}
+      >
+        {children}
+      </span>
+      {loading ? (
+        <Loader2
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 m-auto size-4 animate-spin"
+        />
+      ) : null}
+    </button>
   )
 }
 

@@ -22,6 +22,7 @@ import type { KoroCell, KoroTable } from '@/core/types/koro'
 import type { DocFontSize, SuguanGroup } from '@/core/types/suguan'
 import { exportKoroAsSuguanPdf, exportKoroTablePdf } from './koroPdfExport'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 const GROUPS: { value: SuguanGroup; label: string }[] = [
   { value: 'babae', label: 'Babae' },
@@ -44,6 +45,7 @@ export function KoroMakerPage() {
   const [memberGender, setMemberGender] = useState<'all' | 'male' | 'female'>('all')
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const { exportPreview, requestExport } = useExportPreview()
+  const [createNewKoro, creatingKoro] = useAsyncAction(createDocument)
   const document =
     documents.find((entry) => entry.id === activeDocumentId) ?? documents[0]
   const availableMembers = members.filter((member) => member.isActive)
@@ -233,13 +235,14 @@ export function KoroMakerPage() {
         description="Arrange members by seat and voice color for special occasions. Changes are saved automatically in this browser."
         actions={
           <>
-            <Button variant="outline" onClick={createDocument}>
+            <Button variant="outline" onClick={createNewKoro} loading={creatingKoro}>
               <Plus className="size-4" />
               New Koro
             </Button>
             <Button
               variant="outline"
               onClick={() => void handleExport('table')}
+              loading={exporting === 'table'}
               disabled={exporting !== null}
             >
               <FileDown className="size-4" />
@@ -248,6 +251,7 @@ export function KoroMakerPage() {
             <Button
               variant="outline"
               onClick={() => void handlePreviewSuguan()}
+              loading={exporting === 'preview'}
               disabled={exporting !== null}
             >
               <Eye className="size-4" />
@@ -255,6 +259,7 @@ export function KoroMakerPage() {
             </Button>
             <Button
               onClick={() => void handleExport('suguan')}
+              loading={exporting === 'suguan'}
               disabled={exporting !== null}
             >
               <FileDown className="size-4" />

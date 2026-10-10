@@ -27,6 +27,7 @@ import {
   isSpreadsheetFile,
 } from '@/lib/spreadsheetImport'
 import { todayPHT } from '@/lib/phDate'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 interface ImportRosterDialogProps {
   open: boolean
@@ -278,6 +279,8 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     onOpenChange(false)
   }
 
+  const [importRoster, importing] = useAsyncAction(runImport)
+
   if (!canImport) return null
 
   return (
@@ -486,7 +489,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
               >
                 Choose another file
               </Button>
-              <Button onClick={runImport} disabled={stats.selected === 0}>
+              <Button onClick={importRoster} loading={importing} disabled={stats.selected === 0}>
                 Import {stats.selected > 0 ? stats.selected : ''}
               </Button>
             </DialogFooter>

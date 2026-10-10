@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Eye, EyeOff, Loader2, Music4, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Music4, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -230,8 +230,7 @@ export function AuthPage() {
               </>
             )}
 
-            <Button type="submit" size="lg" className="h-10 w-full" disabled={pending}>
-              {pending && <Loader2 className="size-4 animate-spin" />}
+            <Button type="submit" size="lg" className="h-10 w-full" loading={pending}>
               {isFirstAdminSetup ? 'Create Admin Account' : 'Sign in'}
             </Button>
 

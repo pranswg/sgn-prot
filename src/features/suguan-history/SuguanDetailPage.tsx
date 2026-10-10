@@ -163,6 +163,7 @@ export function SuguanDetailPage() {
             variant="outline"
             size="sm"
             onClick={handleExportPdf}
+            loading={exporting === 'pdf'}
             disabled={exporting !== null}
           >
             <FileDown className="size-3.5" />
@@ -172,6 +173,7 @@ export function SuguanDetailPage() {
             variant="outline"
             size="sm"
             onClick={handleExportExcel}
+            loading={exporting === 'excel'}
             disabled={exporting !== null}
           >
             <FileSpreadsheet className="size-3.5" />
@@ -215,11 +217,21 @@ export function SuguanDetailPage() {
               <ArrowLeft className="size-4" />
               History
             </Button>
-            <Button variant="outline" onClick={handleExportExcel} disabled={exporting !== null}>
+            <Button
+              variant="outline"
+              onClick={handleExportExcel}
+              loading={exporting === 'excel'}
+              disabled={exporting !== null}
+            >
               <FileSpreadsheet className="size-4" />
               Export Excel (.xlsx)
             </Button>
-            <Button variant="outline" onClick={handleExportPdf} disabled={exporting !== null}>
+            <Button
+              variant="outline"
+              onClick={handleExportPdf}
+              loading={exporting === 'pdf'}
+              disabled={exporting !== null}
+            >
               <FileDown className="size-4" />
               Export PDF (.pdf)
             </Button>
@@ -269,6 +281,7 @@ export function SuguanDetailPage() {
         <Button
           className="flex-1"
           onClick={handleExportPdf}
+          loading={exporting === 'pdf'}
           disabled={exporting !== null}
         >
           <FileDown className="size-4" />
@@ -277,6 +290,7 @@ export function SuguanDetailPage() {
         <Button
           variant="outline"
           onClick={handleExportExcel}
+          loading={exporting === 'excel'}
           disabled={exporting !== null}
         >
           <FileSpreadsheet className="size-4" />

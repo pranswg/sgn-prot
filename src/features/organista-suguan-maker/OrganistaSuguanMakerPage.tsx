@@ -24,6 +24,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import type { OrganistaSuguanService } from '@/core/types/organistaSuguan'
 import { MemberPicker } from './memberPicker'
 import {
@@ -524,7 +525,6 @@ export function OrganistaSuguanMakerPage() {
   const previewPdf = async () => {
     if (!requirePagsasanayDate()) return
     const previewWindow = window.open('', '_blank')
-
     if (!previewWindow) {
       toast.error('Allow pop-ups to preview the Organist Suguan PDF.')
       return
@@ -583,6 +583,10 @@ export function OrganistaSuguanMakerPage() {
     }
   }
 
+  const [saveOrganistSuguan, savingOrganistSuguan] = useAsyncAction(saveToHistory)
+  const [previewOrganistSuguan, previewingOrganistSuguan] = useAsyncAction(previewPdf)
+  const [exportOrganistSuguan, exportingOrganistSuguan] = useAsyncAction(exportPdf)
+
   return (
     <div className="flex flex-col gap-5 pb-10">
       {exportPreview}
@@ -601,15 +605,19 @@ export function OrganistaSuguanMakerPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={saveToHistory}>
+          <Button variant="outline" onClick={saveOrganistSuguan} loading={savingOrganistSuguan}>
             <Save className="size-4" />
             Save to History
           </Button>
-          <Button variant="outline" onClick={() => void previewPdf()}>
+          <Button
+            variant="outline"
+            onClick={() => void previewOrganistSuguan()}
+            loading={previewingOrganistSuguan}
+          >
             <Eye className="size-4" />
             Preview
           </Button>
-          <Button onClick={() => void exportPdf()}>
+          <Button onClick={() => void exportOrganistSuguan()} loading={exportingOrganistSuguan}>
             <FileDown className="size-4" />
             Export PDF
           </Button>

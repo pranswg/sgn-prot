@@ -424,10 +424,10 @@ export function AttendanceSheetDialog({
         type="button"
         className="h-11"
         onClick={() => void handleExport()}
-        disabled={isExporting}
+        loading={isExporting}
       >
         <FileDown className="size-4" />
-        {isExporting ? 'Generating PDF…' : 'Generate PDF'}
+        Generate PDF
       </Button>
     </>
   )

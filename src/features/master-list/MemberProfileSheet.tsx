@@ -33,6 +33,7 @@ import { memberEffectivePositions } from '@/core/constants/memberMembership'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 interface MemberProfileSheetProps {
   member: Member | null
@@ -67,6 +68,12 @@ export function MemberProfileSheet({
   const allVoices = useSettingsStore((s) => s.allVoices)
   const suguanList = useSuguanStore((s) => s.suguan)
   const voiceMap = allVoices()
+
+  const [toggleStatus, togglingStatus] = useAsyncAction(() => {
+    if (!member) return
+    onOpenChange(false)
+    onToggleStatus(member)
+  })
 
   if (!member) {
     return <Sheet open={false} onOpenChange={onOpenChange} />
@@ -217,10 +224,8 @@ export function MemberProfileSheet({
           <Button
             variant="outline"
             className={canLifecycle ? 'text-amber-700 dark:text-amber-300' : 'flex-1 text-amber-700 dark:text-amber-300'}
-            onClick={() => {
-              onOpenChange(false)
-              onToggleStatus(member)
-            }}
+            onClick={toggleStatus}
+            loading={togglingStatus}
           >
             {member.isActive ? (
               <>

@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { cn } from '@/lib/utils'
 import { formatTime } from '@/lib/format'
 import {
@@ -133,6 +134,8 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
       `${activeCount} active schedules (${midweek.length} midweek, ${weekend.length} weekend).`,
     )
   }
+
+  const [saveSchedules, savingSchedules] = useAsyncAction(save)
 
   const cancel = () => {
     setMidweek(storedMidweek)
@@ -442,7 +445,8 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
             </Button>
             <Button
               className="min-h-11 flex-1 md:min-h-0 md:flex-none"
-              onClick={save}
+              onClick={saveSchedules}
+              loading={savingSchedules}
               disabled={!dirty}
             >
               Save Changes
@@ -592,6 +596,7 @@ function TimeForm({
 }) {
   const editing = form.editingId !== null
   const suggested = scheduleLabel(form.weekday, form.time24)
+  const [saveTime, savingTime] = useAsyncAction(onSave)
 
   const pickDay = (weekday: number) =>
     onPatch(
@@ -675,7 +680,7 @@ function TimeForm({
               <Button variant="outline" className="min-h-11 flex-1" onClick={onClose}>
                 Cancel
               </Button>
-              <Button className="min-h-11 flex-1" onClick={onSave}>
+              <Button className="min-h-11 flex-1" onClick={saveTime} loading={savingTime}>
                 {editing ? 'Save' : 'Add time'}
               </Button>
             </div>
@@ -698,7 +703,7 @@ function TimeForm({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSave}>{editing ? 'Save' : 'Add time'}</Button>
+          <Button onClick={saveTime} loading={savingTime}>{editing ? 'Save' : 'Add time'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

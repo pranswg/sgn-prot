@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { exportSuguanPdf } from './suguanPdfExport'
 import { SuguanSheetPreview } from './SuguanSheetPreview'
 import { buildPreviewSuguan, saveBlockers, totalAssigned, type SuguanDraft } from './builderState'
@@ -43,6 +44,7 @@ export function PreviewStep({
 
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
   const { exportPreview, requestExport } = useExportPreview()
+  const [saveSuguan, savingSuguan] = useAsyncAction(onSave)
 
   const serviceName =
     allServiceTypes().find((t) => t.id === draft.serviceTypeId)?.name ??
@@ -94,15 +96,25 @@ const runExcelExport = async (exportFileName: string) => {
     <div className="flex flex-col gap-4">
       {exportPreview}
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={onSave} disabled={!canSave}>
+        <Button onClick={saveSuguan} loading={savingSuguan} disabled={!canSave}>
           <Save className="size-4" />
           {isExisting ? 'Save Changes' : 'Save Suguan'}
         </Button>
-        <Button variant="outline" onClick={handleExportPdf} disabled={exporting !== null}>
+        <Button
+          variant="outline"
+          onClick={handleExportPdf}
+          loading={exporting === 'pdf'}
+          disabled={exporting !== null}
+        >
           <FileDown className="size-4" />
           Export PDF
         </Button>
-        <Button variant="outline" onClick={handleExportExcel} disabled={exporting !== null}>
+        <Button
+          variant="outline"
+          onClick={handleExportExcel}
+          loading={exporting === 'excel'}
+          disabled={exporting !== null}
+        >
           <FileSpreadsheet className="size-4" />
           Export Excel
         </Button>

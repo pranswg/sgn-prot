@@ -22,6 +22,7 @@ import type { Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender, UNASSIGNED_VOICE_ID } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { isDateKey, toDateKeyFromInstant, todayPHT } from '@/lib/phDate'
 
 interface TraineeFormDialogProps {
@@ -141,6 +142,8 @@ export function TraineeFormDialog({
     }
     onOpenChange(false)
   }
+
+  const [saveTrainee, savingTrainee] = useAsyncAction(handleSave)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -284,7 +287,7 @@ export function TraineeFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>
+          <Button onClick={saveTrainee} loading={savingTrainee}>
             {trainee ? 'Save Changes' : 'Add Trainee'}
           </Button>
         </DialogFooter>

@@ -20,6 +20,7 @@ import {
   MEMBERSHIP_LABELS,
   memberEffectivePositions,
 } from '@/core/constants/memberMembership'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 interface MemberDetailDialogProps {
   member: Member | null
@@ -52,9 +53,8 @@ export function MemberDetailDialog({
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
 
-  if (!member) return null
-
   const handleToggleActive = () => {
+    if (!member) return
     if (member.isActive) {
       deactivateMember(member.id)
       toast.info(`${member.firstName} ${member.lastName} deactivated.`)
@@ -63,6 +63,10 @@ export function MemberDetailDialog({
       toast.success(`${member.firstName} ${member.lastName} reactivated.`)
     }
   }
+
+  const [toggleActive, togglingActive] = useAsyncAction(handleToggleActive)
+
+  if (!member) return null
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -93,7 +97,8 @@ export function MemberDetailDialog({
             {canEdit && (
               <Button
                 variant="outline"
-                onClick={handleToggleActive}
+                onClick={toggleActive}
+                loading={togglingActive}
                 className={member.isActive ? 'text-red-600' : 'text-emerald-600'}
               >
                 {member.isActive ? 'Deactivate' : 'Reactivate'}

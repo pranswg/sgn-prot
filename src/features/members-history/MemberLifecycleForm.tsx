@@ -15,6 +15,7 @@ import { TRANSFER_REASON_OPTIONS } from '@/lib/memberHistory'
 import { todayPHT } from '@/lib/phDate'
 import { formatMemberName } from '@/lib/memberDirectory'
 import { cn } from '@/lib/utils'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 export type LifecycleFormKind = 'transfer' | 'restore'
 
@@ -151,6 +152,13 @@ export function MemberLifecycleDialog({
   const [wasOpen, setWasOpen] = useState(open)
   const submit = useLifecycleSubmit(kind, onSuccess)
 
+  const [confirmLifecycle, confirmingLifecycle] = useAsyncAction(
+    (target: Member, state: LifecycleFormState) => {
+      const saved = submit(target, state)
+      if (saved) onOpenChange(false)
+    },
+  )
+
   if (open !== wasOpen) {
     setWasOpen(open)
     if (open) setForm(freshState())
@@ -185,10 +193,8 @@ export function MemberLifecycleDialog({
           </Button>
           <Button
             variant={isTransfer ? 'destructive' : 'default'}
-            onClick={() => {
-              const saved = submit(member, form)
-              if (saved) onOpenChange(false)
-            }}
+            onClick={() => void confirmLifecycle(member, form)}
+            loading={confirmingLifecycle}
           >
             {isTransfer ? <LogOut className="size-4" /> : <Undo2 className="size-4" />}
             {isTransfer ? 'Confirm Transfer' : 'Restore Member'}
@@ -210,6 +216,13 @@ export function MemberLifecycleSheet({
   const [form, setForm] = useState<LifecycleFormState>(freshState)
   const [wasOpen, setWasOpen] = useState(open)
   const submit = useLifecycleSubmit(kind, onSuccess)
+
+  const [confirmLifecycle, confirmingLifecycle] = useAsyncAction(
+    (target: Member, state: LifecycleFormState) => {
+      const saved = submit(target, state)
+      if (saved) onOpenChange(false)
+    },
+  )
 
   if (open !== wasOpen) {
     setWasOpen(open)
@@ -266,10 +279,8 @@ export function MemberLifecycleSheet({
           <Button
             variant={isTransfer ? 'destructive' : 'default'}
             className="h-12 flex-1 rounded-xl text-sm font-semibold"
-            onClick={() => {
-              const saved = submit(member, form)
-              if (saved) onOpenChange(false)
-            }}
+            onClick={() => void confirmLifecycle(member, form)}
+            loading={confirmingLifecycle}
           >
             {isTransfer ? 'Confirm Transfer' : 'Restore Member'}
           </Button>

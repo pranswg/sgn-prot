@@ -4,6 +4,7 @@ import { MemberLifecycleBadge } from '@/components/StatusBadges'
 import type { Member } from '@/core/types/member'
 import { formatMemberName, memberInitials } from '@/lib/memberDirectory'
 import { cn } from '@/lib/utils'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 interface DuplicateMemberPanelProps {
   candidates: Member[]
@@ -33,6 +34,9 @@ export function DuplicateMemberPanel({
   onCancel,
   mobile = false,
 }: DuplicateMemberPanelProps) {
+  const [restore, restoring] = useAsyncAction(onRestore)
+  const [proceed, proceeding] = useAsyncAction(onContinue)
+
   return (
     <div className="grid gap-4">
       <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-50 p-3 dark:bg-amber-500/10">
@@ -80,7 +84,8 @@ export function DuplicateMemberPanel({
               {!member.isActive && (
                 <Button
                   size={mobile ? 'default' : 'sm'}
-                  onClick={() => onRestore(member)}
+                  onClick={() => restore(member)}
+                  loading={restoring}
                 >
                   <Undo2 className="size-3.5" />
                   Restore
@@ -101,7 +106,8 @@ export function DuplicateMemberPanel({
         </Button>
         <Button
           className={cn(mobile && 'h-12 rounded-xl text-sm font-semibold')}
-          onClick={onContinue}
+          onClick={proceed}
+          loading={proceeding}
         >
           Create New Member Anyway
         </Button>

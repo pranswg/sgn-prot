@@ -25,6 +25,7 @@ import type { Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { cn } from '@/lib/utils'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { isDateKey, toDateKeyFromInstant, todayPHT } from '@/lib/phDate'
 
 interface TraineeFormSheetProps {
@@ -150,6 +151,8 @@ export function TraineeFormSheet({
     }
     onOpenChange(false)
   }
+
+  const [saveTrainee, savingTrainee] = useAsyncAction(handleSave)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -361,7 +364,8 @@ export function TraineeFormSheet({
           </Button>
           <Button
             className="h-12 flex-1 rounded-xl text-sm font-semibold"
-            onClick={handleSave}
+            onClick={saveTrainee}
+            loading={savingTrainee}
           >
             {trainee ? 'Save Changes' : 'Add Trainee'}
           </Button>

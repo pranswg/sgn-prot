@@ -20,6 +20,7 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import type { Suguan } from '@/core/types/suguan'
 import { cn } from '@/lib/utils'
@@ -169,6 +170,8 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
     toast.success('Suguan saved.')
     openSuguanDetail(created.id)
   }
+
+  const [saveSuguan, savingSuguan] = useAsyncAction(handleSave)
 
   const title = existing ? 'Edit Suguan' : 'Worship Service Suguan'
 
@@ -393,7 +396,8 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
           (existing ? can('edit-suguan') : can('create-suguan')) ? (
           <Button
             size="sm"
-            onClick={handleSave}
+            onClick={saveSuguan}
+            loading={savingSuguan}
             disabled={saveBlockers(draft).length > 0}
           >
             <Check className="size-4" />
@@ -432,7 +436,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
         )}
         {isLast ? (
           (existing ? can('edit-suguan') : can('create-suguan')) ? (
-          <Button className="flex-1" onClick={handleSave}>
+          <Button className="flex-1" onClick={saveSuguan} loading={savingSuguan}>
             <Check className="size-4" />
             Save
           </Button>

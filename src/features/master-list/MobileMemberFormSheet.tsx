@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 import { phtInstantISO } from '@/lib/phDate'
 import { Checkbox } from '@/components/ui/checkbox'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
+import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { DuplicateMemberPanel } from './DuplicateMemberPanel'
 import { useDuplicateActions } from './useDuplicateActions'
 
@@ -173,6 +174,8 @@ export function MobileMemberFormSheet({
     onOpenChange(false)
     onSaved?.()
   }
+
+  const [saveMember, savingMember] = useAsyncAction(handleSave)
 
   const close = () => onOpenChange(false)
 
@@ -441,7 +444,8 @@ export function MobileMemberFormSheet({
           </Button>
           <Button
             className="h-12 flex-1 rounded-xl text-sm font-semibold"
-            onClick={handleSave}
+            onClick={saveMember}
+            loading={savingMember}
           >
             {member ? 'Save Changes' : 'Add Member'}
           </Button>

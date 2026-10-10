@@ -178,10 +178,10 @@ export function MasterListPdfSetupDialog({
             type="button"
             className="h-11 w-full sm:w-auto"
             onClick={() => void handleExport()}
-            disabled={isExporting}
+            loading={isExporting}
           >
             <FileDown className="size-4" />
-            {isExporting ? `Preparing ${documentType}…` : `Export ${documentType}`}
+            Export {documentType}
           </Button>
         </DialogFooter>
       </DialogContent>

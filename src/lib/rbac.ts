@@ -110,10 +110,7 @@ export function canAccessPage(
     )
   }
   if (page === 'koro-maker') {
-    return (
-      hasPermission(account, 'manage-koro', rolePermissions) ||
-      hasPermission(account, 'edit-members', rolePermissions)
-    )
+    return hasPermission(account, 'manage-koro', rolePermissions)
   }
   const pagePermission: Record<string, Permission> = {
     dashboard: 'view-dashboard',

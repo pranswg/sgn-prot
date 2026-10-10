@@ -71,3 +71,32 @@ create policy "service_role write audit_logs" on public.audit_logs
   for all to service_role using (true) with check (true);
 create policy "service_role write login_history" on public.login_history
   for all to service_role using (true) with check (true);
+
+-- Explicit Data API grants so access is deterministic whether or not the
+-- project auto-exposes new tables. Data tables default to select-only for
+-- authenticated users; service_role owns all write paths (Phase 2 import,
+-- Phase 5 write-through).
+grant select on public.profiles to authenticated;
+grant select, insert, update, delete on public.profiles to service_role;
+grant select on public.members to authenticated;
+grant select, insert, update, delete on public.members to service_role;
+grant select on public.trainees to authenticated;
+grant select, insert, update, delete on public.trainees to service_role;
+grant select on public.suguans to authenticated;
+grant select, insert, update, delete on public.suguans to service_role;
+grant select on public.koro_documents to authenticated;
+grant select, insert, update, delete on public.koro_documents to service_role;
+grant select on public.organista_suguans to authenticated;
+grant select, insert, update, delete on public.organista_suguans to service_role;
+grant select on public.assignment_presets to authenticated;
+grant select, insert, update, delete on public.assignment_presets to service_role;
+grant select on public.settings to authenticated;
+grant select, insert, update, delete on public.settings to service_role;
+grant select on public.roles to authenticated;
+grant select, insert, update, delete on public.roles to service_role;
+grant select on public.role_permissions to authenticated;
+grant select, insert, update, delete on public.role_permissions to service_role;
+grant select on public.audit_logs to authenticated;
+grant select, insert, update, delete on public.audit_logs to service_role;
+grant select on public.login_history to authenticated;
+grant select, insert, update, delete on public.login_history to service_role;

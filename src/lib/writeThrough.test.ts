@@ -57,3 +57,45 @@ test('persist treats a missing result as success', async () => {
   assert.equal(rolledBack, false)
   assert.deepEqual(notifications, [])
 })
+
+test('persist rolls back the whole action when one of several writes fails', async () => {
+  let rolledBack = false
+  const notifications: string[] = []
+  setWriteNotifier((message) => notifications.push(message))
+
+  persist({
+    write: [
+      Promise.resolve({ error: null }),
+      Promise.resolve({ error: 'trainee write failed' }),
+    ],
+    rollback: () => {
+      rolledBack = true
+    },
+    failure: 'Could not promote the trainee.',
+  })
+  await flush()
+
+  assert.equal(rolledBack, true)
+  assert.deepEqual(notifications, ['Could not promote the trainee.'])
+})
+
+test('persist accepts a batch where every write succeeds', async () => {
+  let rolledBack = false
+  const notifications: string[] = []
+  setWriteNotifier((message) => notifications.push(message))
+
+  persist({
+    write: [
+      Promise.resolve({ error: null }),
+      Promise.resolve({ error: null }),
+    ],
+    rollback: () => {
+      rolledBack = true
+    },
+    failure: 'nope',
+  })
+  await flush()
+
+  assert.equal(rolledBack, false)
+  assert.deepEqual(notifications, [])
+})

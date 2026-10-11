@@ -12,6 +12,8 @@ import type {
 } from '@/core/types/member'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
+import { deleteRow, upsertRow } from '@/api/db'
+import { persist as persistWrite } from '@/lib/writeThrough'
 import { isDateKey, toDateKeyFromInstant } from '@/lib/phDate'
 import { transferReasonLabel } from '@/lib/memberHistory'
 
@@ -155,6 +157,68 @@ interface MemberState {
   clear: () => void
 }
 
+/**
+ * Phase 4b write-through. Members and trainees are one server row each, so a
+ * per-action helper upserts (or deletes) that row and restores the previous
+ * slice if Supabase rejects the write. Backup `importData` and reset `clear`
+ * stay local for now; the bulk bridge is Phase 7.
+ */
+type MemberStateSetter = (
+  partial: Partial<Pick<MemberState, 'members' | 'trainees' | 'lastUpdatedAt'>>,
+) => void
+
+function writeMember(
+  set: MemberStateSetter,
+  previous: Member[],
+  member: Member,
+  failure: string,
+) {
+  persistWrite({
+    write: upsertRow('members', member.id, member),
+    rollback: () => set({ members: previous, lastUpdatedAt: updatedAt() }),
+    failure,
+  })
+}
+
+function deleteMemberRow(
+  set: MemberStateSetter,
+  previous: Member[],
+  id: string,
+  failure: string,
+) {
+  persistWrite({
+    write: deleteRow('members', id),
+    rollback: () => set({ members: previous, lastUpdatedAt: updatedAt() }),
+    failure,
+  })
+}
+
+function writeTrainee(
+  set: MemberStateSetter,
+  previous: Trainee[],
+  trainee: Trainee,
+  failure: string,
+) {
+  persistWrite({
+    write: upsertRow('trainees', trainee.id, trainee),
+    rollback: () => set({ trainees: previous, lastUpdatedAt: updatedAt() }),
+    failure,
+  })
+}
+
+function deleteTraineeRow(
+  set: MemberStateSetter,
+  previous: Trainee[],
+  id: string,
+  failure: string,
+) {
+  persistWrite({
+    write: deleteRow('trainees', id),
+    rollback: () => set({ trainees: previous, lastUpdatedAt: updatedAt() }),
+    failure,
+  })
+}
+
 export const useMemberStore = create<MemberState>()(
   persist(
     (set, get) => ({
@@ -163,6 +227,7 @@ export const useMemberStore = create<MemberState>()(
       lastUpdatedAt: updatedAt(),
 
       addMember: (input) => {
+        const previous = get().members
         const member: Member = {
           ...input,
           positions: input.positions ?? [],
@@ -173,53 +238,65 @@ export const useMemberStore = create<MemberState>()(
           members: [...s.members, member],
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, member, 'Could not save the new member. It was not added.')
         return member
       },
 
       updateMember: (id, input) => {
-        if (!get().members.some((member) => member.id === id)) return
+        const previous = get().members
+        const existing = previous.find((member) => member.id === id)
+        if (!existing) return
+        const next = { ...existing, ...input }
         set((s) => ({
-          members: s.members.map((m) => (m.id === id ? { ...m, ...input } : m)),
+          members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not save the member. Your change was reverted.')
       },
 
       deactivateMember: (id) => {
-        if (
-          !get().members.some((member) => member.id === id && member.isActive)
-        ) {
-          return
-        }
+        const previous = get().members
+        const existing = previous.find(
+          (member) => member.id === id && member.isActive,
+        )
+        if (!existing) return
+        const next = { ...existing, isActive: false }
         set((s) => ({
-          members: s.members.map((m) => (m.id === id ? { ...m, isActive: false } : m)),
+          members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not deactivate the member. Your change was reverted.')
       },
 
       reactivateMember: (id) => {
-        if (
-          !get().members.some((member) => member.id === id && !member.isActive)
-        ) {
-          return
-        }
+        const previous = get().members
+        const existing = previous.find(
+          (member) => member.id === id && !member.isActive,
+        )
+        if (!existing) return
+        const next = { ...existing, isActive: true }
         set((s) => ({
-          members: s.members.map((m) => (m.id === id ? { ...m, isActive: true } : m)),
+          members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not reactivate the member. Your change was reverted.')
       },
 
       removeMember: (id) => {
-        if (!get().members.some((member) => member.id === id)) return
+        const previous = get().members
+        if (!previous.some((member) => member.id === id)) return
         set((s) => ({
           members: s.members.filter((m) => m.id !== id),
           lastUpdatedAt: updatedAt(),
         }))
+        deleteMemberRow(set, previous, id, 'Could not delete the member. It was restored.')
       },
 
       transferMember: (actorId, id, input) => {
         const actor = activeActor(actorId)
         if (!actor) return { error: MANAGER_ERROR }
-        const member = get().members.find((m) => m.id === id)
+        const previous = get().members
+        const member = previous.find((m) => m.id === id)
         if (!member) return { error: 'Member not found.' }
         if (!member.isActive) {
           return { error: 'This member is already transferred out.' }
@@ -237,18 +314,16 @@ export const useMemberStore = create<MemberState>()(
           actorName: actor.fullName,
           createdAt: updatedAt(),
         }
+        const next = {
+          ...member,
+          isActive: false,
+          history: [...(member.history ?? []), event],
+        }
         set((s) => ({
-          members: s.members.map((m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  isActive: false,
-                  history: [...(m.history ?? []), event],
-                }
-              : m,
-          ),
+          members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not record the transfer. Your change was reverted.')
         useAdminStore.getState().addAuditLog({
           actorId,
           actorName: actor.fullName,
@@ -265,7 +340,8 @@ export const useMemberStore = create<MemberState>()(
       restoreMember: (actorId, id, input) => {
         const actor = activeActor(actorId)
         if (!actor) return { error: MANAGER_ERROR }
-        const member = get().members.find((m) => m.id === id)
+        const previous = get().members
+        const member = previous.find((m) => m.id === id)
         if (!member) return { error: 'Member not found.' }
         if (member.isActive) {
           return { error: 'This member is already on the Master List.' }
@@ -282,18 +358,16 @@ export const useMemberStore = create<MemberState>()(
           actorName: actor.fullName,
           createdAt: updatedAt(),
         }
+        const next = {
+          ...member,
+          isActive: true,
+          history: [...(member.history ?? []), event],
+        }
         set((s) => ({
-          members: s.members.map((m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  isActive: true,
-                  history: [...(m.history ?? []), event],
-                }
-              : m,
-          ),
+          members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not restore the member. Your change was reverted.')
         useAdminStore.getState().addAuditLog({
           actorId,
           actorName: actor.fullName,
@@ -310,7 +384,8 @@ export const useMemberStore = create<MemberState>()(
       updateHistoryEvent: (actorId, memberId, eventId, patch) => {
         const actor = activeActor(actorId)
         if (!actor) return { error: MANAGER_ERROR }
-        const member = get().members.find((m) => m.id === memberId)
+        const previous = get().members
+        const member = previous.find((m) => m.id === memberId)
         if (!member) return { error: 'Member not found.' }
         const history = member.history ?? []
         const event = history.find((e) => e.id === eventId)
@@ -318,7 +393,7 @@ export const useMemberStore = create<MemberState>()(
         if (!isDateKey(patch.date)) {
           return { error: 'Choose a valid date.' }
         }
-        const next: MemberHistoryEvent = {
+        const nextEvent: MemberHistoryEvent = {
           ...event,
           date: patch.date,
           reason: patch.reason,
@@ -327,17 +402,15 @@ export const useMemberStore = create<MemberState>()(
               ? event.notes
               : patch.notes.trim() || undefined,
         }
+        const next = {
+          ...member,
+          history: history.map((e) => (e.id === eventId ? nextEvent : e)),
+        }
         set((s) => ({
-          members: s.members.map((m) =>
-            m.id === memberId
-              ? {
-                  ...m,
-                  history: history.map((e) => (e.id === eventId ? next : e)),
-                }
-              : m,
-          ),
+          members: s.members.map((m) => (m.id === memberId ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not update the history. Your change was reverted.')
         useAdminStore.getState().addAuditLog({
           actorId,
           actorName: actor.fullName,
@@ -354,20 +427,22 @@ export const useMemberStore = create<MemberState>()(
       removeHistoryEvent: (actorId, memberId, eventId) => {
         const actor = activeActor(actorId)
         if (!actor) return { error: MANAGER_ERROR }
-        const member = get().members.find((m) => m.id === memberId)
+        const previous = get().members
+        const member = previous.find((m) => m.id === memberId)
         if (!member) return { error: 'Member not found.' }
         const history = member.history ?? []
         if (!history.some((e) => e.id === eventId)) {
           return { error: 'History event not found.' }
         }
+        const next = {
+          ...member,
+          history: history.filter((e) => e.id !== eventId),
+        }
         set((s) => ({
-          members: s.members.map((m) =>
-            m.id === memberId
-              ? { ...m, history: history.filter((e) => e.id !== eventId) }
-              : m,
-          ),
+          members: s.members.map((m) => (m.id === memberId ? next : m)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeMember(set, previous, next, 'Could not update the history. Your change was reverted.')
         useAdminStore.getState().addAuditLog({
           actorId,
           actorName: actor.fullName,
@@ -382,24 +457,32 @@ export const useMemberStore = create<MemberState>()(
       },
 
       addTrainee: (input) => {
+        const previous = get().trainees
         const trainee: Trainee = { ...input, id: nanoid() }
         set((s) => ({
           trainees: [...s.trainees, trainee],
           lastUpdatedAt: updatedAt(),
         }))
+        writeTrainee(set, previous, trainee, 'Could not save the new trainee. It was not added.')
         return trainee
       },
 
       updateTrainee: (id, input) => {
-        if (!get().trainees.some((trainee) => trainee.id === id)) return
+        const previous = get().trainees
+        const existing = previous.find((trainee) => trainee.id === id)
+        if (!existing) return
+        const next = { ...existing, ...input }
         set((s) => ({
-          trainees: s.trainees.map((t) => (t.id === id ? { ...t, ...input } : t)),
+          trainees: s.trainees.map((t) => (t.id === id ? next : t)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeTrainee(set, previous, next, 'Could not save the trainee. Your change was reverted.')
       },
 
       promoteTrainee: (id) => {
-        const trainee = get().trainees.find((t) => t.id === id)
+        const previousMembers = get().members
+        const previousTrainees = get().trainees
+        const trainee = previousTrainees.find((t) => t.id === id)
         if (!trainee) return null
         const member: Member = {
           id: nanoid(),
@@ -416,38 +499,54 @@ export const useMemberStore = create<MemberState>()(
           notes: trainee.notes,
           history: [joinedEventFor(trainee.dateAdded, trainee.voicePosition)],
         }
+        const promoted: Trainee = {
+          ...trainee,
+          status: 'promoted',
+          promotedToMemberId: member.id,
+        }
         set((s) => ({
           members: [...s.members, member],
-          trainees: s.trainees.map((t) =>
-            t.id === id ? { ...t, status: 'promoted', promotedToMemberId: member.id } : t,
-          ),
+          trainees: s.trainees.map((t) => (t.id === id ? promoted : t)),
           lastUpdatedAt: updatedAt(),
         }))
+        persistWrite({
+          write: [
+            upsertRow('members', member.id, member),
+            upsertRow('trainees', promoted.id, promoted),
+          ],
+          rollback: () =>
+            set({
+              members: previousMembers,
+              trainees: previousTrainees,
+              lastUpdatedAt: updatedAt(),
+            }),
+          failure: 'Could not promote the trainee. Your change was reverted.',
+        })
         return member
       },
 
       deactivateTrainee: (id) => {
-        if (
-          !get().trainees.some(
-            (trainee) => trainee.id === id && trainee.status === 'active',
-          )
-        ) {
-          return
-        }
+        const previous = get().trainees
+        const existing = previous.find(
+          (trainee) => trainee.id === id && trainee.status === 'active',
+        )
+        if (!existing) return
+        const next: Trainee = { ...existing, status: 'inactive' }
         set((s) => ({
-          trainees: s.trainees.map((t) =>
-            t.id === id ? { ...t, status: 'inactive' } : t,
-          ),
+          trainees: s.trainees.map((t) => (t.id === id ? next : t)),
           lastUpdatedAt: updatedAt(),
         }))
+        writeTrainee(set, previous, next, 'Could not deactivate the trainee. Your change was reverted.')
       },
 
       removeTrainee: (id) => {
-        if (!get().trainees.some((trainee) => trainee.id === id)) return
+        const previous = get().trainees
+        if (!previous.some((trainee) => trainee.id === id)) return
         set((s) => ({
           trainees: s.trainees.filter((t) => t.id !== id),
           lastUpdatedAt: updatedAt(),
         }))
+        deleteTraineeRow(set, previous, id, 'Could not delete the trainee. It was restored.')
       },
 
       importData: (members, trainees) => {
@@ -475,28 +574,45 @@ export const useMemberStore = create<MemberState>()(
           return { error: 'Select at least one member or trainee to import.' }
         }
 
+        const previousMembers = get().members
+        const previousTrainees = get().trainees
+        const newMembers: Member[] = members.map((input) => ({
+          ...input,
+          positions: input.positions ?? [],
+          history: [
+            joinedEventFor(
+              input.dateAdded,
+              input.voicePosition,
+              actor.fullName,
+            ),
+          ],
+          id: nanoid(),
+        }))
+        const newTrainees: Trainee[] = trainees.map((input) => ({
+          ...input,
+          id: nanoid(),
+        }))
+
         set((state) => ({
-          members: [
-            ...state.members,
-            ...members.map((input) => ({
-              ...input,
-              positions: input.positions ?? [],
-              history: [
-                joinedEventFor(
-                  input.dateAdded,
-                  input.voicePosition,
-                  actor.fullName,
-                ),
-              ],
-              id: nanoid(),
-            })),
-          ],
-          trainees: [
-            ...state.trainees,
-            ...trainees.map((input) => ({ ...input, id: nanoid() })),
-          ],
+          members: [...state.members, ...newMembers],
+          trainees: [...state.trainees, ...newTrainees],
           lastUpdatedAt: updatedAt(),
         }))
+
+        persistWrite({
+          write: [
+            ...newMembers.map((m) => upsertRow('members', m.id, m)),
+            ...newTrainees.map((t) => upsertRow('trainees', t.id, t)),
+          ],
+          rollback: () =>
+            set({
+              members: previousMembers,
+              trainees: previousTrainees,
+              lastUpdatedAt: updatedAt(),
+            }),
+          failure: 'Could not import the Master List. Your change was reverted.',
+        })
+
         return {
           importedMembers: members.length,
           importedTrainees: trainees.length,

@@ -19,8 +19,9 @@ export function setWriteNotifier(next: WriteNotifier) {
 }
 
 export interface PersistOptions {
-  /** Always resolves; never throws (see `src/api/db.ts`). */
-  write: Promise<WriteResult>
+  /** Always resolves; never throws (see `src/api/db.ts`). Pass one write, or
+   *  several for an action that touches multiple rows (promote, bulk import). */
+  write: Promise<WriteResult> | Promise<WriteResult>[]
   /** Restores the state captured before the optimistic change. */
   rollback: () => void
   /** User-facing copy shown when the write fails. */
@@ -28,9 +29,11 @@ export interface PersistOptions {
 }
 
 export function persist({ write, rollback, failure }: PersistOptions) {
-  void write.then((result) => {
-    if (!result?.error) return
-    console.error('Server write failed:', result.error)
+  const writes = Array.isArray(write) ? write : [write]
+  void Promise.all(writes).then((results) => {
+    const failed = results.find((result) => result?.error)
+    if (!failed?.error) return
+    console.error('Server write failed:', failed.error)
     rollback()
     notify(failure)
   })

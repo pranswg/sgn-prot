@@ -4,7 +4,9 @@ import { readServerData, type ServerDataSnapshot } from '@/lib/serverData'
 import { applySettingsRow } from '@/lib/settingsSync'
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
+import { useKoroStore } from '@/store/koroStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
+import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
 
 type ServerDataStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -29,7 +31,9 @@ function applyServerData(snapshot: ServerDataSnapshot) {
 
   useMemberStore.getState().importData(snapshot.members, snapshot.trainees)
   useSuguanStore.getState().importData(snapshot.suguan)
+  useKoroStore.getState().importData(snapshot.koro)
   useOrganistaSuguanStore.getState().importData(snapshot.organistaSuguan)
+  useAssignmentPresetStore.getState().importData(snapshot.presets)
 }
 
 /**

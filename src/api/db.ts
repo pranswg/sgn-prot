@@ -41,6 +41,20 @@ export function deleteRow(table: string, id: string): Promise<WriteResult> {
   return run(() => getSupabase().from(table).delete().eq('id', id))
 }
 
+/** Upserts one owner-scoped row (used by per-user tables like presets). */
+export function upsertOwnedRow(
+  table: string,
+  id: string,
+  data: unknown,
+  ownerId: string,
+): Promise<WriteResult> {
+  return run(() =>
+    getSupabase()
+      .from(table)
+      .upsert({ id, data, owner_id: ownerId, updated_at: new Date().toISOString() }),
+  )
+}
+
 /** Upserts the single shared settings row (`id = 1`). */
 export function upsertSettingsRow(data: unknown): Promise<WriteResult> {
   return run(() =>

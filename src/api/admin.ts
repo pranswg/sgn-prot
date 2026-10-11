@@ -171,3 +171,72 @@ export function setAccountStatus(
 ): Promise<void> {
   return invokeAdmin<void>('setAccountStatus', { userId, status, statusReason })
 }
+
+export interface AuditLogRow {
+  id: number
+  actor_id: string | null
+  actor_name: string
+  actor_username: string
+  action: string
+  module: string
+  affected_user_id: string | null
+  affected_user_name: string | null
+  details: string | null
+  created_at: string
+}
+
+export interface LoginHistoryRow {
+  id: number
+  user_id: string | null
+  user_name: string
+  username: string
+  device: string
+  client_ip: string | null
+  status: 'successful' | 'failed'
+  created_at: string
+}
+
+export async function fetchAuditLogs(): Promise<AuditLogRow[]> {
+  const { data, error } = await getSupabase()
+    .from('audit_logs')
+    .select(
+      'id, actor_id, actor_name, actor_username, action, module, affected_user_id, affected_user_name, details, created_at',
+    )
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (error) throw new AdminError(error.message)
+  return (data ?? []) as AuditLogRow[]
+}
+
+export async function fetchLoginHistory(): Promise<LoginHistoryRow[]> {
+  const { data, error } = await getSupabase()
+    .from('login_history')
+    .select('id, user_id, user_name, username, device, client_ip, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (error) throw new AdminError(error.message)
+  return (data ?? []) as LoginHistoryRow[]
+}
+
+export function logAudit(input: {
+  action: string
+  module: string
+  affectedUserId?: string
+  affectedUserName?: string
+  details?: string
+}): Promise<void> {
+  return callRpc<void>('log_audit', {
+    p_action: input.action,
+    p_module: input.module,
+    p_affected_user_id: input.affectedUserId ?? null,
+    p_affected_user_name: input.affectedUserName ?? null,
+    p_details: input.details ?? null,
+  })
+}
+
+export function logLogin(
+  status: 'successful' | 'failed',
+  device: string,
+): Promise<void> {
+  return callRpc<void>('log_login', { p_status: status, p_device: device })
+}

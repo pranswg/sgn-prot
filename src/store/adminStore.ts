@@ -2,7 +2,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { AccountRole, Permission } from '@/core/types/auth'
-import { fetchRoles } from '@/api/admin'
+import {
+  fetchAuditLogs,
+  fetchLoginHistory,
+  fetchRoles,
+  logAudit,
+  logLogin,
+} from '@/api/admin'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { auditLogFromRow, loginHistoryFromRow } from '@/lib/securityLogs'
 import {
   ADMIN_ONLY_PERMISSIONS,
   DEFAULT_ROLE_PERMISSIONS,
@@ -71,6 +79,7 @@ interface AdminState {
   endSession: (id: string) => void
   endUserSessions: (userId: string) => void
   refreshRoles: () => Promise<void>
+  refreshSecurity: () => Promise<void>
 }
 
 const KNOWN_PERMISSIONS = new Set<Permission>(
@@ -85,6 +94,30 @@ function sanitizePermissions(permissions: Permission[]): Permission[] {
   )
 }
 
+/**
+ * Phase 5d: audit/log entries are kept locally for instant display and also
+ * pushed to the server, best-effort. Failed sign-ins have no session, so only
+ * successful logins persist server-side. Without Supabase configured (tests,
+ * offline dev) both helpers are no-ops, exactly as before Phase 5d.
+ */
+function persistAudit(entry: AuditLogEntry) {
+  if (!isSupabaseConfigured()) return
+  void logAudit({
+    action: entry.action,
+    module: entry.module,
+    affectedUserId: entry.affectedUserId,
+    affectedUserName: entry.affectedUserName,
+    details: entry.details,
+  }).catch((cause) => console.error('Could not record audit log:', cause))
+}
+
+function persistLogin(entry: LoginHistoryEntry) {
+  if (!isSupabaseConfigured() || entry.status !== 'successful') return
+  void logLogin(entry.status, entry.device).catch((cause) =>
+    console.error('Could not record login history:', cause),
+  )
+}
+
 export const useAdminStore = create<AdminState>()(
   persist(
     (set) => ({
@@ -94,20 +127,26 @@ export const useAdminStore = create<AdminState>()(
       customRoles: [],
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
       rolesLoaded: false,
-      addAuditLog: (entry) =>
+      addAuditLog: (entry) => {
+        const record: AuditLogEntry = {
+          ...entry,
+          id: nanoid(),
+          createdAt: new Date().toISOString(),
+        }
+        set((state) => ({ auditLogs: [record, ...state.auditLogs] }))
+        persistAudit(record)
+      },
+      recordLogin: (entry) => {
+        const record: LoginHistoryEntry = {
+          ...entry,
+          id: nanoid(),
+          createdAt: new Date().toISOString(),
+        }
         set((state) => ({
-          auditLogs: [
-            { ...entry, id: nanoid(), createdAt: new Date().toISOString() },
-            ...state.auditLogs,
-          ],
-        })),
-      recordLogin: (entry) =>
-        set((state) => ({
-          loginHistory: [
-            { ...entry, id: nanoid(), createdAt: new Date().toISOString() },
-            ...state.loginHistory,
-          ].slice(0, 5000),
-        })),
+          loginHistory: [record, ...state.loginHistory].slice(0, 5000),
+        }))
+        persistLogin(record)
+      },
       startSession: (entry) => {
         const id = nanoid()
         const now = new Date().toISOString()
@@ -150,6 +189,17 @@ export const useAdminStore = create<AdminState>()(
           )
         }
         set({ customRoles, rolePermissions, rolesLoaded: true })
+      },
+      refreshSecurity: async () => {
+        if (!isSupabaseConfigured()) return
+        const [audit, logins] = await Promise.all([
+          fetchAuditLogs(),
+          fetchLoginHistory(),
+        ])
+        set({
+          auditLogs: audit.map(auditLogFromRow),
+          loginHistory: logins.map(loginHistoryFromRow),
+        })
       },
     }),
     {

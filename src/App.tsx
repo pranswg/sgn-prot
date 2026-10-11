@@ -89,6 +89,19 @@ function App() {
         .getState()
         .refreshRoles()
         .catch((cause) => console.error('Could not load roles from the server:', cause))
+      // Audit logs and login history are permission-gated reads, so only an
+      // Admin can hydrate them; a lesser account would just get an empty result.
+      const account = useAuthStore
+        .getState()
+        .accounts.find((item) => item.id === currentAccountId)
+      if (account?.role === 'admin') {
+        void useAdminStore
+          .getState()
+          .refreshSecurity()
+          .catch((cause) =>
+            console.error('Could not load the audit trail from the server:', cause),
+          )
+      }
     } else {
       resetServerData()
     }

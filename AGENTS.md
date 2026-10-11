@@ -25,19 +25,20 @@ The app is gaining a backend, phased in from easiest to hardest. Phase 1
 (scaffold: schema, seed, read-only RLS), Phase 2 (auth swap: sign-in/out, session
 restore, read-only profile cache), Phase 3 (read-only reads into the stores on
 load), Phase 4 (write-through stores: every domain mutation persists to
-Supabase), and Phase 5 (RBAC + the admin write path: role CRUD and account
-mutations run through server RPCs and one service-role Edge Function) are done.
-Still to come: offline, and backup import (deferred to last). The migration plan
-lives on the Desktop at `backend-plan.md`, not in this repo.
+Supabase), and Phase 5 (RBAC: the admin write path, permission-based RLS, and a
+server-backed audit trail) are done. Offline (Phase 6) was dropped. Still to
+come: backup import only (Phase 7, deferred to last). The migration plan lives on
+the Desktop at `backend-plan.md`, not in this repo.
 
 - The database schema and seed live in `supabase/migrations/`. `npm run db:push`
   applies them to the linked project (`supabase link`), `npm run db:lint` checks
   them. `npm run db:push` cannot run on an unlinked machine.
 - Schema posture: one table per Zustand store, entries as whole JSONB docs in a
   `data` column; admin/security tables are normalized. Reads are open to any
-  authenticated user. Phase 4 added interim **authenticated** write policies per
-  data table (migrations `0006`–`0009`), to be tightened to the twenty
-  `Permission`s in Phase 5; `assignment_presets` is owner-scoped
+  authenticated user (except `audit_logs`/`login_history`, which are gated by
+  their `view-*` permission). Phase 4 added interim **authenticated** write
+  policies per data table (migrations `0006`–`0009`); Phase 5e (`0011`) replaced
+  them with the twenty-permission RLS. `assignment_presets` is owner-scoped
   (`auth.uid() = owner_id`). `roles` seeds the builtin `admin` role with all
   twenty permissions from `src/lib/rbac.ts`; the seeded login is `admin` /
   `admin1234` (published backstop, must change).
@@ -66,9 +67,24 @@ lives on the Desktop at `backend-plan.md`, not in this repo.
   and uses the service-role key. App-level failures come back HTTP 200 as
   `{ error: { code, message } }`. Client surface is `src/api/admin.ts`; roles are
   cached in `adminStore` and `usePermissions` stays synchronous. Disable sets
-  `profiles.status` AND bans the auth user so live JWTs die. Audit logs, login
-  history, and session termination stay local (5d deferred); data-table writes
-  stay on the interim open policies (5e deferred).
+  `profiles.status` AND bans the auth user so live JWTs die.
+- Permission-based RLS (Phase 5e): migration `0011_rls_write_policies.sql` drops
+  the interim `authenticated write …` policies and recreates them per command on
+  `members`/`trainees`/`suguans`/`organista_suguans`/`koro_documents`/`settings`,
+  each calling `public.has_permission(...)`. Reads stay open on the data tables.
+  Because the client write path **upserts**, Postgres checks both the INSERT and
+  UPDATE policies, so create/edit permissions are unioned on insert+update (a
+  role that can edit may also upsert a new row); deletes take their own
+  permission. `assignment_presets` stays owner-scoped; `profiles`/`roles`/
+  `role_permissions` keep no direct authenticated write policy.
+- Server-backed audit trail (Phase 5d): migration `0012_audit_login.sql` adds the
+  `SECURITY DEFINER` RPCs `log_audit` / `log_login` (actor/user derived from
+  `auth.uid()` + `profiles`, never trusted from the client) and gates
+  `audit_logs`/`login_history` reads behind `view-audit-logs` /
+  `view-login-history`. `adminStore` keeps an optimistic local entry then pushes
+  best-effort (`refreshSecurity()` hydrates the tables on Admin sign-in; only
+  successful logins persist, since a failed one has no session). Session
+  termination is the only still-deferred piece (5d); its button stays disabled.
 - Seeding an Admin by raw SQL into `auth.users` is fragile: GoTrue scans its
   token columns (`confirmation_token`, `recovery_token`, `email_change`,
   `email_change_token_new/current`, `phone_change*`, `reauthentication_token`)
@@ -86,7 +102,7 @@ lives on the Desktop at `backend-plan.md`, not in this repo.
 - The **repo stays data-free** rule still holds: choir data lives in the hosted
   Supabase database, never in a file in this repository.
 
-Tests use `node:test` with the glob `src/**/*.test.ts` (34 files today), loaded
+Tests use `node:test` with the glob `src/**/*.test.ts` (36 files today), loaded
 through `scripts/test-aliases.mjs`, which teaches Node to resolve the `@/` alias
 and extensionless relative imports. Two consequences:
 
@@ -100,7 +116,10 @@ Backend tests worth knowing (all added for Phases 3/4): `lib/serverData.test.ts`
 `lib/writeThrough.test.ts` (single + batch rollback), and the store tests
 `store/koroStore.test.ts`, `store/memberStore.test.ts`,
 `store/settingsStore.test.ts`, `store/authStore.test.ts`. Phase 5 adds
-`lib/rbacParity.test.ts` (TS↔SQL permission-list parity). When you add a pure
+`lib/rbacParity.test.ts` (TS↔SQL permission-list parity),
+`lib/rlsPermissions.test.ts` (every `has_permission('…')` in the RLS migrations
+is a real `Permission`, so a typo can't silently deny), and
+`lib/securityLogs.test.ts` (server audit/login row → store entry). When you add a pure
 function worth protecting, add cases next to it rather than leaving behaviour
 implicit.
 
@@ -461,7 +480,7 @@ Rules if you touch it:
   `admin` Edge Function) and return `FieldProblem[]` on failure. Only
   `terminateManagedSession` still returns a "temporarily unavailable" problem
   and its button stays disabled (`AdminManagement.tsx` `SESSIONS_READ_ONLY`);
-  audit logs and login history also stay local for now (5d).
+  audit logs and login history are now server-backed (Phase 5d).
 - `changeOwnPassword` calls `supabase.auth.updateUser({ password })` then the
   narrow `public.mark_password_changed()` RPC (migration `0004`) to clear the
   profile's `must_change_password` flag, because RLS otherwise blocks the client

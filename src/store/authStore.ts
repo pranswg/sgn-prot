@@ -1,8 +1,24 @@
 import { create } from 'zustand'
 import type { Account, AccountRole, Permission } from '@/core/types/auth'
-import { normalizeUsername, validatePassword, type FieldProblem } from '@/lib/credentials'
+import {
+  normalizeUsername,
+  validateFullName,
+  validatePassword,
+  validateUsername,
+  type FieldProblem,
+} from '@/lib/credentials'
 import { profileToAccount, resolveSignInEmail, type ProfileRow } from '@/lib/authIdentity'
 import { getSupabase } from '@/lib/supabase'
+import {
+  createRole,
+  createUser,
+  deleteRole,
+  resetUserPassword,
+  setAccountStatus,
+  setRolePermissions,
+  updateAccountMetadata,
+  updateRole,
+} from '@/api/admin'
 import { useAdminStore, type ActiveSession } from '@/store/adminStore'
 import type { ManagedRole } from '@/store/adminStore'
 
@@ -37,11 +53,15 @@ export interface CreateManagedRoleInput {
   permissions: Permission[]
 }
 
-const deferredProblem: FieldProblem[] = [
+/**
+ * Sessions stay a client-only map in Phase 5c; terminating them server-side
+ * needs the session registry, which is deferred to Phase 5d.
+ */
+const sessionsDeferredProblem: FieldProblem[] = [
   {
     field: 'form',
     message:
-      'User and role management are moving to the server and are temporarily unavailable.',
+      'Ending another device’s session is coming in a later update. The sessions listed here are local to this browser.',
   },
 ]
 
@@ -91,6 +111,15 @@ function addAudit(
     affectedUserName: affected?.fullName,
     details,
   })
+}
+
+function actor(actorId: string): Account | undefined {
+  return useAuthStore.getState().accounts.find((account) => account.id === actorId)
+}
+
+function problemsFrom(cause: unknown, fallback: string): FieldProblem[] {
+  const message = cause instanceof Error && cause.message ? cause.message : fallback
+  return [{ field: 'form', message }]
 }
 
 function recordFailedLogin(
@@ -150,7 +179,7 @@ interface AuthState {
         | 'statusReason'
       >
     >,
-  ) => { account: Account } | { problems: FieldProblem[] }
+  ) => Promise<{ account: Account } | { problems: FieldProblem[] }>
   resetManagedPassword: (
     actorId: string,
     id: string,
@@ -160,21 +189,21 @@ interface AuthState {
   createManagedRole: (
     actorId: string,
     input: CreateManagedRoleInput,
-  ) => { role: ManagedRole } | { problems: FieldProblem[] }
+  ) => Promise<{ role: ManagedRole } | { problems: FieldProblem[] }>
   updateManagedRole: (
     actorId: string,
     roleId: AccountRole,
     patch: Pick<ManagedRole, 'label' | 'description'>,
-  ) => { role: ManagedRole } | { problems: FieldProblem[] }
+  ) => Promise<{ role: ManagedRole } | { problems: FieldProblem[] }>
   deleteManagedRole: (
     actorId: string,
     roleId: AccountRole,
-  ) => { roleId: AccountRole } | { problems: FieldProblem[] }
+  ) => Promise<{ roleId: AccountRole } | { problems: FieldProblem[] }>
   updateManagedRolePermissions: (
     actorId: string,
     role: AccountRole,
     permissions: Permission[],
-  ) => { permissions: Permission[] } | { problems: FieldProblem[] }
+  ) => Promise<{ permissions: Permission[] } | { problems: FieldProblem[] }>
   terminateManagedSession: (
     actorId: string,
     sessionId: string,
@@ -384,18 +413,158 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   clear: () => set({ accounts: [], currentAccountId: null, activeSessionId: null }),
 
-  // --- Deferred until the Phase 5 server write path -------------------------
+  // --- Phase 5 server-backed administration ---------------------------------
 
-  createManagedAccount: (_actorId, _input) =>
-    Promise.resolve({ problems: deferredProblem }),
-  updateManagedAccount: (_actorId, _id, _patch) => ({ problems: deferredProblem }),
-  resetManagedPassword: (_actorId, _id, _password, _requireChange) =>
-    Promise.resolve({ problems: deferredProblem }),
-  createManagedRole: (_actorId, _input) => ({ problems: deferredProblem }),
-  updateManagedRole: (_actorId, _roleId, _patch) => ({ problems: deferredProblem }),
-  deleteManagedRole: (_actorId, _roleId) => ({ problems: deferredProblem }),
-  updateManagedRolePermissions: (_actorId, _role, _permissions) => ({
-    problems: deferredProblem,
+  createManagedAccount: async (actorId, input) => {
+    const usernameProblem = validateUsername(input.username)
+    if (usernameProblem) {
+      return { problems: [{ field: 'username', message: usernameProblem }] }
+    }
+    const fullName = [input.firstName, input.lastName].filter(Boolean).join(' ').trim()
+    const nameProblem = validateFullName(fullName)
+    if (nameProblem) {
+      return { problems: [{ field: 'fullName', message: nameProblem }] }
+    }
+    const passwordProblem = validatePassword(input.password)
+    if (passwordProblem) {
+      return { problems: [{ field: 'password', message: passwordProblem }] }
+    }
+    try {
+      const { accountId } = await createUser({
+        username: normalizeUsername(input.username),
+        firstName: input.firstName.trim(),
+        lastName: input.lastName.trim(),
+        email: input.email.trim(),
+        password: input.password,
+        role: input.role,
+        customPermissions: input.customPermissions,
+      })
+      await get().refreshAccounts()
+      const account = get().accounts.find((candidate) => candidate.id === accountId)
+      if (!account) {
+        return {
+          problems: [
+            {
+              field: 'form',
+              message: 'The account was created but is not visible yet. Reload to see it.',
+            },
+          ],
+        }
+      }
+      addAudit(actor(actorId), 'Created User Account', account, `@${account.username} created`)
+      return { account }
+    } catch (cause) {
+      console.error('Create account failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not create the account.') }
+    }
+  },
+
+  updateManagedAccount: async (actorId, id, patch) => {
+    const current = get().accounts.find((candidate) => candidate.id === id)
+    if (!current) {
+      return { problems: [{ field: 'form', message: 'That account no longer exists.' }] }
+    }
+    const fullName =
+      patch.fullName ??
+      ([patch.firstName ?? current.firstName, patch.lastName ?? current.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() ||
+        current.fullName)
+    try {
+      if (patch.status !== undefined) {
+        await setAccountStatus(id, patch.status, patch.statusReason ?? '')
+      }
+      await updateAccountMetadata({
+        userId: id,
+        fullName,
+        email: patch.email ?? current.email ?? '',
+        role: patch.role ?? current.role,
+        customPermissions:
+          patch.customPermissions !== undefined
+            ? patch.customPermissions
+            : current.customPermissions ?? null,
+      })
+      await get().refreshAccounts()
+      const account = get().accounts.find((candidate) => candidate.id === id) ?? current
+      addAudit(
+        actor(actorId),
+        patch.status !== undefined ? `Set Account ${patch.status}` : 'Updated User Account',
+        account,
+        `@${account.username} updated`,
+      )
+      return { account }
+    } catch (cause) {
+      console.error('Update account failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not update the account.') }
+    }
+  },
+
+  resetManagedPassword: async (actorId, id, password, requireChange = true) => {
+    const passwordProblem = validatePassword(password)
+    if (passwordProblem) {
+      return { problems: [{ field: 'password', message: passwordProblem }] }
+    }
+    try {
+      await resetUserPassword(id, password, requireChange)
+      const account = get().accounts.find((candidate) => candidate.id === id)
+      if (account) addAudit(actor(actorId), 'Reset Account Password', account)
+      return account ? { account } : { problems: problemsFrom(null, 'Account not found.') }
+    } catch (cause) {
+      console.error('Reset password failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not reset the password.') }
+    }
+  },
+
+  createManagedRole: async (actorId, input) => {
+    try {
+      const row = await createRole(input.label, input.description, input.permissions)
+      await useAdminStore.getState().refreshRoles()
+      addAudit(actor(actorId), 'Created Role', undefined, `Role ${row.label} created`, 'Roles')
+      return { role: { id: row.id, label: row.label, description: row.description } }
+    } catch (cause) {
+      console.error('Create role failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not create the role.') }
+    }
+  },
+
+  updateManagedRole: async (actorId, roleId, patch) => {
+    try {
+      const row = await updateRole(roleId, patch.label, patch.description)
+      await useAdminStore.getState().refreshRoles()
+      addAudit(actor(actorId), 'Updated Role', undefined, `Role ${row.label} updated`, 'Roles')
+      return { role: { id: row.id, label: row.label, description: row.description } }
+    } catch (cause) {
+      console.error('Update role failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not update the role.') }
+    }
+  },
+
+  deleteManagedRole: async (actorId, roleId) => {
+    try {
+      await deleteRole(roleId)
+      await useAdminStore.getState().refreshRoles()
+      addAudit(actor(actorId), 'Deleted Role', undefined, `Role ${roleId} deleted`, 'Roles')
+      return { roleId }
+    } catch (cause) {
+      console.error('Delete role failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not delete the role.') }
+    }
+  },
+
+  updateManagedRolePermissions: async (actorId, role, permissions) => {
+    try {
+      const saved = await setRolePermissions(role, permissions)
+      await useAdminStore.getState().refreshRoles()
+      addAudit(actor(actorId), 'Updated Role Permissions', undefined, `Role ${role}`, 'Roles')
+      return { permissions: saved }
+    } catch (cause) {
+      console.error('Update role permissions failed:', cause)
+      return { problems: problemsFrom(cause, 'Could not update the role permissions.') }
+    }
+  },
+
+  terminateManagedSession: (_actorId, _sessionId) => ({
+    problems: sessionsDeferredProblem,
   }),
-  terminateManagedSession: (_actorId, _sessionId) => ({ problems: deferredProblem }),
 }))

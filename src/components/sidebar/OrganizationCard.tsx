@@ -18,7 +18,6 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
   const accounts = useAuthStore((s) => s.accounts)
   const members = useMemberStore((s) => s.members)
   const customRoles = useAdminStore((s) => s.customRoles)
-  const removedRoleIds = useAdminStore((s) => s.removedRoleIds)
 
   const account = accounts.find((candidate) => candidate.id === currentAccountId)
   const activeCount = members.filter((member) => member.isActive).length
@@ -54,7 +53,7 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
               {account?.fullName ?? 'Signed in'}
             </p>
             <p className="truncate text-[11px] text-sidebar-secondary">
-              {[...ACCOUNT_ROLES, ...customRoles].find((role) => role.id === account?.role && !removedRoleIds.includes(role.id))?.label ??
+              {[...ACCOUNT_ROLES, ...customRoles].find((role) => role.id === account?.role)?.label ??
                 (account?.role
                   ? `Unassigned role (${account.role})`
                   : 'Staff account')}

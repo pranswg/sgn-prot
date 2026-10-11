@@ -12,7 +12,8 @@
     "test": "node --import ./scripts/test-aliases.mjs --test src/**/*.test.ts",
     "verify": "npm run typecheck && npm run test && npm run lint",
     "db:push": "supabase db push",
-    "db:lint": "supabase db lint"
+    "db:lint": "supabase db lint",
+    "functions:deploy": "supabase functions deploy admin"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",

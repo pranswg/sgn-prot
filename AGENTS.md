@@ -24,10 +24,11 @@ interactive terminal here.
 The app is gaining a backend, phased in from easiest to hardest. Phase 1
 (scaffold: schema, seed, read-only RLS), Phase 2 (auth swap: sign-in/out, session
 restore, read-only profile cache), Phase 3 (read-only reads into the stores on
-load), and Phase 4 (write-through stores: every domain mutation persists to
-Supabase) are done. Still to come: RBAC, offline, and backup import (deferred to
-last). The migration plan lives on the Desktop at `backend-plan.md`, not in this
-repo.
+load), Phase 4 (write-through stores: every domain mutation persists to
+Supabase), and Phase 5 (RBAC + the admin write path: role CRUD and account
+mutations run through server RPCs and one service-role Edge Function) are done.
+Still to come: offline, and backup import (deferred to last). The migration plan
+lives on the Desktop at `backend-plan.md`, not in this repo.
 
 - The database schema and seed live in `supabase/migrations/`. `npm run db:push`
   applies them to the linked project (`supabase link`), `npm run db:lint` checks
@@ -48,6 +49,26 @@ repo.
   notifier is injected in `App.tsx`). `importData` (backup restore / server
   hydration) and `clear` (reset) deliberately stay local until Phase 7. Settings
   and worship schedules share one row via `src/lib/settingsSync.ts`.
+- RBAC + admin write path (Phase 5): migration `0010_admin_rpc.sql` adds
+  `profiles.status_reason`, the SQL permission helpers (`all_permissions()`,
+  `admin_only_permissions()`, `current_permissions()`, `has_permission()`), and
+  the `SECURITY DEFINER` RPCs the client calls (`admin_create_role` /
+  `admin_update_role` / `admin_delete_role` / `admin_set_role_permissions` /
+  `admin_update_account_metadata` / `admin_set_account_status`). They authorize
+  through `auth.uid()` + `has_permission()`, are revoked from `public` and
+  granted to `authenticated`, and name params `p_*` to dodge column/param
+  ambiguity. `src/lib/rbacParity.test.ts` parses the marker-delimited permission
+  lists in that migration and fails if they drift from `src/lib/rbac.ts`. The
+  three GoTrue-only operations (create user, reset password, ban/unban) run
+  through the `admin` Edge Function (`supabase/functions/admin/index.ts`,
+  deployed with `npm run functions:deploy`, held under `.oxlintrc.json`
+  `ignorePatterns`), which verifies the caller's JWT + `manage-users` permission
+  and uses the service-role key. App-level failures come back HTTP 200 as
+  `{ error: { code, message } }`. Client surface is `src/api/admin.ts`; roles are
+  cached in `adminStore` and `usePermissions` stays synchronous. Disable sets
+  `profiles.status` AND bans the auth user so live JWTs die. Audit logs, login
+  history, and session termination stay local (5d deferred); data-table writes
+  stay on the interim open policies (5e deferred).
 - Seeding an Admin by raw SQL into `auth.users` is fragile: GoTrue scans its
   token columns (`confirmation_token`, `recovery_token`, `email_change`,
   `email_change_token_new/current`, `phone_change*`, `reauthentication_token`)
@@ -56,16 +77,16 @@ repo.
   generic "do not match" message. `0003` sets the token columns to `''` and
   inserts the identity; `0005` repairs a database provisioned before that fix.
 - Auth runs through Supabase Auth (see "Sign-in is server-backed" below). Admin
-  account/role mutations are still deferred: the `authStore` methods exist but
-  return a "temporarily unavailable" problem, and `AdministrationPage` renders
-  read-only while its `READ_ONLY` flag is set.
+  account/role mutations now go through the Phase 5 RPCs and the `admin` Edge
+  Function; the only still-deferred piece is session termination (5d), which
+  keeps its button disabled.
 - `.env.local` holds `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and is
   gitignored (`*.local`). The service_role key must never be committed or
   bundled; it is only used for one-off server-side checks.
 - The **repo stays data-free** rule still holds: choir data lives in the hosted
   Supabase database, never in a file in this repository.
 
-Tests use `node:test` with the glob `src/**/*.test.ts` (33 files today), loaded
+Tests use `node:test` with the glob `src/**/*.test.ts` (34 files today), loaded
 through `scripts/test-aliases.mjs`, which teaches Node to resolve the `@/` alias
 and extensionless relative imports. Two consequences:
 
@@ -78,7 +99,8 @@ Backend tests worth knowing (all added for Phases 3/4): `lib/serverData.test.ts`
 (row unwrapping + settings-row split), `lib/settingsRow.test.ts`,
 `lib/writeThrough.test.ts` (single + batch rollback), and the store tests
 `store/koroStore.test.ts`, `store/memberStore.test.ts`,
-`store/settingsStore.test.ts`, `store/authStore.test.ts`. When you add a pure
+`store/settingsStore.test.ts`, `store/authStore.test.ts`. Phase 5 adds
+`lib/rbacParity.test.ts` (TS↔SQL permission-list parity). When you add a pure
 function worth protecting, add cases next to it rather than leaving behaviour
 implicit.
 
@@ -433,11 +455,13 @@ Rules if you touch it:
   when the session ends.
 - The rest of the app still reads `accounts` + `currentAccountId` synchronously,
   so `usePermissions` and the member-store admin checks did not change.
-- **Admin account/role mutations are deferred** (see the backend section):
-  `createManagedAccount`, `resetManagedPassword`, the role methods, and
-  `terminateManagedSession` return a "temporarily unavailable" problem, and
-  `AdministrationPage`'s `READ_ONLY` flag disables their controls. Wiring them up
-  needs the service-role Admin API, which is the Phase 5 write path.
+- **Admin account/role mutations are server-backed** (see the backend section):
+  `createManagedAccount`, `resetManagedPassword`, the role methods, and the
+  account-metadata/status path call `src/api/admin.ts` (Phase 5 RPCs + the
+  `admin` Edge Function) and return `FieldProblem[]` on failure. Only
+  `terminateManagedSession` still returns a "temporarily unavailable" problem
+  and its button stays disabled (`AdminManagement.tsx` `SESSIONS_READ_ONLY`);
+  audit logs and login history also stay local for now (5d).
 - `changeOwnPassword` calls `supabase.auth.updateUser({ password })` then the
   narrow `public.mark_password_changed()` RPC (migration `0004`) to clear the
   profile's `must_change_password` flag, because RLS otherwise blocks the client

@@ -46,31 +46,42 @@ test('currentAccount returns the active signed-in account and nothing otherwise'
   assert.equal(useAuthStore.getState().currentAccountId, null)
 })
 
-test('admin account and role mutations are deferred to the server write path', async () => {
+test('admin account and role mutations go through the server and fail closed', async () => {
   useAuthStore.getState().clear()
   const admin = account()
   useAuthStore.setState({ accounts: [admin], currentAccountId: admin.id })
   const state = useAuthStore.getState()
 
+  // Supabase is unconfigured under the node test runner, so every Phase 5 write
+  // is refused rather than silently succeeding against localStorage.
   assert.ok('problems' in (await state.createManagedAccount(admin.id, newAccountInput)))
   assert.ok(
-    'problems' in state.updateManagedAccount(admin.id, admin.id, { status: 'disabled' }),
+    'problems' in
+      (await state.updateManagedAccount(admin.id, admin.id, { status: 'disabled' })),
   )
-  assert.ok('problems' in (await state.resetManagedPassword(admin.id, admin.id, 'abcd1234')))
+  assert.ok(
+    'problems' in (await state.resetManagedPassword(admin.id, admin.id, 'abcd1234')),
+  )
   assert.ok(
     'problems' in
-      state.createManagedRole(admin.id, {
+      (await state.createManagedRole(admin.id, {
         label: 'Staff',
         description: '',
         permissions: [],
-      }),
+      })),
   )
   assert.ok(
     'problems' in
-      state.updateManagedRole(admin.id, 'custom-1', { label: 'Staff', description: '' }),
+      (await state.updateManagedRole(admin.id, 'custom-1', {
+        label: 'Staff',
+        description: '',
+      })),
   )
-  assert.ok('problems' in state.deleteManagedRole(admin.id, 'custom-1'))
-  assert.ok('problems' in state.updateManagedRolePermissions(admin.id, 'staff', []))
+  assert.ok('problems' in (await state.deleteManagedRole(admin.id, 'custom-1')))
+  assert.ok(
+    'problems' in (await state.updateManagedRolePermissions(admin.id, 'staff', [])),
+  )
+  // Active sessions are still client-only (Phase 5d), so this stays deferred.
   assert.ok('problems' in state.terminateManagedSession(admin.id, 'session-1'))
 })
 

@@ -2,9 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { AccountRole, Permission } from '@/core/types/auth'
+import { fetchRoles } from '@/api/admin'
 import {
   ADMIN_ONLY_PERMISSIONS,
   DEFAULT_ROLE_PERMISSIONS,
+  PERMISSION_DEFINITIONS,
 } from '@/lib/rbac'
 
 export interface ManagedRole {
@@ -49,22 +51,38 @@ export interface ActiveSession {
   lastActiveAt: string
 }
 
+/**
+ * Roles and their permissions are read from the server (`public.roles` +
+ * `public.role_permissions`) and cached here so `usePermissions` stays
+ * synchronous. Writes go through the Phase 5 RPCs; after a write the caller
+ * re-runs `refreshRoles`. Audit logs, login history, and sessions stay local
+ * (Phase 5d).
+ */
 interface AdminState {
   auditLogs: AuditLogEntry[]
   loginHistory: LoginHistoryEntry[]
   activeSessions: ActiveSession[]
   customRoles: ManagedRole[]
-  removedRoleIds: AccountRole[]
   rolePermissions: Partial<Record<AccountRole, Permission[]>>
+  rolesLoaded: boolean
   addAuditLog: (entry: Omit<AuditLogEntry, 'id' | 'createdAt'>) => void
   recordLogin: (entry: Omit<LoginHistoryEntry, 'id' | 'createdAt'>) => void
   startSession: (entry: Omit<ActiveSession, 'id' | 'startedAt' | 'lastActiveAt'>) => string
   endSession: (id: string) => void
   endUserSessions: (userId: string) => void
-  updateRolePermissions: (role: AccountRole, permissions: Permission[]) => void
-  addCustomRole: (role: ManagedRole, permissions: Permission[]) => void
-  updateCustomRole: (role: ManagedRole) => void
-  removeRole: (role: AccountRole) => void
+  refreshRoles: () => Promise<void>
+}
+
+const KNOWN_PERMISSIONS = new Set<Permission>(
+  PERMISSION_DEFINITIONS.map((permission) => permission.id),
+)
+
+function sanitizePermissions(permissions: Permission[]): Permission[] {
+  return [...new Set(permissions)].filter(
+    (permission) =>
+      KNOWN_PERMISSIONS.has(permission) &&
+      !ADMIN_ONLY_PERMISSIONS.includes(permission),
+  )
 }
 
 export const useAdminStore = create<AdminState>()(
@@ -74,8 +92,8 @@ export const useAdminStore = create<AdminState>()(
       loginHistory: [],
       activeSessions: [],
       customRoles: [],
-      removedRoleIds: [],
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
+      rolesLoaded: false,
       addAuditLog: (entry) =>
         set((state) => ({
           auditLogs: [
@@ -111,50 +129,32 @@ export const useAdminStore = create<AdminState>()(
             (session) => session.userId !== userId,
           ),
         })),
-      updateRolePermissions: (role, permissions) =>
-        set((state) => ({
-          rolePermissions: {
-            ...state.rolePermissions,
-            [role]:
-              role === 'admin'
-                ? DEFAULT_ROLE_PERMISSIONS.admin
-                : [...new Set(permissions)].filter(
-                    (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-                  ),
-          },
-        })),
-      addCustomRole: (role, permissions) =>
-        set((state) => ({
-          customRoles: [...state.customRoles, role],
-          rolePermissions: {
-            ...state.rolePermissions,
-            [role.id]: [...new Set(permissions)].filter(
-              (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-            ),
-          },
-        })),
-      updateCustomRole: (role) =>
-        set((state) => ({
-          customRoles: state.customRoles.map((item) =>
-            item.id === role.id ? role : item,
-          ),
-        })),
-      removeRole: (role) =>
-        set((state) => {
-          const rolePermissions = { ...state.rolePermissions }
-          delete rolePermissions[role]
-          return {
-            customRoles: state.customRoles.filter((item) => item.id !== role),
-            removedRoleIds: state.removedRoleIds.includes(role)
-              ? state.removedRoleIds
-              : [...state.removedRoleIds, role],
-            rolePermissions,
-          }
-        }),
+      refreshRoles: async () => {
+        const { roles, permissions } = await fetchRoles()
+        const customRoles = roles
+          .filter((role) => !role.builtin && role.id !== 'admin')
+          .map((role) => ({
+            id: role.id,
+            label: role.label,
+            description: role.description,
+          }))
+        const rolePermissions: Partial<Record<AccountRole, Permission[]>> = {
+          admin: DEFAULT_ROLE_PERMISSIONS.admin,
+        }
+        for (const role of roles) {
+          if (role.id === 'admin') continue
+          rolePermissions[role.id] = sanitizePermissions(
+            permissions
+              .filter((row) => row.role_id === role.id)
+              .map((row) => row.permission),
+          )
+        }
+        set({ customRoles, rolePermissions, rolesLoaded: true })
+      },
     }),
     {
       name: 'choir-admin-security',
-      version: 4,
+      version: 5,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<AdminState>
         const customRoles = Array.isArray(state.customRoles)
@@ -174,9 +174,7 @@ export const useAdminStore = create<AdminState>()(
           if (role !== 'admin' && !customRoles.some((item) => item.id === role)) {
             delete permissions[role]
           } else if (role !== 'admin') {
-            permissions[role] = (permissions[role] ?? []).filter(
-              (permission) => !ADMIN_ONLY_PERMISSIONS.includes(permission),
-            )
+            permissions[role] = sanitizePermissions(permissions[role] ?? [])
           }
         }
         return {
@@ -188,13 +186,8 @@ export const useAdminStore = create<AdminState>()(
             ? state.activeSessions
             : [],
           customRoles,
-          removedRoleIds: Array.isArray(state.removedRoleIds)
-            ? state.removedRoleIds.filter(
-                (role): role is AccountRole =>
-                  typeof role === 'string' && role !== 'admin',
-              )
-            : [],
           rolePermissions: permissions,
+          rolesLoaded: false,
         }
       },
     },

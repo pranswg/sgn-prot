@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { AuthPage } from '@/features/auth/AuthPage'
 import { PasswordChangePage } from '@/features/auth/PasswordChangePage'
 import { useAuthStore } from '@/store/authStore'
+import { useAdminStore } from '@/store/adminStore'
 import { useServerDataStore } from '@/store/serverDataStore'
 import { setWriteNotifier } from '@/lib/writeThrough'
 import { ThemeProvider } from '@/components/sidebar/ThemeProvider'
@@ -79,9 +80,18 @@ function App() {
 
   // Fetch the server data once the session is known, and drop it on sign-out so
   // the next sign-in re-reads rather than reusing the previous user's cache.
+  // Roles are part of the same read: `usePermissions` stays synchronous off the
+  // admin store's cache, which `refreshRoles` fills from `public.roles`.
   useEffect(() => {
-    if (currentAccountId) void loadServerData()
-    else resetServerData()
+    if (currentAccountId) {
+      void loadServerData()
+      void useAdminStore
+        .getState()
+        .refreshRoles()
+        .catch((cause) => console.error('Could not load roles from the server:', cause))
+    } else {
+      resetServerData()
+    }
   }, [currentAccountId, loadServerData, resetServerData])
 
   // Hold the auth screen until the session has been restored, so a reload with

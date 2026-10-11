@@ -75,12 +75,12 @@ import {
 } from '@/store/authStore'
 
 /**
- * Phase 2 keeps the Administration screens visible but read-only. Account and
- * role writes now belong to the server (created/reset through the service-role
- * Admin API), which ships with the Phase 5 write path; the store methods already
- * reject, and this disables the controls so nothing looks interactive.
+ * Phase 5 flips the Administration screens live: account and role writes go
+ * through the server (SQL RPCs plus the `admin` Edge Function). Active Sessions
+ * stays a client-only map until Phase 5d, so it keeps its own read-only flag.
  */
-const READ_ONLY = true
+const READ_ONLY = false
+const SESSIONS_READ_ONLY = true
 
 type AdminSection = 'overview' | 'users' | 'roles' | 'audit' | 'logins' | 'sessions'
 
@@ -104,10 +104,9 @@ const sectionItems: { id: AdminSection; label: string }[] = [
 ]
 
 function roleLabel(role: AccountRole) {
-  const removedRoleIds = useAdminStore.getState().removedRoleIds
   return (
     [...ACCOUNT_ROLES, ...useAdminStore.getState().customRoles].find(
-      (item) => item.id === role && !removedRoleIds.includes(item.id),
+      (item) => item.id === role,
     )?.label ?? role
   )
 }
@@ -217,10 +216,7 @@ function CreateUserDialog({
   const createManagedAccount = useAuthStore((state) => state.createManagedAccount)
   const rolePermissions = useAdminStore((state) => state.rolePermissions)
   const customRoles = useAdminStore((state) => state.customRoles)
-  const removedRoleIds = useAdminStore((state) => state.removedRoleIds)
-  const roles = [...ACCOUNT_ROLES, ...customRoles].filter(
-    (role) => !removedRoleIds.includes(role.id),
-  )
+  const roles = [...ACCOUNT_ROLES, ...customRoles]
   const [form, setForm] = useState(EMPTY_NEW_USER)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
@@ -416,11 +412,11 @@ function ManagedRoleDialog({
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [error, setError] = useState('')
 
-  const save = () => {
+  const save = async () => {
     setError('')
     const result = role
-      ? updateManagedRole(actorId, role.id, { label, description })
-      : createManagedRole(actorId, { label, description, permissions })
+      ? await updateManagedRole(actorId, role.id, { label, description })
+      : await createManagedRole(actorId, { label, description, permissions })
     if ('problems' in result) {
       setError(result.problems.map((problem) => problem.message).join(' '))
     } else {
@@ -494,10 +490,7 @@ function UserProfileDialog({
   const resetManagedPassword = useAuthStore((state) => state.resetManagedPassword)
   const rolePermissions = useAdminStore((state) => state.rolePermissions)
   const customRoles = useAdminStore((state) => state.customRoles)
-  const removedRoleIds = useAdminStore((state) => state.removedRoleIds)
-  const roles = [...ACCOUNT_ROLES, ...customRoles].filter(
-    (role) => !removedRoleIds.includes(role.id),
-  )
+  const roles = [...ACCOUNT_ROLES, ...customRoles]
   const [editing, setEditing] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [requirePasswordChange, setRequirePasswordChange] = useState(true)
@@ -532,11 +525,11 @@ function UserProfileDialog({
     setEditing(true)
   }
 
-  const save = () => {
+  const save = async () => {
     if (!account) return
     const nextPermissions =
       form.role === 'admin' || !permissionsCustomized ? null : [...permissions]
-    const result = updateManagedAccount(actorId, account.id, {
+    const result = await updateManagedAccount(actorId, account.id, {
       ...form,
       customPermissions: nextPermissions,
     })
@@ -575,9 +568,9 @@ function UserProfileDialog({
     }
   }
 
-  const changeStatus = (status: AccountStatus, reason = '') => {
+  const changeStatus = async (status: AccountStatus, reason = '') => {
     if (!account) return
-    const result = updateManagedAccount(actorId, account.id, {
+    const result = await updateManagedAccount(actorId, account.id, {
       status,
       statusReason: reason,
     })
@@ -947,10 +940,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   const activeSessions = useAdminStore((state) => state.activeSessions)
   const rolePermissions = useAdminStore((state) => state.rolePermissions)
   const customRoles = useAdminStore((state) => state.customRoles)
-  const removedRoleIds = useAdminStore((state) => state.removedRoleIds)
-  const roles = [...ACCOUNT_ROLES, ...customRoles].filter(
-    (role) => !removedRoleIds.includes(role.id),
-  )
+  const roles = [...ACCOUNT_ROLES, ...customRoles]
   const [section, setSection] = useState<AdminSection>('overview')
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
@@ -985,7 +975,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     setSelectedAccountId(account.id)
   }
 
-  const changeRolePermission = (
+  const changeRolePermission = async (
     role: AccountRole,
     permission: Permission,
     enabled: boolean,
@@ -995,7 +985,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     const after = enabled
       ? [...new Set([...before, permission])]
       : before.filter((item) => item !== permission)
-    const result = updateManagedRolePermissions(actorId, role, after)
+    const result = await updateManagedRolePermissions(actorId, role, after)
     if ('problems' in result) {
       toast.error(result.problems.map((problem) => problem.message).join(' '))
     }
@@ -1024,9 +1014,9 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     }
   }
 
-  const confirmDeleteRole = () => {
+  const confirmDeleteRole = async () => {
     if (!rolePendingDelete) return
-    const result = deleteManagedRole(actorId, rolePendingDelete.id)
+    const result = await deleteManagedRole(actorId, rolePendingDelete.id)
     if ('problems' in result) {
       toast.error(result.problems.map((problem) => problem.message).join(' '))
     } else {
@@ -1043,15 +1033,6 @@ export function AdminManagement({ actorId }: { actorId: string }) {
         title="Administration"
         description="Manage system accounts, roles, permissions, and security activity."
       />
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <p className="font-medium">Read-only while accounts move to the server</p>
-        <p className="mt-1 text-xs leading-relaxed text-amber-900/80">
-          Sign-in is now handled by the hosted backend. Creating users, resetting
-          passwords, and editing roles require server-side administration, which
-          is coming in the next phase — these screens are read-only until then.
-          Sign-in, sign-out, and changing your own password already work.
-        </p>
-      </div>
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
         {sectionItems.map((item) => (
           <button
@@ -1289,7 +1270,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                                 ADMIN_ONLY_PERMISSIONS.includes(permission.id)
                               }
                               onCheckedChange={(checked) =>
-                                changeRolePermission(
+                                void changeRolePermission(
                                   role.id,
                                   permission.id,
                                   checked === true,
@@ -1421,7 +1402,8 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={READ_ONLY}
+                    disabled={SESSIONS_READ_ONLY}
+                    title="Ending another device's session is coming in a later update"
                     onClick={() => endSession(session.id)}
                     loading={terminatingId === session.id}
                   >
@@ -1472,7 +1454,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white"
-              onClick={confirmDeleteRole}
+              onClick={() => void confirmDeleteRole()}
             >
               Delete Role
             </AlertDialogAction>

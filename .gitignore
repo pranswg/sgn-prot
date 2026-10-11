@@ -26,6 +26,11 @@ backups/
 # Machine-specific backend setup notes: names the hosted project, never committed
 BACKEND-NOTES.md
 
+# Per-phase backend planning notes, kept out of the repo
+step3_backendplan.md
+step5_backendplan.md
+step3_read_test_seed.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

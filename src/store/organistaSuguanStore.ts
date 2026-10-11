@@ -16,6 +16,7 @@ interface OrganistaSuguanState {
   createRecord: (input: OrganistaSuguanRecordInput) => OrganistaSuguanRecord
   deleteRecord: (id: string) => void
   deleteMany: (ids: string[]) => void
+  importData: (records: OrganistaSuguanRecord[]) => void
   clear: () => void
 }
 
@@ -48,6 +49,7 @@ export const useOrganistaSuguanStore = create<OrganistaSuguanState>()(
           records: state.records.filter((record) => !deleted.has(record.id)),
         }))
       },
+      importData: (records) => set({ records }),
       clear: () => set({ records: [] }),
     }),
     { name: 'choir-organista-suguan-history' },

@@ -7,8 +7,8 @@ import type { ReactNode } from 'react'
  *
  * - `attribute="class"` toggles `.dark` on <html>, which is what
  *   `@custom-variant dark (&:where(.dark, .dark *))` in `index.css` matches.
- * - `defaultTheme="system"` is what makes the first load follow the OS. The
- *   user's explicit choice, once made, is stored and wins from then on.
+ * - `defaultTheme="light"` is what makes the first load default to light mode.
+ *   The user's explicit choice, once made, is stored and wins from then on.
  * - `storageKey="choir-theme"` matches the `choir-` prefix the app's own
  *   stores use; next-themes would otherwise claim the bare `theme` key.
  *
@@ -20,7 +20,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="light"
       storageKey="choir-theme"
       enableSystem
     >

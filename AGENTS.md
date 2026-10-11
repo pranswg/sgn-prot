@@ -417,15 +417,16 @@ Three decisions are fixed there, so do not repeat them at call sites:
 
 - `attribute="class"` toggles `.dark` on `<html>`, which is what
   `@custom-variant dark (&:where(.dark, .dark *))` in `index.css` matches.
-- `defaultTheme="system"` plus `enableSystem` is what makes the first load follow
-  the OS. An explicit choice is stored and wins afterwards. **Do not hand-roll a
-  second theme store or read `localStorage.theme` directly.**
+- `defaultTheme="light"` plus `enableSystem` is what makes the first load default
+  to light mode. An explicit choice is stored and wins afterwards. **Do not
+  hand-roll a second theme store or read `localStorage.theme` directly.**
 - `storageKey="choir-theme"` matches the `choir-` prefix. next-themes would
   otherwise claim the bare `theme` key.
 
-`ThemeToggle` reads `resolvedTheme`, not `theme`. `theme` returns the literal
-string `"system"` on a machine where the user never chose, and there is no sun
-glyph for that; `resolvedTheme` is the one that is actually applied.
+`ThemeToggle` reads `resolvedTheme`, not `theme`. `theme` can report the literal
+string `"system"` (and defaults to `"light"` before the user chooses), and there
+is no sun glyph for `"system"`; `resolvedTheme` is the one that is actually
+applied.
 
 **The toggle is app-wide, not sidebar-only.** Every `.dark` block in
 `index.css` already existed, so this mainly means previously unreachable dark

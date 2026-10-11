@@ -10,6 +10,7 @@ export type Page =
   | 'koro-maker'
   | 'organista-suguan-maker'
   | 'suguan-builder'
+  | 'extra-occasion-suguan'
   | 'suguan-history'
   | 'suguan-detail'
   | 'settings'
@@ -19,6 +20,7 @@ interface NavState {
   page: Page
   selectedSuguanId: string | null
   builderSuguanId: string | null
+  extraOccasionSuguanId: string | null
   /**
    * The member whose Members History timeline should open on the next visit
    * to the Members History page. Set when "View History" is chosen from the
@@ -72,6 +74,7 @@ interface NavState {
   /** Forgets the remembered return page once the user has committed to a draft. */
   clearBuilderReturnPage: () => void
   editSuguanInBuilder: (id: string) => void
+  editExtraOccasionSuguan: (id: string) => void
 }
 
 export const useNavStore = create<NavState>()(
@@ -80,6 +83,7 @@ export const useNavStore = create<NavState>()(
       page: 'dashboard',
       selectedSuguanId: null,
       builderSuguanId: null,
+      extraOccasionSuguanId: null,
       selectedHistoryMemberId: null,
       builderReturnPage: null,
       previousPage: null,
@@ -89,6 +93,7 @@ export const useNavStore = create<NavState>()(
           page,
           selectedSuguanId: null,
           builderSuguanId: null,
+          extraOccasionSuguanId: null,
           // A plain navigation must not re-open a remembered history timeline.
           selectedHistoryMemberId: null,
           // Tapping the page you are already on leaves the back destination alone,
@@ -111,6 +116,7 @@ export const useNavStore = create<NavState>()(
           directoryStart: start,
           selectedSuguanId: null,
           builderSuguanId: null,
+          extraOccasionSuguanId: null,
           selectedHistoryMemberId: null,
           previousPage: s.page === 'master-list' ? s.previousPage : s.page,
           builderReturnPage: null,
@@ -129,6 +135,7 @@ export const useNavStore = create<NavState>()(
           page: 'suguan-detail',
           selectedSuguanId: id,
           builderSuguanId: null,
+          extraOccasionSuguanId: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,
           directoryStart: null,
@@ -139,6 +146,7 @@ export const useNavStore = create<NavState>()(
           selectedHistoryMemberId: memberId,
           selectedSuguanId: null,
           builderSuguanId: null,
+          extraOccasionSuguanId: null,
           builderReturnPage: null,
           directoryStart: null,
         }),
@@ -155,6 +163,7 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'suguan-builder',
           builderSuguanId: null,
+          extraOccasionSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           // Already in the builder means this is a deliberate "start over", not a
@@ -181,6 +190,17 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'suguan-builder',
           builderSuguanId: id,
+          extraOccasionSuguanId: null,
+          selectedSuguanId: null,
+          selectedHistoryMemberId: null,
+          builderReturnPage: null,
+          directoryStart: null,
+        }),
+      editExtraOccasionSuguan: (id) =>
+        set({
+          page: 'extra-occasion-suguan',
+          extraOccasionSuguanId: id,
+          builderSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,

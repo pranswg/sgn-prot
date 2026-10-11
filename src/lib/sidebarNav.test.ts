@@ -34,6 +34,7 @@ const ALL_PAGES = [
   'koro-maker',
   'organista-suguan-maker',
   'suguan-builder',
+  'extra-occasion-suguan',
   'suguan-history',
   'suguan-detail',
   'settings',
@@ -78,7 +79,12 @@ test('resolvedNavGroups preserves group order and item order', () => {
     [
       ['Dashboard'],
       ['Master List', 'Trainees', 'Members History', 'Koro Maker'],
-      ['Choir Suguan', 'Organist Suguan', 'Suguan History'],
+      [
+        'Choir Suguan',
+        'Extra Occasion Suguan',
+        'Organist Suguan',
+        'Suguan History',
+      ],
       ['Settings', 'Administration'],
     ],
   )

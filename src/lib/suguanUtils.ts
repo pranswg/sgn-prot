@@ -469,7 +469,11 @@ export function normalizeSuguan(
       : derived ?? 'babae'
   const hasEvents =
     Array.isArray(suguan.events) && suguan.events.length > 0
-  const events = !hasEvents ? defaultEventsFor(suguan.date) : suguan.events ?? []
+  const events = suguan.extraOccasion
+    ? suguan.events ?? []
+    : !hasEvents
+      ? defaultEventsFor(suguan.date)
+      : suguan.events ?? []
   const schedules = normalizeSchedules(suguan)
   return {
     ...suguan,
@@ -628,6 +632,9 @@ export function suguanFileName(
   suguan: Suguan,
   ext: 'xlsx' | 'pdf' | 'docx',
 ): string {
+  if (suguan.extraOccasion) {
+    return exportFileName('Extra Occasion Suguan', ext)
+  }
   const base = `${suguanExportGroupLabel(suguan.group)} Choir Suguan`
   const service = serviceTypeLabel(suguan)
   return exportFileName(service ? `${base} - ${service}` : base, ext)

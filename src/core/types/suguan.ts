@@ -115,6 +115,27 @@ export interface SuguanCoverage {
   pagtupadEndOverride?: string
 }
 
+export interface ExtraOccasionDateColumn {
+  enabled: boolean
+  label: string
+  date: string
+}
+
+export type ExtraOccasionOrganistaRole = 'organista' | 'reserve'
+
+export interface ExtraOccasionOrganistaAssignment {
+  memberId: string
+  role: ExtraOccasionOrganistaRole
+}
+
+export interface ExtraOccasionSuguanConfig {
+  localeName: string
+  pagsasanay: ExtraOccasionDateColumn
+  pagtupad: ExtraOccasionDateColumn
+  showFooterSignatories: boolean
+  organistaAssignments: Record<string, ExtraOccasionOrganistaAssignment[]>
+}
+
 export interface Suguan {
   id: string
   date: string
@@ -131,6 +152,7 @@ export interface Suguan {
   assignments: SuguanAssignment[]
   dutyRoles: SuguanDutyRole[]
   destinadoName?: string
+  extraOccasion?: ExtraOccasionSuguanConfig
   copiedFromId?: string
   createdAt: string
   updatedAt: string

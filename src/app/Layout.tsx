@@ -36,6 +36,7 @@ import { TraineePage } from '@/features/trainees/TraineePage'
 import { KoroMakerPage } from '@/features/koro-maker/KoroMakerPage'
 import { OrganistaSuguanMakerPage } from '@/features/organista-suguan-maker/OrganistaSuguanMakerPage'
 import { SuguanBuilderPage } from '@/features/suguan-builder/SuguanBuilderPage'
+import { ExtraOccasionSuguanPage } from '@/features/extra-occasion-suguan/ExtraOccasionSuguanPage'
 import { SuguanHistoryPage } from '@/features/suguan-history/SuguanHistoryPage'
 import { SuguanDetailPage } from '@/features/suguan-history/SuguanDetailPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
@@ -90,6 +91,8 @@ function CurrentPage() {
       return <OrganistaSuguanMakerPage />
     case 'suguan-builder':
       return <SuguanBuilderPage />
+    case 'extra-occasion-suguan':
+      return <ExtraOccasionSuguanPage />
     case 'suguan-history':
       return <SuguanHistoryPage />
     case 'suguan-detail':
@@ -144,6 +147,11 @@ const PAGE_META: Record<
     group: 'Suguan',
     title: 'Choir Suguan',
     subtitle: 'Build worship service schedules, assignments, and duty roles.',
+  },
+  'extra-occasion-suguan': {
+    group: 'Suguan',
+    title: 'Extra Occasion Suguan',
+    subtitle: 'Create a custom-date choir sign-up sheet for special occasions.',
   },
   'suguan-history': {
     group: 'Suguan',

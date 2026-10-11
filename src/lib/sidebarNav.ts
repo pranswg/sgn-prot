@@ -10,6 +10,7 @@
 import {
   ArchiveRestore,
   CalendarPlus,
+  CalendarRange,
   GraduationCap,
   Grid2X2,
   History,
@@ -77,6 +78,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Koro Maker', page: 'koro-maker', icon: Grid2X2 },
   { label: 'Organist Suguan', page: 'organista-suguan-maker', icon: Music4 },
   { label: 'Choir Suguan', page: 'suguan-builder', icon: CalendarPlus },
+  { label: 'Extra Occasion Suguan', page: 'extra-occasion-suguan', icon: CalendarRange },
   { label: 'Suguan History', page: 'suguan-history', icon: History },
   { label: 'Settings', page: 'settings', icon: Settings },
   { label: 'Administration', page: 'administration', icon: ShieldCheck },
@@ -88,7 +90,15 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: 'Choir Management',
     pages: ['master-list', 'trainees', 'members-history', 'koro-maker'],
   },
-  { label: 'Suguan', pages: ['suguan-builder', 'organista-suguan-maker', 'suguan-history'] },
+  {
+    label: 'Suguan',
+    pages: [
+      'suguan-builder',
+      'extra-occasion-suguan',
+      'organista-suguan-maker',
+      'suguan-history',
+    ],
+  },
   { label: 'System', pages: ['settings', 'administration'] },
 ]
 

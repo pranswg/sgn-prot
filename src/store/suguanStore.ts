@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
-import type { Suguan, SuguanEvent, SuguanGroup, SuguanDocFormat, SuguanCoverage, SuguanScheduleSection } from '@/core/types/suguan'
+import type { ExtraOccasionSuguanConfig, Suguan, SuguanAssignment, SuguanDutyRole, SuguanEvent, SuguanGroup, SuguanDocFormat, SuguanCoverage, SuguanScheduleSection } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
 import { deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
@@ -14,12 +14,16 @@ export interface SuguanConfigInput {
   serviceTypeId: string
   group?: SuguanGroup
   docFormat?: SuguanDocFormat
-  coverage?: SuguanCoverage
+  coverage?: SuguanCoverage | null
   events?: SuguanEvent[]
   pagsasanayDate?: string
   pagtupadDate?: string
   schedules?: SuguanScheduleSection[]
+  voiceCapacities?: Record<string, number>
+  assignments?: SuguanAssignment[]
+  dutyRoles?: SuguanDutyRole[]
   destinadoName?: string
+  extraOccasion?: ExtraOccasionSuguanConfig
   copiedFromId?: string
 }
 
@@ -90,9 +94,9 @@ export const useSuguanStore = create<SuguanState>()(
               coverage: config.coverage ?? null,
               events,
               schedules: config.schedules ?? [],
-              voiceCapacities: defaultCapacities(voices),
-              assignments: [],
-              dutyRoles: [],
+              voiceCapacities: config.voiceCapacities ?? defaultCapacities(voices),
+              assignments: config.assignments ?? [],
+              dutyRoles: config.dutyRoles ?? [],
               createdAt: now,
               updatedAt: now,
             },
@@ -212,7 +216,7 @@ export const useSuguanStore = create<SuguanState>()(
     }),
     {
       name: 'choir-suguan',
-      version: 7,
+      version: 8,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Pick<SuguanState, 'suguan'>
         const list = Array.isArray(state.suguan) ? state.suguan : []

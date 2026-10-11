@@ -99,6 +99,9 @@ export function canAccessPage(
       hasPermission(account, 'edit-suguan', rolePermissions)
     )
   }
+  if (page === 'extra-occasion-suguan') {
+    return hasPermission(account, 'create-suguan', rolePermissions)
+  }
   const pagePermission: Record<string, Permission> = {
     dashboard: 'view-dashboard',
     'master-list': 'view-master-list',

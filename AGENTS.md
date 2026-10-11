@@ -223,7 +223,7 @@ migration function. **UI-only changes must not change a persisted shape.**
 | Store | localStorage key | version |
 | --- | --- | --- |
 | `memberStore.ts` | `choir-members` | 4 |
-| `suguanStore.ts` | `choir-suguan` | 6 |
+| `suguanStore.ts` | `choir-suguan` | 8 |
 | `settingsStore.ts` | `choir-settings` | 3 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
 | `sidebarStore.ts` | `sidebarExpanded` | 1 |
@@ -315,8 +315,10 @@ appending an event, so a stale `joined`/`returned` event must not read as
 active. Do not re-derive lifecycle status from events alone.
 
 The Choir Suguan builder **never assigns the `organista` or
-`organista-reserve` duty roles** — organist duties belong to the Organist
-Suguan feature, and the printed choir sheet has no organista slot.
+`organista-reserve` duty roles** — those duties belong to the Organist Suguan
+feature, and the standard Choir Suguan sheet has no organista slot. Extra
+Occasion Suguan is separate: it offers an optional per-schedule Organista
+section without changing the standard builder or its saved records.
 `CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in `src/core/constants/dutyRoles.ts` is
 the single source: `DutyRolesPanel` hides those selectors and
 `createDraftFromSuguan` strips stored entries on load/edit, so already-saved
@@ -489,7 +491,7 @@ Rules if you touch it:
 
 ## Feature map
 
-Seven features under `src/features/`. Only the imports below cross feature
+Eight features under `src/features/`. Only the imports below cross feature
 boundaries, so a change in one feature rarely reaches another.
 
 - **auth** — `AuthPage.tsx`, the pre-shell sign-in screen, plus
@@ -504,6 +506,12 @@ boundaries, so a change in one feature rarely reaches another.
   `builderState.ts` (`BUILDER_STEPS`). The pipeline is
   `CoverageStep` → `DocumentSetupStep` → `SchedulesStep` →
   `AssignmentWorkspace` → `PreviewStep`.
+- **extra-occasion-suguan** — independent special-occasion sheet generator.
+  It reuses the Choir Suguan schedule and assignment UI, but keeps its own
+  custom Pagsasanay/Pagtupad dates, column labels, signatory toggles, optional
+  Organista assignments, and PDF/Excel/Word renderers. Records save through
+  `suguanStore` into Suguan History with their custom settings, where they can
+  be previewed, re-exported, edited in this maker, and deleted.
 - **suguan-history** — saved Suguan list and detail view.
 - **trainees** — trainee-only forms.
 - **settings** — reference list management, backup export/import.

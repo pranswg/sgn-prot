@@ -18,6 +18,7 @@ function reset(page: Page = 'dashboard') {
     page,
     selectedSuguanId: null,
     builderSuguanId: null,
+    extraOccasionSuguanId: null,
     builderReturnPage: null,
     previousPage: null,
     directoryStart: null,
@@ -101,6 +102,16 @@ test('editing a saved Suguan does not arm a return, because no dialog opens', ()
   assert.equal(useNavStore.getState().page, 'suguan-builder')
   assert.equal(useNavStore.getState().builderSuguanId, 'sg1')
   assert.equal(useNavStore.getState().builderReturnPage, null)
+})
+
+test('editing an Extra Occasion record opens its maker and plain navigation clears the edit target', () => {
+  reset('suguan-history')
+  useNavStore.getState().editExtraOccasionSuguan('extra-1')
+  assert.equal(useNavStore.getState().page, 'extra-occasion-suguan')
+  assert.equal(useNavStore.getState().extraOccasionSuguanId, 'extra-1')
+
+  useNavStore.getState().navigate('suguan-history')
+  assert.equal(useNavStore.getState().extraOccasionSuguanId, null)
 })
 
 test('re-entering the builder from the builder does not arm a self-return', () => {

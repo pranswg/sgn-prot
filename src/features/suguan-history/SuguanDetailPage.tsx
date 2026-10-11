@@ -30,6 +30,7 @@ import {
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
 import { useMemberStore } from '@/store/memberStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { formatDateLong, formatTime } from '@/lib/format'
 import {
   coverageLabel,
@@ -41,6 +42,13 @@ import { exportSuguanExcel } from '@/lib/suguanExport'
 import { suguanFileName } from '@/lib/suguanUtils'
 import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import { SuguanSheetPreview } from '@/features/suguan-builder/SuguanSheetPreview'
+import { ExtraOccasionPreview } from '@/features/extra-occasion-suguan/ExtraOccasionPreview'
+import {
+  exportExtraOccasionDocx,
+  exportExtraOccasionExcel,
+  exportExtraOccasionPdf,
+  extraOccasionExportOptionsForRecord,
+} from '@/features/extra-occasion-suguan/extraOccasionExport'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { MobileSuguanDetailHeader } from './MobileSuguanDetailHeader'
 
@@ -58,12 +66,14 @@ export function SuguanDetailPage() {
   const deleteSuguan = useSuguanStore((s) => s.deleteSuguan)
   const navigate = useNavStore((s) => s.navigate)
   const editSuguanInBuilder = useNavStore((s) => s.editSuguanInBuilder)
+  const editExtraOccasionSuguan = useNavStore((s) => s.editExtraOccasionSuguan)
   const members = useMemberStore((s) => s.members)
+  const allVoices = useSettingsStore((s) => s.allVoices)
 
   const s = suguan.find((su) => su.id === selectedSuguanId) ?? null
 
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
+  const [exporting, setExporting] = useState<'excel' | 'pdf' | 'docx' | null>(null)
   const { exportPreview, requestExport } = useExportPreview()
 
   if (!s) {
@@ -85,14 +95,39 @@ export function SuguanDetailPage() {
     )
   }
 
-  const serviceName = serviceTypeLabel(s)
+  const isExtraOccasion = Boolean(s.extraOccasion)
+  const serviceName = isExtraOccasion
+    ? 'Extra Occasion Suguan'
+    : serviceTypeLabel(s)
+  const title = isExtraOccasion ? 'EXTRA OCCASION SUGUAN' : suguanTitle(s)
+  const assignedCount = isExtraOccasion
+    ? s.schedules.reduce(
+        (count, schedule) => count + schedule.assignments.length,
+        0,
+      ) +
+      Object.values(s.extraOccasion?.organistaAssignments ?? {}).reduce(
+        (count, assignments) => count + assignments.length,
+        0,
+      )
+    : s.assignments.length
+  const editRecord = () =>
+    isExtraOccasion
+      ? editExtraOccasionSuguan(s.id)
+      : editSuguanInBuilder(s.id)
 
   const events = s.events ?? []
 
   const runExportExcel = async (fileName: string) => {
     setExporting('excel')
     try {
-      await exportSuguanExcel(s, members, s.docFormat, fileName)
+      if (s.extraOccasion) {
+        await exportExtraOccasionExcel({
+          ...extraOccasionExportOptionsForRecord(s, members, allVoices()),
+          filename: fileName,
+        })
+      } else {
+        await exportSuguanExcel(s, members, s.docFormat, fileName)
+      }
       toast.success('SUGUAN sheet exported as Excel.')
     } catch (err) {
       console.error(err)
@@ -105,7 +140,14 @@ export function SuguanDetailPage() {
   const runExportPdf = async (fileName: string) => {
     setExporting('pdf')
     try {
-      await exportSuguanPdf(s, members, s.docFormat, undefined, 'download', fileName)
+      if (s.extraOccasion) {
+        await exportExtraOccasionPdf({
+          ...extraOccasionExportOptionsForRecord(s, members, allVoices()),
+          filename: fileName,
+        })
+      } else {
+        await exportSuguanPdf(s, members, s.docFormat, undefined, 'download', fileName)
+      }
       toast.success('SUGUAN sheet exported as PDF.')
     } catch (err) {
       console.error(err)
@@ -125,6 +167,32 @@ export function SuguanDetailPage() {
     requestExport({ filename: fileName, onConfirm: () => void runExportPdf(fileName) })
   }
 
+  const handleExportDocx = () => {
+    if (!s.extraOccasion) return
+    const fileName = suguanFileName(s, 'docx')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runExportDocx(fileName),
+    })
+  }
+
+  const runExportDocx = async (fileName: string) => {
+    if (!s.extraOccasion) return
+    setExporting('docx')
+    try {
+      await exportExtraOccasionDocx({
+        ...extraOccasionExportOptionsForRecord(s, members, allVoices()),
+        filename: fileName,
+      })
+      toast.success('Extra Occasion Suguan exported as Word.')
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not export the Extra Occasion Suguan as Word.')
+    } finally {
+      setExporting(null)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 pb-10 md:pb-0">
       {exportPreview}
@@ -134,7 +202,7 @@ export function SuguanDetailPage() {
       <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-sm md:hidden">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            {suguanTitle(s)}
+            {title}
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {formatDateLong(s.date)}
@@ -142,10 +210,12 @@ export function SuguanDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <MetaChip>{s.assignments.length} members</MetaChip>
+          <MetaChip>{assignedCount} members</MetaChip>
           <MetaChip>{groupLabel(s.group)}</MetaChip>
           <MetaChip>
-            {s.coverage
+            {s.extraOccasion
+              ? `${s.schedules.length} schedules`
+              : s.coverage
               ? coverageLabel(s.coverage)
               : `${events.length} events`}
           </MetaChip>
@@ -186,10 +256,16 @@ export function SuguanDetailPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => editSuguanInBuilder(s.id)}>
+              <DropdownMenuItem onClick={editRecord}>
                 <FileText className="size-4" />
                 Edit Suguan
               </DropdownMenuItem>
+              {s.extraOccasion && (
+                <DropdownMenuItem onClick={handleExportDocx}>
+                  <FileText className="size-4" />
+                  Export Word (.docx)
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-red-600 focus:text-red-600"
@@ -206,10 +282,12 @@ export function SuguanDetailPage() {
       <PageHeader
         className="hidden md:flex"
         title={`${serviceName} — ${formatDateLong(s.date)}`}
-        description={`${s.assignments.length} members • ${groupLabel(s.group)}${
-          s.coverage
-            ? ` • ${coverageLabel(s.coverage)}`
-            : ` • ${events.length} events`
+        description={`${assignedCount} members • ${groupLabel(s.group)}${
+          s.extraOccasion
+            ? ` • ${s.schedules.length} schedules`
+            : s.coverage
+              ? ` • ${coverageLabel(s.coverage)}`
+              : ` • ${events.length} events`
         }`}
         actions={
           <div className="flex items-center gap-2">
@@ -235,7 +313,18 @@ export function SuguanDetailPage() {
               <FileDown className="size-4" />
               Export PDF (.pdf)
             </Button>
-            <Button variant="outline" onClick={() => editSuguanInBuilder(s.id)}>
+            {s.extraOccasion && (
+              <Button
+                variant="outline"
+                onClick={handleExportDocx}
+                loading={exporting === 'docx'}
+                disabled={exporting !== null}
+              >
+                <FileText className="size-4" />
+                Export Word (.docx)
+              </Button>
+            )}
+            <Button variant="outline" onClick={editRecord}>
               <FileText className="size-4" />
               Edit
             </Button>
@@ -253,24 +342,45 @@ export function SuguanDetailPage() {
             Document Preview
           </p>
           <p className="text-[0.6875rem] text-muted-foreground">
-            The printed Suguan — identical to the PDF export.
+            Preview of the saved Suguan sheet.
           </p>
         </div>
-        <SuguanSheetPreview
-          suguan={s}
-          members={members}
-          docFormat={s.docFormat}
-          previewWidth={900}
-        />
+        {s.extraOccasion ? (
+          <ExtraOccasionPreview
+            suguan={s}
+            config={s.extraOccasion}
+            members={members}
+            voices={allVoices()}
+          />
+        ) : (
+          <SuguanSheetPreview
+            suguan={s}
+            members={members}
+            docFormat={s.docFormat}
+            previewWidth={900}
+          />
+        )}
 
-        {s.pagsasanayDate && (
+        {!s.extraOccasion && s.pagsasanayDate && (
           <p className="mt-4 text-xs text-muted-foreground">
             Petsa ng Pagsasanay: {s.pagsasanayDate}
           </p>
         )}
-        {s.pagtupadDate && (
+        {!s.extraOccasion && s.pagtupadDate && (
           <p className="mt-4 text-xs text-muted-foreground">
             Petsa ng Pagtupad: {s.pagtupadDate}
+          </p>
+        )}
+        {s.extraOccasion?.pagsasanay.enabled && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            {s.extraOccasion.pagsasanay.label}:{' '}
+            {s.extraOccasion.pagsasanay.date}
+          </p>
+        )}
+        {s.extraOccasion?.pagtupad.enabled && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {s.extraOccasion.pagtupad.label}:{' '}
+            {s.extraOccasion.pagtupad.date}
           </p>
         )}
       </div>
@@ -300,7 +410,7 @@ export function SuguanDetailPage() {
           variant="outline"
           size="icon-sm"
           aria-label="Edit Suguan"
-          onClick={() => editSuguanInBuilder(s.id)}
+          onClick={editRecord}
         >
           <FileText className="size-4" />
         </Button>

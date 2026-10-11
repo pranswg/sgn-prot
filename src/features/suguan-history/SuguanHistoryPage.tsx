@@ -5,6 +5,7 @@ import {
   Eye,
   FileDown,
   FileSpreadsheet,
+  FileText,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -75,8 +76,15 @@ import type { Suguan } from '@/core/types/suguan'
 import type { OrganistaSuguanRecord } from '@/core/types/organistaSuguan'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import {
+  exportExtraOccasionDocx,
+  exportExtraOccasionExcel,
+  exportExtraOccasionPdf,
+  extraOccasionExportOptionsForRecord,
+} from '@/features/extra-occasion-suguan/extraOccasionExport'
 
 const ORGANISTA_FILTER = 'organista-suguan'
+const EXTRA_OCCASION_FILTER = 'extra-occasion-suguan'
 
 type HistoryItem =
   | { kind: 'suguan'; key: string; record: Suguan }
@@ -155,8 +163,12 @@ export function SuguanHistoryPage() {
   const clearOrganistaHistory = useOrganistaSuguanStore((state) => state.clear)
   const openSuguanDetail = useNavStore((state) => state.openSuguanDetail)
   const editSuguanInBuilder = useNavStore((state) => state.editSuguanInBuilder)
+  const editExtraOccasionSuguan = useNavStore(
+    (state) => state.editExtraOccasionSuguan,
+  )
   const startNewSuguan = useNavStore((state) => state.startNewSuguan)
   const allServiceTypes = useSettingsStore((state) => state.allServiceTypes)
+  const allVoices = useSettingsStore((state) => state.allVoices)
   const members = useMemberStore((state) => state.members)
   const { can } = usePermissions()
   const canCreateSuguan = can('create-suguan')
@@ -199,8 +211,12 @@ export function SuguanHistoryPage() {
       if (
         typeFilter === ORGANISTA_FILTER
           ? item.kind !== 'organista'
-          : typeFilter !== 'all' &&
-            (item.kind !== 'suguan' || item.record.serviceTypeId !== typeFilter)
+          : typeFilter === EXTRA_OCCASION_FILTER
+            ? item.kind !== 'suguan' || !item.record.extraOccasion
+            : typeFilter !== 'all' &&
+              (item.kind !== 'suguan' ||
+                Boolean(item.record.extraOccasion) ||
+                item.record.serviceTypeId !== typeFilter)
       ) {
         return false
       }
@@ -208,6 +224,8 @@ export function SuguanHistoryPage() {
       const searchText =
         item.kind === 'suguan'
           ? `${item.record.date} ${
+              item.record.extraOccasion ? 'Extra Occasion Suguan' : ''
+            } ${
               allTypes.find(
                 (service) => service.id === item.record.serviceTypeId,
               )?.name ?? item.record.serviceTypeId
@@ -277,8 +295,11 @@ export function SuguanHistoryPage() {
     setClearOpen(false)
   }
 
-  const exportSuguan = (record: Suguan, kind: 'excel' | 'pdf') => {
-    const ext = kind === 'excel' ? 'xlsx' : 'pdf'
+  const exportSuguan = (
+    record: Suguan,
+    kind: 'excel' | 'pdf' | 'docx',
+  ) => {
+    const ext = kind === 'excel' ? 'xlsx' : kind === 'docx' ? 'docx' : 'pdf'
     const fileName = suguanFileName(record, ext)
     requestExport({
       filename: fileName,
@@ -288,14 +309,24 @@ export function SuguanHistoryPage() {
 
   const runSuguanExport = async (
     record: Suguan,
-    kind: 'excel' | 'pdf',
+    kind: 'excel' | 'pdf' | 'docx',
     fileName: string,
   ) => {
     setExportingId(`suguan:${record.id}`)
     try {
-      if (kind === 'excel')
+      if (record.extraOccasion) {
+        const options = {
+          ...extraOccasionExportOptionsForRecord(record, members, allVoices()),
+          filename: fileName,
+        }
+        if (kind === 'excel') await exportExtraOccasionExcel(options)
+        else if (kind === 'docx') await exportExtraOccasionDocx(options)
+        else await exportExtraOccasionPdf(options)
+      } else if (kind === 'excel') {
         await exportSuguanExcel(record, members, record.docFormat, fileName)
-      else await exportSuguanPdf(record, members, record.docFormat, undefined, 'download', fileName)
+      } else {
+        await exportSuguanPdf(record, members, record.docFormat, undefined, 'download', fileName)
+      }
       toast.success('SUGUAN sheet exported.')
     } catch (error) {
       console.error(error)
@@ -370,7 +401,16 @@ export function SuguanHistoryPage() {
 
   const assignedCount = (item: HistoryItem) =>
     item.kind === 'suguan'
-      ? item.record.assignments.length
+      ? item.record.extraOccasion
+        ? item.record.schedules.reduce(
+            (count, schedule) => count + schedule.assignments.length,
+            0,
+          ) +
+          Object.values(item.record.extraOccasion.organistaAssignments).reduce(
+            (count, assignments) => count + assignments.length,
+            0,
+          )
+        : item.record.assignments.length
       : item.record.services.reduce(
           (count, service) =>
             count +
@@ -381,7 +421,9 @@ export function SuguanHistoryPage() {
 
   const historyService = (item: HistoryItem) =>
     item.kind === 'suguan'
-      ? serviceName(item.record.serviceTypeId)
+      ? item.record.extraOccasion
+        ? 'Extra Occasion Suguan'
+        : serviceName(item.record.serviceTypeId)
       : 'Organist Suguan'
 
   const historyGroup = (item: HistoryItem) =>
@@ -449,6 +491,9 @@ export function SuguanHistoryPage() {
               </SelectItem>
             ))}
             <SelectItem value={ORGANISTA_FILTER}>Organist Suguan</SelectItem>
+            <SelectItem value={EXTRA_OCCASION_FILTER}>
+              Extra Occasion Suguan
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -515,8 +560,8 @@ export function SuguanHistoryPage() {
                   colSpan={7}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  No Suguan records found. Create one with the Choir Suguan or
-                  Organist Suguan.
+                  No Suguan records found. Create one with the available Suguan
+                  makers.
                 </TableCell>
               </TableRow>
             ) : (
@@ -544,7 +589,11 @@ export function SuguanHistoryPage() {
                             variant="ghost"
                             size="icon-sm"
                             aria-label="Edit Suguan"
-                            onClick={() => editSuguanInBuilder(item.record.id)}
+                            onClick={() =>
+                              item.record.extraOccasion
+                                ? editExtraOccasionSuguan(item.record.id)
+                                : editSuguanInBuilder(item.record.id)
+                            }
                           >
                             <Pencil className="size-4" />
                           </Button>}
@@ -582,6 +631,16 @@ export function SuguanHistoryPage() {
                                     <FileDown className="size-4" />
                                     Export PDF (.pdf)
                                   </DropdownMenuItem>
+                                  {item.record.extraOccasion && (
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        void exportSuguan(item.record, 'docx')
+                                      }
+                                    >
+                                      <FileText className="size-4" />
+                                      Export Word (.docx)
+                                    </DropdownMenuItem>
+                                  )}
                                 </>
                               )}
                               {canExportDocuments && canDeleteSuguan && <DropdownMenuSeparator />}

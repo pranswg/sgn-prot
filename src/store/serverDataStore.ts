@@ -1,11 +1,10 @@
 import { create } from 'zustand'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { readServerData, type ServerDataSnapshot } from '@/lib/serverData'
+import { applySettingsRow } from '@/lib/settingsSync'
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
-import { useSettingsStore } from '@/store/settingsStore'
-import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 
 type ServerDataStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -26,24 +25,7 @@ function applyServerData(snapshot: ServerDataSnapshot) {
   // Settings must land first: `suguanStore.importData` reads `allVoices()` from
   // the settings store to normalise each record, so restoring the Suguan list
   // against the previous session's voices would derive the wrong groups.
-  const settings = snapshot.settings
-  if (settings) {
-    useSettingsStore
-      .getState()
-      .importData(settings.serviceTypes, settings.dutyRoles, settings.voices)
-    // `importData` only restores the three lists, so the locale name and default
-    // service type are set explicitly. A default id that is not in the restored
-    // list must not dangle.
-    const defaultServiceTypeId =
-      settings.defaultServiceTypeId &&
-      settings.serviceTypes.some((item) => item.id === settings.defaultServiceTypeId)
-        ? settings.defaultServiceTypeId
-        : null
-    useSettingsStore.setState({ localeName: settings.localeName, defaultServiceTypeId })
-    useWorshipScheduleStore
-      .getState()
-      .importData(settings.midweek, settings.weekend)
-  }
+  if (snapshot.settings) applySettingsRow(snapshot.settings)
 
   useMemberStore.getState().importData(snapshot.members, snapshot.trainees)
   useSuguanStore.getState().importData(snapshot.suguan)

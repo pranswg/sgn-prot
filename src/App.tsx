@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Layout } from '@/app/Layout'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -7,7 +8,13 @@ import { AuthPage } from '@/features/auth/AuthPage'
 import { PasswordChangePage } from '@/features/auth/PasswordChangePage'
 import { useAuthStore } from '@/store/authStore'
 import { useServerDataStore } from '@/store/serverDataStore'
+import { setWriteNotifier } from '@/lib/writeThrough'
 import { ThemeProvider } from '@/components/sidebar/ThemeProvider'
+
+// Stores report a failed server write through this notifier instead of importing
+// `sonner` themselves, which keeps the store graph (and the node test runner)
+// free of React. Registered once, before any store action can run.
+setWriteNotifier((message) => toast.error(message))
 
 function CenteredMessage({ children }: { children: ReactNode }) {
   return (

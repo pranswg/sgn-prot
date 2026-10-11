@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { ServiceType, VoicePosition, DutyRole } from '@/core/types/suguan'
 import { reorderList } from '@/lib/reorderList'
+import { persistSettingsRow, snapshotSettingsRow } from '@/lib/settingsSync'
 
 export type StoredDutyRole = DutyRole & { custom: boolean }
 export type StoredServiceType = ServiceType & { custom: boolean }
@@ -51,156 +52,174 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => ({
-      serviceTypes: [],
-      dutyRoles: [],
-      voices: [],
-      localeName: 'Sta. Monica',
-      defaultServiceTypeId: null,
+    (set, get) => {
+      /**
+       * Applies a reference-list change and persists the shared settings row.
+       * The document is captured before the change so a failed write rolls the
+       * row back instead of leaving the server and the local store disagreeing.
+       */
+      const commit = (
+        mutate: (state: SettingsState) => Partial<SettingsState>,
+      ) => {
+        const previous = snapshotSettingsRow()
+        set(mutate)
+        persistSettingsRow(previous)
+      }
 
-      setLocaleName: (localeName) => set({ localeName: localeName.trim() }),
+      return {
+        serviceTypes: [],
+        dutyRoles: [],
+        voices: [],
+        localeName: 'Sta. Monica',
+        defaultServiceTypeId: null,
 
-      setDefaultServiceType: (id) =>
-        // Setting the current default again clears it, so "remove default" is
-        // the same gesture as "set default". Any other id simply replaces the
-        // previous default; only one default is ever active.
-        set((s) => ({
-          defaultServiceTypeId: s.defaultServiceTypeId === id ? null : id,
-        })),
+        setLocaleName: (localeName) =>
+          commit(() => ({ localeName: localeName.trim() })),
 
-      addServiceType: (name) => {
-        set((s) => ({
-          serviceTypes: [
-            ...s.serviceTypes,
-            { id: nanoid(), name, custom: true },
-          ],
-        }))
-      },
+        setDefaultServiceType: (id) =>
+          // Setting the current default again clears it, so "remove default" is
+          // the same gesture as "set default". Any other id simply replaces the
+          // previous default; only one default is ever active.
+          commit((s) => ({
+            defaultServiceTypeId: s.defaultServiceTypeId === id ? null : id,
+          })),
 
-      updateServiceType: (id, patch) => {
-        set((s) => ({
-          serviceTypes: s.serviceTypes.map((t) =>
-            t.id === id ? { ...t, ...patch } : t,
-          ),
-        }))
-      },
+        addServiceType: (name) => {
+          commit((s) => ({
+            serviceTypes: [
+              ...s.serviceTypes,
+              { id: nanoid(), name, custom: true },
+            ],
+          }))
+        },
 
-      removeServiceType: (id) => {
-        set((s) => ({
-          serviceTypes: s.serviceTypes.filter((t) => t.id !== id),
-          // A deleted default must not dangle behind an id that no longer
-          // exists in the list.
-          defaultServiceTypeId:
-            s.defaultServiceTypeId === id ? null : s.defaultServiceTypeId,
-        }))
-      },
+        updateServiceType: (id, patch) => {
+          commit((s) => ({
+            serviceTypes: s.serviceTypes.map((t) =>
+              t.id === id ? { ...t, ...patch } : t,
+            ),
+          }))
+        },
 
-      moveServiceType: (id, toIndex) => {
-        set((s) => ({
-          serviceTypes: reorderList(s.serviceTypes, id, toIndex),
-        }))
-      },
+        removeServiceType: (id) => {
+          commit((s) => ({
+            serviceTypes: s.serviceTypes.filter((t) => t.id !== id),
+            // A deleted default must not dangle behind an id that no longer
+            // exists in the list.
+            defaultServiceTypeId:
+              s.defaultServiceTypeId === id ? null : s.defaultServiceTypeId,
+          }))
+        },
 
-      addDutyRole: (name, abbreviation) => {
-        set((s) => ({
-          dutyRoles: [
-            ...s.dutyRoles,
-            { id: nanoid(), name, abbreviation, custom: true },
-          ],
-        }))
-      },
+        moveServiceType: (id, toIndex) => {
+          commit((s) => ({
+            serviceTypes: reorderList(s.serviceTypes, id, toIndex),
+          }))
+        },
 
-      updateDutyRole: (id, patch) => {
-        set((s) => ({
-          dutyRoles: s.dutyRoles.map((r) =>
-            r.id === id ? { ...r, ...patch } : r,
-          ),
-        }))
-      },
+        addDutyRole: (name, abbreviation) => {
+          commit((s) => ({
+            dutyRoles: [
+              ...s.dutyRoles,
+              { id: nanoid(), name, abbreviation, custom: true },
+            ],
+          }))
+        },
 
-      removeDutyRole: (id) => {
-        set((s) => ({
-          dutyRoles: s.dutyRoles.filter((r) => r.id !== id),
-        }))
-      },
+        updateDutyRole: (id, patch) => {
+          commit((s) => ({
+            dutyRoles: s.dutyRoles.map((r) =>
+              r.id === id ? { ...r, ...patch } : r,
+            ),
+          }))
+        },
 
-      moveDutyRole: (id, toIndex) => {
-        set((s) => ({
-          dutyRoles: reorderList(s.dutyRoles, id, toIndex),
-        }))
-      },
+        removeDutyRole: (id) => {
+          commit((s) => ({
+            dutyRoles: s.dutyRoles.filter((r) => r.id !== id),
+          }))
+        },
 
-      addVoice: (name, gender) => {
-        set((s) => ({
-          voices: [
-            ...s.voices,
-            {
-              id: nanoid(),
-              name,
-              shortName: name.trim().slice(0, 2).toUpperCase(),
-              gender,
-              custom: true,
-            },
-          ],
-        }))
-      },
+        moveDutyRole: (id, toIndex) => {
+          commit((s) => ({
+            dutyRoles: reorderList(s.dutyRoles, id, toIndex),
+          }))
+        },
 
-      updateVoice: (id, patch) => {
-        set((s) => ({
-          voices: s.voices.map((v) =>
-            v.id === id
-              ? {
-                  ...v,
-                  ...patch,
-                  shortName: patch.name.trim().slice(0, 2).toUpperCase(),
-                }
-              : v,
-          ),
-        }))
-      },
+        addVoice: (name, gender) => {
+          commit((s) => ({
+            voices: [
+              ...s.voices,
+              {
+                id: nanoid(),
+                name,
+                shortName: name.trim().slice(0, 2).toUpperCase(),
+                gender,
+                custom: true,
+              },
+            ],
+          }))
+        },
 
-      removeVoice: (id) => {
-        set((s) => ({
-          voices: s.voices.filter((v) => v.id !== id),
-        }))
-      },
+        updateVoice: (id, patch) => {
+          commit((s) => ({
+            voices: s.voices.map((v) =>
+              v.id === id
+                ? {
+                    ...v,
+                    ...patch,
+                    shortName: patch.name.trim().slice(0, 2).toUpperCase(),
+                  }
+                : v,
+            ),
+          }))
+        },
 
-      moveVoice: (id, toIndex) => {
-        set((s) => ({ voices: reorderList(s.voices, id, toIndex) }))
-      },
+        removeVoice: (id) => {
+          commit((s) => ({
+            voices: s.voices.filter((v) => v.id !== id),
+          }))
+        },
 
-      allServiceTypes: () => get().serviceTypes,
-      allDutyRoles: () => get().dutyRoles,
-      allVoices: () => get().voices,
+        moveVoice: (id, toIndex) => {
+          commit((s) => ({ voices: reorderList(s.voices, id, toIndex) }))
+        },
 
-      importData: (serviceTypes, dutyRoles, voices) => {
-        const configuredServiceTypes = serviceTypes.filter((item) => item.custom !== false)
-        const configuredDutyRoles = dutyRoles.filter((item) => item.custom !== false)
-        const configuredVoices = voices.filter((item) => item.custom !== false)
-        set((s) => ({
-          serviceTypes: configuredServiceTypes,
-          dutyRoles: configuredDutyRoles,
-          voices: configuredVoices,
-          // A restored backup may not contain the current default service type;
-          // keep the default only when it survives the import.
-          defaultServiceTypeId:
-            s.defaultServiceTypeId != null &&
-            configuredServiceTypes.some((t) => t.id === s.defaultServiceTypeId)
-              ? s.defaultServiceTypeId
-              : null,
-        }))
-      },
+        allServiceTypes: () => get().serviceTypes,
+        allDutyRoles: () => get().dutyRoles,
+        allVoices: () => get().voices,
 
-      clear: () => {
-        set({
-          serviceTypes: [],
-          dutyRoles: [],
-          voices: [],
-          localeName: '',
-          defaultServiceTypeId: null,
-        })
-      },
-    }),
+        // Backup restore and reset stay local for now; the bulk server write is
+        // Phase 7's bridge, deliberately not a side effect of this action.
+        importData: (serviceTypes, dutyRoles, voices) => {
+          const configuredServiceTypes = serviceTypes.filter((item) => item.custom !== false)
+          const configuredDutyRoles = dutyRoles.filter((item) => item.custom !== false)
+          const configuredVoices = voices.filter((item) => item.custom !== false)
+          set((s) => ({
+            serviceTypes: configuredServiceTypes,
+            dutyRoles: configuredDutyRoles,
+            voices: configuredVoices,
+            // A restored backup may not contain the current default service type;
+            // keep the default only when it survives the import.
+            defaultServiceTypeId:
+              s.defaultServiceTypeId != null &&
+              configuredServiceTypes.some((t) => t.id === s.defaultServiceTypeId)
+                ? s.defaultServiceTypeId
+                : null,
+          }))
+        },
+
+        clear: () => {
+          set({
+            serviceTypes: [],
+            dutyRoles: [],
+            voices: [],
+            localeName: '',
+            defaultServiceTypeId: null,
+          })
+        },
+      }
+    },
     {
       name: 'choir-settings',
       version: 6,

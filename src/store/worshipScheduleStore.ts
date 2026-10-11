@@ -10,6 +10,7 @@ import {
   DEFAULT_SCHEDULE_CATEGORIES,
   worshipDayName,
 } from '@/core/constants/worshipSchedules'
+import { persistSettingsRow, snapshotSettingsRow } from '@/lib/settingsSync'
 
 export type WorshipScheduleCategory = 'midweek' | 'weekend'
 
@@ -61,70 +62,88 @@ const seed = (): Pick<WorshipScheduleState, 'midweek' | 'weekend'> => ({
 
 export const useWorshipScheduleStore = create<WorshipScheduleState>()(
   persist(
-    (set) => ({
-      ...seed(),
+    (set) => {
+      /**
+       * Applies a schedule change and persists the shared settings row (worship
+       * schedules are half of that document). The row is captured first so a
+       * failed write rolls the whole thing back.
+       */
+      const commit = (
+        mutate: (state: WorshipScheduleState) => Partial<WorshipScheduleState>,
+      ) => {
+        const previous = snapshotSettingsRow()
+        set(mutate)
+        persistSettingsRow(previous)
+      }
 
-      addSchedule: (category, input) => {
-        const record: StoredWorshipSchedule = {
-          id: nanoid(),
-          weekday: input.weekday,
-          scheduleDay: worshipDayName(input.weekday).toUpperCase(),
-          scheduleTime: input.scheduleTime,
-          label: input.label,
-          presetHint: '',
-          custom: true,
-        }
-        set((s) =>
-          category === 'midweek'
-            ? { midweek: [...s.midweek, record] }
-            : { weekend: [...s.weekend, record] },
-        )
-      },
+      return {
+        ...seed(),
 
-      updateSchedule: (category, id, patch) =>
-        set((s) => {
-          const list = category === 'midweek' ? s.midweek : s.weekend
-          const next = list.map((item) =>
-            item.id !== id
-              ? item
-              : {
-                  ...item,
-                  ...patch,
-                  scheduleDay:
-                    patch.weekday != null
-                      ? worshipDayName(patch.weekday).toUpperCase()
-                      : item.scheduleDay,
-                },
+        addSchedule: (category, input) => {
+          const record: StoredWorshipSchedule = {
+            id: nanoid(),
+            weekday: input.weekday,
+            scheduleDay: worshipDayName(input.weekday).toUpperCase(),
+            scheduleTime: input.scheduleTime,
+            label: input.label,
+            presetHint: '',
+            custom: true,
+          }
+          commit((s) =>
+            category === 'midweek'
+              ? { midweek: [...s.midweek, record] }
+              : { weekend: [...s.weekend, record] },
           )
-          return category === 'midweek' ? { midweek: next } : { weekend: next }
-        }),
+        },
 
-      toggleSchedule: (category, id) =>
-        set((s) => {
-          const list = category === 'midweek' ? s.midweek : s.weekend
-          const next = list.map((item) =>
-            item.id === id ? { ...item, disabled: !item.disabled } : item,
-          )
-          return category === 'midweek' ? { midweek: next } : { weekend: next }
-        }),
+        updateSchedule: (category, id, patch) =>
+          commit((s) => {
+            const list = category === 'midweek' ? s.midweek : s.weekend
+            const next = list.map((item) =>
+              item.id !== id
+                ? item
+                : {
+                    ...item,
+                    ...patch,
+                    scheduleDay:
+                      patch.weekday != null
+                        ? worshipDayName(patch.weekday).toUpperCase()
+                        : item.scheduleDay,
+                  },
+            )
+            return category === 'midweek' ? { midweek: next } : { weekend: next }
+          }),
 
-      removeSchedule: (category, id) =>
-        set((s) => {
-          const list = category === 'midweek' ? s.midweek : s.weekend
-          const next = list.filter((item) => item.id !== id)
-          return category === 'midweek' ? { midweek: next } : { weekend: next }
-        }),
+        toggleSchedule: (category, id) =>
+          commit((s) => {
+            const list = category === 'midweek' ? s.midweek : s.weekend
+            const next = list.map((item) =>
+              item.id === id ? { ...item, disabled: !item.disabled } : item,
+            )
+            return category === 'midweek' ? { midweek: next } : { weekend: next }
+          }),
 
-      setSchedules: (midweek, weekend) => set({ midweek, weekend }),
+        removeSchedule: (category, id) =>
+          commit((s) => {
+            const list = category === 'midweek' ? s.midweek : s.weekend
+            const next = list.filter((item) => item.id !== id)
+            return category === 'midweek' ? { midweek: next } : { weekend: next }
+          }),
 
-      importData: (midweek, weekend) =>
-        set((s) => ({
-          midweek: midweek ?? s.midweek,
-          weekend: weekend ?? s.weekend,
-        })),
+        setSchedules: (midweek, weekend) =>
+          commit(() => ({ midweek, weekend })),
 
-      clear: () => set(seed()),
-    }),
+        // Hydration (Phase 3) and backup restore stay local; the bulk server
+        // write belongs to Phase 7, not to this action.
+        importData: (midweek, weekend) =>
+          set((s) => ({
+            midweek: midweek ?? s.midweek,
+            weekend: weekend ?? s.weekend,
+          })),
+
+        clear: () => set(seed()),
+      }
+    },
     {
       name: 'choir-worship-schedules',
       version: 1,

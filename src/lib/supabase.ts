@@ -9,9 +9,16 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 let client: SupabaseClient | null = null
 
 export function supabaseEnv() {
-  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-  return { url, anonKey }
+  // `import.meta.env` is injected by Vite. The plain Node test runner has no
+  // such object, so guard the access: every Supabase path must read as "not
+  // configured" there rather than throwing on `undefined`.
+  const env = import.meta.env as unknown as
+    | Record<string, string | undefined>
+    | undefined
+  return {
+    url: env?.VITE_SUPABASE_URL,
+    anonKey: env?.VITE_SUPABASE_ANON_KEY,
+  }
 }
 
 export function isSupabaseConfigured(): boolean {

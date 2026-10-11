@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FileDown, FileSpreadsheet, Save } from 'lucide-react'
+import { FileDown, FileSpreadsheet, FileText, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { exportSuguanPdf } from './suguanPdfExport'
+import { exportSuguanDocx } from './suguanDocxExport'
 import { SuguanSheetPreview } from './SuguanSheetPreview'
 import { buildPreviewSuguan, saveBlockers, totalAssigned, type SuguanDraft } from './builderState'
 
@@ -42,7 +43,7 @@ export function PreviewStep({
 
   const canSave = blockers.length === 0
 
-  const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null)
+  const [exporting, setExporting] = useState<'excel' | 'pdf' | 'docx' | null>(null)
   const { exportPreview, requestExport } = useExportPreview()
   const [saveSuguan, savingSuguan] = useAsyncAction(onSave)
 
@@ -92,6 +93,27 @@ const runExcelExport = async (exportFileName: string) => {
     })
   }
 
+  const runDocxExport = async (exportFileName: string) => {
+    setExporting('docx')
+    try {
+      await exportSuguanDocx(preview, members, draft.docFormat, exportFileName)
+      toast.success('SUGUAN sheet exported as Word.')
+    } catch (err) {
+      console.error(err)
+      toast.error('Could not export Word document.')
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const handleExportDocx = () => {
+    const exportFileName = suguanFileName(preview, 'docx')
+    requestExport({
+      filename: exportFileName,
+      onConfirm: () => runDocxExport(exportFileName),
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {exportPreview}
@@ -117,6 +139,15 @@ const runExcelExport = async (exportFileName: string) => {
         >
           <FileSpreadsheet className="size-4" />
           Export Excel
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleExportDocx}
+          loading={exporting === 'docx'}
+          disabled={exporting !== null}
+        >
+          <FileText className="size-4" />
+          Export Word
         </Button>
         {blockers.length > 0 && (
           <p className="text-xs text-muted-foreground">

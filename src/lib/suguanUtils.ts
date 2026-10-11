@@ -624,7 +624,10 @@ export function assignmentDisplayName(
   return `${last}, ${firstName}`
 }
 
-export function suguanFileName(suguan: Suguan, ext: 'xlsx' | 'pdf'): string {
+export function suguanFileName(
+  suguan: Suguan,
+  ext: 'xlsx' | 'pdf' | 'docx',
+): string {
   const base = `${suguanExportGroupLabel(suguan.group)} Choir Suguan`
   const service = serviceTypeLabel(suguan)
   return exportFileName(service ? `${base} - ${service}` : base, ext)

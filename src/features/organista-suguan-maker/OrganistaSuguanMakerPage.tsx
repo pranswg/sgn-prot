@@ -35,6 +35,7 @@ import {
   createServiceFromSchedule,
   servicesFromCategories,
 } from './organistaSuguanService'
+import { buildOrganistaSuguanDocx } from './organistaSuguanDocx'
 import segoeScriptUrl from '@/assets/fonts/SegoeScript.ttf'
 
 let segoeScriptBase64: string | null = null
@@ -484,6 +485,40 @@ export function OrganistaSuguanMakerPage() {
     })
   }
 
+  const exportDocx = () => {
+    if (!requirePagsasanayDate()) return
+    const fileName = exportFileName('Organist Suguan', 'docx')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => void runExportDocx(fileName),
+    })
+  }
+
+  const runExportDocx = async (fileName: string) => {
+    try {
+      const blob = await buildOrganistaSuguanDocx(
+        churchName,
+        pagsasanayDate,
+        services,
+        docFormat,
+        pmName,
+        destinadoName,
+      )
+      const link = document.createElement('a')
+      const fileUrl = URL.createObjectURL(blob)
+      link.href = fileUrl
+      link.download = fileName
+      document.body.append(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(fileUrl), 1000)
+      toast.success('Organist Suguan Word document exported.')
+    } catch (error) {
+      console.error(error)
+      toast.error('Could not export the Organist Suguan Word document.')
+    }
+  }
+
   const runExportPdf = async (fileName: string) => {
     try {
       const blob = await buildOrganistaSuguanPdf(
@@ -621,6 +656,10 @@ export function OrganistaSuguanMakerPage() {
             <FileDown className="size-4" />
             Export PDF
           </Button>
+          <Button variant="outline" onClick={exportDocx}>
+            <FileText className="size-4" />
+            Export Word
+          </Button>
         </div>
       </div>
 
@@ -714,7 +753,7 @@ export function OrganistaSuguanMakerPage() {
             {documentSetupOpen && (
               <div className="mt-4 space-y-4">
                 <p className="text-xs text-muted-foreground">
-                  These document options are applied to the exported PDF.
+                  These document options are applied to exported PDF and Word files.
                 </p>
                 <DocumentSetupStep
                   value={docFormat}

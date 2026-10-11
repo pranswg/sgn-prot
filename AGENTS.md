@@ -22,20 +22,32 @@ interactive terminal here.
 ### Backend: Supabase
 
 The app is gaining a backend, phased in from easiest to hardest. Phase 1
-(scaffold: schema, seed, read-only RLS) and Phase 2 (auth swap: sign-in/out,
-session restore, read-only profile cache) are done. Still to come: read-only data
-pages, write-through stores, RBAC, offline, and backup import (deferred to last).
-The migration plan lives on the Desktop at `backend-plan.md`, not in this repo.
+(scaffold: schema, seed, read-only RLS), Phase 2 (auth swap: sign-in/out, session
+restore, read-only profile cache), Phase 3 (read-only reads into the stores on
+load), and Phase 4 (write-through stores: every domain mutation persists to
+Supabase) are done. Still to come: RBAC, offline, and backup import (deferred to
+last). The migration plan lives on the Desktop at `backend-plan.md`, not in this
+repo.
 
 - The database schema and seed live in `supabase/migrations/`. `npm run db:push`
   applies them to the linked project (`supabase link`), `npm run db:lint` checks
   them. `npm run db:push` cannot run on an unlinked machine.
 - Schema posture: one table per Zustand store, entries as whole JSONB docs in a
-  `data` column; admin/security tables are normalized. RLS allows any
-  authenticated user to read and only `service_role` to write — the
-  per-`Permission` policies land with the write path. `roles` seeds the builtin
-  `admin` role with all twenty permissions from `src/lib/rbac.ts`; the seeded
-  login is `admin` / `admin1234` (published backstop, must change).
+  `data` column; admin/security tables are normalized. Reads are open to any
+  authenticated user. Phase 4 added interim **authenticated** write policies per
+  data table (migrations `0006`–`0009`), to be tightened to the twenty
+  `Permission`s in Phase 5; `assignment_presets` is owner-scoped
+  (`auth.uid() = owner_id`). `roles` seeds the builtin `admin` role with all
+  twenty permissions from `src/lib/rbac.ts`; the seeded login is `admin` /
+  `admin1234` (published backstop, must change).
+- Write-through (Phase 4): `src/api/db.ts` is the only domain-write path
+  (`upsertRow`/`deleteRow`/`upsertOwnedRow`/`upsertSettingsRow`); it no-ops when
+  Supabase is unconfigured, so tests and offline dev stay localStorage-only.
+  `src/lib/writeThrough.ts` `persist({ write, rollback, failure })` applies the
+  optimistic change, then on error restores the captured slice and toasts (the
+  notifier is injected in `App.tsx`). `importData` (backup restore / server
+  hydration) and `clear` (reset) deliberately stay local until Phase 7. Settings
+  and worship schedules share one row via `src/lib/settingsSync.ts`.
 - Seeding an Admin by raw SQL into `auth.users` is fragile: GoTrue scans its
   token columns (`confirmation_token`, `recovery_token`, `email_change`,
   `email_change_token_new/current`, `phone_change*`, `reauthentication_token`)
@@ -53,21 +65,22 @@ The migration plan lives on the Desktop at `backend-plan.md`, not in this repo.
 - The **repo stays data-free** rule still holds: choir data lives in the hosted
   Supabase database, never in a file in this repository.
 
-Tests use `node:test` with the glob `src/**/*.test.ts`, loaded through
-`scripts/test-aliases.mjs`, which teaches Node to resolve the `@/` alias and
-extensionless relative imports. Two consequences:
+Tests use `node:test` with the glob `src/**/*.test.ts` (33 files today), loaded
+through `scripts/test-aliases.mjs`, which teaches Node to resolve the `@/` alias
+and extensionless relative imports. Two consequences:
 
 - Tests must stay in plain `.test.ts` files with **no JSX**, because the runner
   has no DOM.
 - Import with an explicit extension (`./phDate.ts`) or a `@/` alias. A bare
   extensionless relative path will not resolve from a test file.
 
-Test files that exist, all pure-logic: `suguanDates.test.ts`,
-`suguanExport.test.ts`, `spreadsheetImport.test.ts`, `rosterImport.test.ts`,
-`memberDirectory.test.ts`, `format.test.ts`, `credentials.test.ts`,
-`sidebarNav.test.ts`, `reorderList.test.ts`, `navStore.test.ts`, and
-`features/settings/referenceList.test.ts`. When you add a pure function worth
-protecting, add cases next to it rather than leaving behaviour implicit.
+Backend tests worth knowing (all added for Phases 3/4): `lib/serverData.test.ts`
+(row unwrapping + settings-row split), `lib/settingsRow.test.ts`,
+`lib/writeThrough.test.ts` (single + batch rollback), and the store tests
+`store/koroStore.test.ts`, `store/memberStore.test.ts`,
+`store/settingsStore.test.ts`, `store/authStore.test.ts`. When you add a pure
+function worth protecting, add cases next to it rather than leaving behaviour
+implicit.
 
 `tsconfig.app.json` enables `noUnusedLocals` and `noUnusedParameters`, so a
 typecheck failure about an unused import is usually a real leftover from an edit

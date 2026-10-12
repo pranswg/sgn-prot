@@ -140,7 +140,7 @@ export async function exportTraineeAttendancePdf(options: {
   const tableWidth = pageWidth - left * 2
   const titleTop = 38
   const tableTop = 105
-  const tableHeaderHeight = 38
+  const tableHeaderHeight = 54
   const rowHeight = 28
   const footerReserve = 162
   const numberWidth = 32
@@ -219,15 +219,20 @@ export async function exportTraineeAttendancePdf(options: {
             maxWidth: column.width - 4,
           })
         } else {
-          doc.text(column.label, centerX, tableTop + 15, {
+          const dateLines = doc.splitTextToSize(column.label, column.width - 4)
+          doc.text(dateLines, centerX, tableTop + 11, {
             align: 'center',
-            maxWidth: column.width - 4,
           })
           doc.setFont('BookAntiqua', 'normal')
-          doc.text('Lagda', centerX, tableTop + 30, {
-            align: 'center',
-            maxWidth: column.width - 4,
-          })
+          doc.text(
+            'Lagda',
+            centerX,
+            tableTop + Math.max(31, 14 + dateLines.length * 11),
+            {
+              align: 'center',
+              maxWidth: column.width - 4,
+            },
+          )
           doc.setFont('BookAntiqua', 'bold')
         }
         x += column.width

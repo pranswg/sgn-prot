@@ -100,7 +100,7 @@ export function AttendanceSheetDialog({
   const [weekdays, setWeekdays] = useState<number[]>([6])
   const [paperSize, setPaperSize] = useState<AttendancePaperSize>('legal')
   const [orientation, setOrientation] =
-    useState<AttendanceOrientation>('landscape')
+    useState<AttendanceOrientation>('portrait')
   const [pangulongMemberId, setPangulongMemberId] = useState('')
   const [isExporting, setIsExporting] = useState(false)
 

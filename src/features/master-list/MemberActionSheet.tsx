@@ -1,4 +1,4 @@
-import { CalendarPlus, Eye, LogOut, Pencil } from 'lucide-react'
+import { CalendarPlus, Eye, LogOut, Pencil, Trash2 } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -18,9 +18,11 @@ interface MemberActionSheetProps {
   onEdit: (member: Member) => void
   onAssign: (member: Member) => void
   onTransfer: (member: Member) => void
+  onDelete: (member: Member) => void
   canEdit: boolean
   canAssign: boolean
   canTransfer: boolean
+  canDelete: boolean
 }
 
 /** Mobile three-dot menu. Each row is a full-width, thumb-sized tap target. */
@@ -32,9 +34,11 @@ export function MemberActionSheet({
   onEdit,
   onAssign,
   onTransfer,
+  onDelete,
   canEdit,
   canAssign,
   canTransfer,
+  canDelete,
 }: MemberActionSheetProps) {
   const name = member ? formatMemberName(member, sort) : ''
 
@@ -76,6 +80,14 @@ export function MemberActionSheet({
                 label="Transfer Out"
                 destructive
                 onClick={() => onTransfer(member)}
+              />
+            )}
+            {canDelete && (
+              <ActionRow
+                icon={Trash2}
+                label="Delete Member"
+                destructive
+                onClick={() => onDelete(member)}
               />
             )}
           </ul>

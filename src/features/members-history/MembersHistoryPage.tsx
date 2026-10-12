@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import {
   ArchiveRestore,
   Eye,
   Search,
+  Trash2,
   Undo2,
   X,
 } from 'lucide-react'
@@ -30,6 +32,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useMemberStore } from '@/store/memberStore'
@@ -70,16 +82,20 @@ interface HistoryCardProps {
   member: Member
   reference?: string
   canManage: boolean
+  canDelete: boolean
   onView: (member: Member) => void
   onRestore: (member: Member) => void
+  onDelete: (member: Member) => void
 }
 
 function HistoryCard({
   member,
   reference,
   canManage,
+  canDelete,
   onView,
   onRestore,
+  onDelete,
 }: HistoryCardProps) {
   const restorable = isRestorable(member)
   return (
@@ -123,6 +139,17 @@ function HistoryCard({
               Restore
             </Button>
           )}
+          {canDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => onDelete(member)}
+            >
+              <Trash2 className="size-3.5" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
     </li>
@@ -133,13 +160,16 @@ const COLUMN_HEAD = 'text-[0.6875rem] font-semibold uppercase tracking-[0.08em] 
 
 export function MembersHistoryPage() {
   const members = useMemberStore((s) => s.members)
+  const removeMember = useMemberStore((s) => s.removeMember)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
   const isMobile = useIsMobile()
   const { can } = usePermissions()
   const canManage = can('manage-membership-history')
+  const canDeleteMembers = can('delete-members')
 
   const [filters, setFilters] = useState(EMPTY_HISTORY_FILTERS)
   const [historyTarget, setHistoryTarget] = useState<Member | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null)
   const [lifecycle, setLifecycle] = useState<{
     member: Member
     kind: LifecycleFormKind
@@ -222,8 +252,10 @@ export function MembersHistoryPage() {
               member={member}
               reference={references.get(member.id)}
               canManage={canManage}
+              canDelete={canDeleteMembers}
               onView={setHistoryTarget}
               onRestore={requestRestore}
+              onDelete={setDeleteTarget}
             />
           ))}
         </ul>
@@ -292,6 +324,17 @@ export function MembersHistoryPage() {
                           <Button size="sm" onClick={() => requestRestore(member)}>
                             <Undo2 className="size-3.5" />
                             Restore
+                          </Button>
+                        )}
+                        {canDeleteMembers && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteTarget(member)}
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete
                           </Button>
                         )}
                       </div>
@@ -447,6 +490,41 @@ export function MembersHistoryPage() {
             kind={lifecycle.kind}
           />
         ))}
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete {deleteTarget?.firstName}{' '}
+              {deleteTarget?.lastName}? This removes their entire record from
+              the archive and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white"
+              onClick={() => {
+                if (!deleteTarget) return
+                removeMember(deleteTarget.id)
+                toast.success(
+                  `${deleteTarget.firstName} ${deleteTarget.lastName} deleted.`,
+                )
+                setDeleteTarget(null)
+                setHistoryTarget(null)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

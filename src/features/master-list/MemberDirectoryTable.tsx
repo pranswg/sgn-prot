@@ -41,8 +41,10 @@ interface MemberDirectoryTableProps {
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onTransfer: (member: Member) => void
+  onDelete: (member: Member) => void
   canEdit: boolean
   canTransfer: boolean
+  canDelete: boolean
   hasAnyMembers: boolean
   onClearFilters: () => void
   pageSize: MemberPageSize
@@ -132,8 +134,10 @@ export function MemberDirectoryTable({
   onView,
   onEdit,
   onTransfer,
+  onDelete,
   canEdit,
   canTransfer,
+  canDelete,
   hasAnyMembers,
   onClearFilters,
   pageSize,
@@ -233,8 +237,10 @@ export function MemberDirectoryTable({
                 onView={onView}
                 onEdit={onEdit}
                 onTransfer={onTransfer}
+                onDelete={onDelete}
                 canEdit={canEdit}
                 canTransfer={canTransfer}
+                canDelete={canDelete}
                 onPageChange={(page) => setSectionPage(section.key, page)}
               />
             ))}
@@ -257,8 +263,10 @@ interface ChoirSectionProps {
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onTransfer: (member: Member) => void
+  onDelete: (member: Member) => void
   canEdit: boolean
   canTransfer: boolean
+  canDelete: boolean
   onPageChange: (page: number) => void
 }
 
@@ -273,8 +281,10 @@ function ChoirSection({
   onView,
   onEdit,
   onTransfer,
+  onDelete,
   canEdit,
   canTransfer,
+  canDelete,
   onPageChange,
 }: ChoirSectionProps) {
   return (
@@ -333,8 +343,10 @@ function ChoirSection({
               onView={onView}
               onEdit={onEdit}
               onTransfer={onTransfer}
+              onDelete={onDelete}
               canEdit={canEdit}
               canTransfer={canTransfer}
+              canDelete={canDelete}
             />
           </TableCell>
         </TableRow>

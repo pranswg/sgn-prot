@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { LogOut } from 'lucide-react'
+import { LogOut, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -27,8 +27,10 @@ interface MemberDetailDialogProps {
   onOpenChange: (open: boolean) => void
   onEdit: () => void
   onTransfer: (member: Member) => void
+  onDelete: (member: Member) => void
   canEdit: boolean
   canTransfer: boolean
+  canDelete: boolean
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -45,8 +47,10 @@ export function MemberDetailDialog({
   onOpenChange,
   onEdit,
   onTransfer,
+  onDelete,
   canEdit,
   canTransfer,
+  canDelete,
 }: MemberDetailDialogProps) {
   const deactivateMember = useMemberStore((s) => s.deactivateMember)
   const reactivateMember = useMemberStore((s) => s.reactivateMember)
@@ -92,7 +96,7 @@ export function MemberDetailDialog({
           </Label>
           <MemberLifecycleBadge member={member} />
         </div>
-        {(canEdit || canTransfer) && <DialogFooter className="flex !justify-between sm:justify-between">
+        {(canEdit || canTransfer || canDelete) && <DialogFooter className="flex !justify-between sm:justify-between">
           <div className="flex gap-2">
             {canEdit && (
               <Button
@@ -115,6 +119,19 @@ export function MemberDetailDialog({
               >
                 <LogOut className="size-4" />
                 Transfer Out
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  onOpenChange(false)
+                  onDelete(member)
+                }}
+              >
+                <Trash2 className="size-4" />
+                Delete
               </Button>
             )}
           </div>

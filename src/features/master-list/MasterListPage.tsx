@@ -22,6 +22,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -144,6 +154,7 @@ export function MasterListPage() {
   const lastUpdatedAt = useMemberStore((s) => s.lastUpdatedAt)
   const deactivateMember = useMemberStore((s) => s.deactivateMember)
   const reactivateMember = useMemberStore((s) => s.reactivateMember)
+  const removeMember = useMemberStore((s) => s.removeMember)
   const voices = useSettingsStore((s) => s.voices)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
@@ -159,6 +170,7 @@ export function MasterListPage() {
   // A member who transfers out (admin-only) is never deleted from the archive;
   // the lifecycle form records the date, reason, and notes as history events.
   const canManageHistory = can('manage-membership-history')
+  const canDeleteMembers = can('delete-members')
   const canAssignMembers = can('assign-members')
   const canExportDocuments = can('export-documents')
   const updatedAt = new Date(lastUpdatedAt)
@@ -207,6 +219,7 @@ export function MasterListPage() {
     null,
   )
   const [actionTarget, setActionTarget] = useState<Member | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null)
   const [lifecycleTarget, setLifecycleTarget] = useState<{
     member: Member
     kind: LifecycleFormKind
@@ -451,8 +464,10 @@ export function MasterListPage() {
     onEdit: openEditDialog,
     onTransfer: (member: Member) =>
       setLifecycleTarget({ member, kind: 'transfer' }),
+    onDelete: setDeleteTarget,
     canEdit: canEditMembers,
     canTransfer: canManageHistory,
+    canDelete: canDeleteMembers,
     hasAnyMembers: directoryMembers.length > 0,
     onClearFilters: clearFilters,
   }
@@ -942,7 +957,7 @@ export function MasterListPage() {
                       sort={sort}
                       onOpen={setProfileTarget}
                       onOpenMenu={setActionTarget}
-                      hasActions={canEditMembers || canAssignMembers || canManageHistory}
+                      hasActions={canEditMembers || canAssignMembers || canManageHistory || canDeleteMembers}
                     />
                   ))}
                 </ul>
@@ -1017,9 +1032,14 @@ export function MasterListPage() {
           setActionTarget(null)
           setLifecycleTarget({ member, kind: 'transfer' })
         }}
+        onDelete={(member) => {
+          setActionTarget(null)
+          setDeleteTarget(member)
+        }}
         canEdit={canEditMembers}
         canAssign={canAssignMembers}
         canTransfer={canManageHistory}
+        canDelete={canDeleteMembers}
       />
 
       {isMobile ? (
@@ -1098,8 +1118,10 @@ export function MasterListPage() {
         onTransfer={(member) =>
           setLifecycleTarget({ member, kind: 'transfer' })
         }
+        onDelete={setDeleteTarget}
         canEdit={canEditMembers}
         canTransfer={canManageHistory}
+        canDelete={canDeleteMembers}
       />
 
       {lifecycleTarget &&
@@ -1122,6 +1144,40 @@ export function MasterListPage() {
             kind={lifecycleTarget.kind}
           />
         ))}
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete {deleteTarget?.firstName}{' '}
+              {deleteTarget?.lastName}? This removes them from the Master List
+              and Members History and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white"
+              onClick={() => {
+                if (!deleteTarget) return
+                removeMember(deleteTarget.id)
+                toast.success(
+                  `${deleteTarget.firstName} ${deleteTarget.lastName} deleted.`,
+                )
+                setDeleteTarget(null)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

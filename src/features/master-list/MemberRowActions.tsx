@@ -1,4 +1,4 @@
-import { Eye, LogOut, Pencil } from 'lucide-react'
+import { Eye, LogOut, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -14,8 +14,10 @@ interface MemberRowActionsProps {
   onView: (member: Member) => void
   onEdit: (member: Member) => void
   onTransfer: (member: Member) => void
+  onDelete: (member: Member) => void
   canEdit?: boolean
   canTransfer?: boolean
+  canDelete?: boolean
   sort?: MemberSort
   className?: string
 }
@@ -25,8 +27,10 @@ export function MemberRowActions({
   onView,
   onEdit,
   onTransfer,
+  onDelete,
   canEdit = true,
   canTransfer = true,
+  canDelete = false,
   sort = 'last-name',
   className,
 }: MemberRowActionsProps) {
@@ -80,6 +84,23 @@ export function MemberRowActions({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Transfer out</TooltipContent>
+        </Tooltip>
+      )}
+
+      {canDelete && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Delete ${name}`}
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => onDelete(member)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Delete member</TooltipContent>
         </Tooltip>
       )}
     </div>

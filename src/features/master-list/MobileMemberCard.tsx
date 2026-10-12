@@ -20,17 +20,14 @@ interface MobileMemberCardProps {
   reference?: string
   voices: VoicePosition[]
   sort: MemberSort
-  /** Tapping the card body opens the member's profile. */
-  onOpen: (member: Member) => void
   onOpenMenu: (member: Member) => void
   hasActions: boolean
 }
 
 /**
- * Compact directory card. The body is one large tap target for the profile;
- * the row number chip sits beside the avatar and the display reference (M-001)
- * under the name. The overflow button stays a sibling of the tap target rather
- * than nested inside it.
+ * Compact directory card. The body and the overflow button both open the
+ * member's action sheet; the row number chip sits beside the avatar and the
+ * display reference (M-001) under the name.
  */
 export function MobileMemberCard({
   member,
@@ -38,7 +35,6 @@ export function MobileMemberCard({
   reference,
   voices,
   sort,
-  onOpen,
   onOpenMenu,
   hasActions,
 }: MobileMemberCardProps) {
@@ -49,7 +45,7 @@ export function MobileMemberCard({
       <div className="flex items-center gap-2 p-3.5">
         <button
           type="button"
-          onClick={() => onOpen(member)}
+          onClick={() => onOpenMenu(member)}
           className="flex min-w-0 flex-1 items-start gap-3 text-left"
         >
           <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">

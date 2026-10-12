@@ -77,7 +77,6 @@ import { belongsInMasterList } from '@/lib/memberHistory'
 import { cn } from '@/lib/utils'
 import { exportFileName, masterListExportDocumentName } from '@/lib/exportNaming'
 import { MemberFormDialog } from './MemberFormDialog'
-import { MemberDetailDialog } from './MemberDetailDialog'
 import {
   MemberDirectoryTable,
   MemberDirectoryEmptyState,
@@ -93,7 +92,6 @@ import {
   MOBILE_FILTER_SECTIONS,
   type MobileFilterSection,
 } from './mobileFilters'
-import { MemberProfileSheet } from './MemberProfileSheet'
 import { MobileMemberFormSheet } from './MobileMemberFormSheet'
 import {
   MasterListPdfSetupDialog,
@@ -152,8 +150,6 @@ export function MasterListPage() {
   const members = useMemberStore((s) => s.members)
   const trainees = useMemberStore((s) => s.trainees)
   const lastUpdatedAt = useMemberStore((s) => s.lastUpdatedAt)
-  const deactivateMember = useMemberStore((s) => s.deactivateMember)
-  const reactivateMember = useMemberStore((s) => s.reactivateMember)
   const removeMember = useMemberStore((s) => s.removeMember)
   const voices = useSettingsStore((s) => s.voices)
   const allVoices = useSettingsStore((s) => s.allVoices)
@@ -214,10 +210,6 @@ export function MasterListPage() {
   const [wordSetupOpen, setWordSetupOpen] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
   const [editingMember, setEditingMember] = useState<Member | null>(null)
-  const [profileTarget, setProfileTarget] = useState<Member | null>(null)
-  const [desktopDetailTarget, setDesktopDetailTarget] = useState<Member | null>(
-    null,
-  )
   const [actionTarget, setActionTarget] = useState<Member | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null)
   const [lifecycleTarget, setLifecycleTarget] = useState<{
@@ -256,12 +248,6 @@ export function MasterListPage() {
       filterMembers(directoryMembers, filters, voices, references, effectiveSort),
     [directoryMembers, filters, voices, references, effectiveSort],
   )
-
-  // The profile sheet stays open across a deactivate, so it reads the member
-  // back out of the store instead of holding the snapshot it was opened with.
-  const profileMember = profileTarget
-    ? (members.find((m) => m.id === profileTarget.id) ?? null)
-    : null
 
   // Match count for the filter sheet's Apply button, evaluated against the
   // in-progress edits rather than the filters that are already applied.
@@ -320,8 +306,6 @@ export function MasterListPage() {
   }
 
   const openEditDialog = (member: Member) => {
-    setProfileTarget(null)
-    setDesktopDetailTarget(null)
     setEditingMember(member)
     setFormOpen(true)
   }
@@ -460,7 +444,7 @@ export function MasterListPage() {
     voices,
     references,
     sort,
-    onView: setDesktopDetailTarget,
+    dutyRoles,
     onEdit: openEditDialog,
     onTransfer: (member: Member) =>
       setLifecycleTarget({ member, kind: 'transfer' }),
@@ -955,7 +939,6 @@ export function MasterListPage() {
                       reference={references.get(member.id)}
                       voices={voiceMap}
                       sort={sort}
-                      onOpen={setProfileTarget}
                       onOpenMenu={setActionTarget}
                       hasActions={canEditMembers || canAssignMembers || canManageHistory || canDeleteMembers}
                     />
@@ -1016,10 +999,6 @@ export function MasterListPage() {
         onOpenChange={(open) => {
           if (!open) setActionTarget(null)
         }}
-        onView={(member) => {
-          setActionTarget(null)
-          setProfileTarget(member)
-        }}
         onEdit={(member) => {
           setActionTarget(null)
           openEditDialog(member)
@@ -1047,14 +1026,12 @@ export function MasterListPage() {
           open={formOpen}
           onOpenChange={setFormOpen}
           member={editingMember}
-          onSaved={() => setProfileTarget(null)}
         />
       ) : (
         <MemberFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
           member={editingMember}
-          onSaved={() => setDesktopDetailTarget(null)}
         />
       )}
 
@@ -1073,56 +1050,6 @@ export function MasterListPage() {
           onExport={handleWordExport}
         />
       )}
-
-      {/* Mobile profile screen */}
-      <MemberProfileSheet
-        member={isMobile ? profileMember : null}
-        reference={
-          isMobile && profileMember
-            ? references.get(profileMember.id)
-            : undefined
-        }
-        sort={sort}
-        onOpenChange={(open) => {
-          if (!open) setProfileTarget(null)
-        }}
-        onEdit={openEditDialog}
-        onToggleStatus={(member) => {
-          const name = formatMemberName(member, sort)
-          if (member.isActive) {
-            deactivateMember(member.id)
-            toast.success(`${name} deactivated.`)
-          } else {
-            reactivateMember(member.id)
-            toast.success(`${name} reactivated.`)
-          }
-        }}
-        onLifecycle={(member) =>
-          setLifecycleTarget({
-            member,
-            kind: member.isActive ? 'transfer' : 'restore',
-          })
-        }
-        canManage={canEditMembers}
-        canLifecycle={canManageHistory}
-      />
-
-      <MemberDetailDialog
-        member={isMobile ? null : desktopDetailTarget}
-        onOpenChange={(open) => {
-          if (!open) setDesktopDetailTarget(null)
-        }}
-        onEdit={() =>
-          desktopDetailTarget && openEditDialog(desktopDetailTarget)
-        }
-        onTransfer={(member) =>
-          setLifecycleTarget({ member, kind: 'transfer' })
-        }
-        onDelete={setDeleteTarget}
-        canEdit={canEditMembers}
-        canTransfer={canManageHistory}
-        canDelete={canDeleteMembers}
-      />
 
       {lifecycleTarget &&
         (isMobile ? (

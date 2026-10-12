@@ -12,12 +12,12 @@ import {
 import {
   GenderBadge,
   MemberLifecycleBadge,
-  MembershipBadge,
   ReturnedMemberBadge,
   VoiceBadge,
 } from '@/components/StatusBadges'
+import { Badge } from '@/components/ui/badge'
 import { memberPositionLabel } from '@/core/constants/memberMembership'
-import type { VoicePosition } from '@/core/types/suguan'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { cn } from '@/lib/utils'
 import { memberIsReturned } from '@/lib/memberHistory'
@@ -38,7 +38,7 @@ interface MemberDirectoryTableProps {
   voices: VoicePosition[]
   references: Map<string, string>
   sort: MemberSort
-  onView: (member: Member) => void
+  dutyRoles: DutyRole[]
   onEdit: (member: Member) => void
   onTransfer: (member: Member) => void
   onDelete: (member: Member) => void
@@ -55,6 +55,40 @@ const COLUMN_COUNT = 7
 
 const headClass =
   'h-11 bg-background text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
+
+/** The member's checked Choir Rankings (duty-role names), in stored order. */
+function rankingsFor(member: Member, dutyRoles: DutyRole[]): string[] {
+  const ids = member.assignedDutyRoleIds ?? []
+  if (ids.length === 0) return []
+  const nameById = new Map(dutyRoles.map((role) => [role.id, role.name]))
+  return ids
+    .map((id) => nameById.get(id))
+    .filter((name): name is string => Boolean(name))
+}
+
+/**
+ * The Membership cell now reflects the member's Choir Rankings rather than the
+ * old membership category. No rankings reads as an em dash, matching the other
+ * empty directory cells.
+ */
+function ChoirRankings({ names }: { names: string[] }) {
+  if (names.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {names.map((name, index) => (
+        <Badge
+          key={`${name}-${index}`}
+          variant="outline"
+          className="h-5 rounded-md border-transparent bg-violet-100 px-1.5 text-[0.6875rem] font-medium tracking-tight text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
+        >
+          {name}
+        </Badge>
+      ))}
+    </div>
+  )
+}
 
 interface ChoirSectionHeaderProps {
   icon: typeof Users
@@ -131,7 +165,7 @@ export function MemberDirectoryTable({
   voices,
   references,
   sort,
-  onView,
+  dutyRoles,
   onEdit,
   onTransfer,
   onDelete,
@@ -234,7 +268,7 @@ export function MemberDirectoryTable({
                 voices={voices}
                 references={references}
                 sort={sort}
-                onView={onView}
+                dutyRoles={dutyRoles}
                 onEdit={onEdit}
                 onTransfer={onTransfer}
                 onDelete={onDelete}
@@ -260,7 +294,7 @@ interface ChoirSectionProps {
   voices: VoicePosition[]
   references: Map<string, string>
   sort: MemberSort
-  onView: (member: Member) => void
+  dutyRoles: DutyRole[]
   onEdit: (member: Member) => void
   onTransfer: (member: Member) => void
   onDelete: (member: Member) => void
@@ -278,7 +312,7 @@ function ChoirSection({
   voices,
   references,
   sort,
-  onView,
+  dutyRoles,
   onEdit,
   onTransfer,
   onDelete,
@@ -331,7 +365,9 @@ function ChoirSection({
             <VoiceBadge name={memberPositionLabel(member, voices)} />
           </TableCell>
           <TableCell>
-            <MembershipBadge type={member.membershipType} />
+            <ChoirRankings
+              names={rankingsFor(member, dutyRoles)}
+            />
           </TableCell>
           <TableCell>
             <MemberLifecycleBadge member={member} />
@@ -340,7 +376,6 @@ function ChoirSection({
             <MemberRowActions
               member={member}
               sort={sort}
-              onView={onView}
               onEdit={onEdit}
               onTransfer={onTransfer}
               onDelete={onDelete}

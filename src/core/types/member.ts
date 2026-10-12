@@ -80,10 +80,18 @@ export interface Trainee {
   lastName: string
   gender: Gender
   voicePosition: string
-  status: 'active' | 'inactive' | 'promoted' | 'removed'
+  status: 'active' | 'inactive' | 'promoted' | 'removed' | 'transferred-out'
   dateAdded: string
   promotedToMemberId?: string
   notes?: string
+  /** Why a trainee left without ever becoming a member. */
+  transferReason?: TransferReason
+  /** Calendar date `YYYY-MM-DD` the trainee transferred out. */
+  transferredOutDate?: string
+  /** Whether the trainee was already inactive when they transferred out. */
+  transferredWhenInactive?: boolean
+  /** Optional note recorded with a trainee transfer-out. */
+  transferNotes?: string
 }
 
 export interface MemberInput {

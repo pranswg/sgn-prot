@@ -1,4 +1,4 @@
-import { CalendarPlus, Eye, LogOut, Pencil, Trash2 } from 'lucide-react'
+import { CalendarPlus, LogOut, Pencil, Trash2 } from 'lucide-react'
 import {
   Sheet,
   SheetContent,
@@ -14,7 +14,6 @@ interface MemberActionSheetProps {
   member: Member | null
   sort?: MemberSort
   onOpenChange: (open: boolean) => void
-  onView: (member: Member) => void
   onEdit: (member: Member) => void
   onAssign: (member: Member) => void
   onTransfer: (member: Member) => void
@@ -30,7 +29,6 @@ export function MemberActionSheet({
   member,
   sort = 'last-name',
   onOpenChange,
-  onView,
   onEdit,
   onAssign,
   onTransfer,
@@ -55,11 +53,6 @@ export function MemberActionSheet({
 
         {member && (
           <ul className="flex flex-col gap-1 pb-2">
-            <ActionRow
-              icon={Eye}
-              label="View Profile"
-              onClick={() => onView(member)}
-            />
             {canEdit && (
               <ActionRow
                 icon={Pencil}
@@ -74,7 +67,7 @@ export function MemberActionSheet({
                 onClick={() => onAssign(member)}
               />
             )}
-            {canTransfer && member.isActive && (
+            {canTransfer && (
               <ActionRow
                 icon={LogOut}
                 label="Transfer Out"
@@ -103,7 +96,7 @@ function ActionRow({
   onClick,
   destructive,
 }: {
-  icon: typeof Eye
+  icon: typeof CalendarPlus
   label: string
   onClick: () => void
   destructive?: boolean

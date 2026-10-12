@@ -4,11 +4,13 @@ import {
   ArrowUpRight,
   FileDown,
   GraduationCap,
+  LogOut,
   Mars,
   Pencil,
   Plus,
   Search,
   SlidersHorizontal,
+  Undo2,
   UserRoundX,
   Venus,
   X,
@@ -57,6 +59,10 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { TraineeFormDialog } from './TraineeFormDialog'
 import { TraineeFormSheet } from './TraineeFormSheet'
 import { AttendanceSheetDialog } from './AttendanceSheetDialog'
+import {
+  TraineeTransferDialog,
+  TraineeTransferSheet,
+} from './TraineeTransferForm'
 
 /** Matches the Master List table header styling. */
 const headClass =
@@ -79,6 +85,7 @@ export function TraineePage() {
   const trainees = useMemberStore((s) => s.trainees)
   const promoteTrainee = useMemberStore((s) => s.promoteTrainee)
   const removeTrainee = useMemberStore((s) => s.removeTrainee)
+  const restoreTrainee = useMemberStore((s) => s.restoreTrainee)
   const masterListMembers = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const localeName = useSettingsStore((s) => s.localeName)
@@ -96,15 +103,25 @@ export function TraineePage() {
   const [editing, setEditing] = useState<Trainee | null>(null)
   const [promoteTarget, setPromoteTarget] = useState<Trainee | null>(null)
   const [removeTarget, setRemoveTarget] = useState<Trainee | null>(null)
+  const [transferTarget, setTransferTarget] = useState<Trainee | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<Trainee | null>(null)
 
+  // Attendance excludes transferred-out trainees; the visible list keeps them
+  // so a transfer can be undone from here.
   const activeTrainees = trainees.filter(
     (t) => t.status === 'active' || t.status === 'inactive',
+  )
+  const listedTrainees = trainees.filter(
+    (t) =>
+      t.status === 'active' ||
+      t.status === 'inactive' ||
+      t.status === 'transferred-out',
   )
   const promotedCount = trainees.filter((t) => t.status === 'promoted').length
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return activeTrainees
+    return listedTrainees
       .filter((t) => {
         if (statusFilter !== 'all' && t.status !== statusFilter) return false
         if (choirFilter !== 'all' && t.gender !== choirFilter) return false
@@ -115,7 +132,7 @@ export function TraineePage() {
       .sort((a, b) =>
         `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`),
       )
-  }, [activeTrainees, query, statusFilter, choirFilter])
+  }, [listedTrainees, query, statusFilter, choirFilter])
 
   const choirSections = [
     {
@@ -174,7 +191,7 @@ export function TraineePage() {
             <span className="font-medium tabular-nums text-foreground/80">
               {filtered.length}
             </span>{' '}
-            of {activeTrainees.length} trainees
+            of {listedTrainees.length} trainees
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -268,6 +285,7 @@ export function TraineePage() {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="transferred-out">Transferred Out</SelectItem>
             </SelectContent>
           </Select>
 
@@ -342,20 +360,43 @@ export function TraineePage() {
                       <VoiceBadge name={getVoiceName(t.voicePosition, voices)} />
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 shrink-0 text-xs"
-                    onClick={() => setPromoteTarget(t)}
-                    disabled={t.status !== 'active'}
-                  >
-                    <ArrowUpRight className="size-3.5" />
-                    Promote
-                  </Button>
+                  {t.status === 'transferred-out' ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0 text-xs"
+                      onClick={() => setRestoreTarget(t)}
+                    >
+                      <Undo2 className="size-3.5" />
+                      Restore
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0 text-xs"
+                      onClick={() => setPromoteTarget(t)}
+                      disabled={t.status !== 'active'}
+                    >
+                      <ArrowUpRight className="size-3.5" />
+                      Promote
+                    </Button>
+                  )}
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <TraineeStatusBadge status={t.status} />
                   <div className="flex gap-1">
+                    {t.status !== 'transferred-out' && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Transfer out ${t.firstName} ${t.lastName}`}
+                        className="text-amber-600 hover:text-amber-600"
+                        onClick={() => setTransferTarget(t)}
+                      >
+                        <LogOut className="size-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -460,16 +501,39 @@ export function TraineePage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs"
-                              onClick={() => setPromoteTarget(t)}
-                              disabled={t.status !== 'active'}
-                            >
-                              <ArrowUpRight className="size-3.5" />
-                              Promote
-                            </Button>
+                            {t.status === 'transferred-out' ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => setRestoreTarget(t)}
+                              >
+                                <Undo2 className="size-3.5" />
+                                Restore
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => setPromoteTarget(t)}
+                                disabled={t.status !== 'active'}
+                              >
+                                <ArrowUpRight className="size-3.5" />
+                                Promote
+                              </Button>
+                            )}
+                            {t.status !== 'transferred-out' && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Transfer out ${t.firstName} ${t.lastName}`}
+                                className="text-amber-600 hover:text-amber-600"
+                                onClick={() => setTransferTarget(t)}
+                              >
+                                <LogOut className="size-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -529,6 +593,24 @@ export function TraineePage() {
         localeName={localeName}
       />
 
+      {isMobile ? (
+        <TraineeTransferSheet
+          open={!!transferTarget}
+          onOpenChange={(open) => {
+            if (!open) setTransferTarget(null)
+          }}
+          trainee={transferTarget}
+        />
+      ) : (
+        <TraineeTransferDialog
+          open={!!transferTarget}
+          onOpenChange={(open) => {
+            if (!open) setTransferTarget(null)
+          }}
+          trainee={transferTarget}
+        />
+      )}
+
       <AlertDialog open={!!promoteTarget} onOpenChange={(o) => !o && setPromoteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -571,6 +653,37 @@ export function TraineePage() {
               }}
             >
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!restoreTarget}
+        onOpenChange={(o) => !o && setRestoreTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore trainee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Restore {restoreTarget?.firstName} {restoreTarget?.lastName} to
+              the trainee list? They will return as{' '}
+              {restoreTarget?.transferredWhenInactive ? 'inactive' : 'active'}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (restoreTarget) {
+                  restoreTrainee(restoreTarget.id)
+                  toast.success('Trainee restored.')
+                  setRestoreTarget(null)
+                }
+              }}
+            >
+              <Undo2 className="mr-1 size-4" />
+              Restore
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

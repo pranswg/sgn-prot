@@ -22,7 +22,6 @@ import type { Member, MemberInput, MembershipType } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
-import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { phtInstantISO } from '@/lib/phDate'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -45,6 +44,7 @@ interface MemberFormState {
   gender: 'male' | 'female'
   voicePosition: string
   membershipType: MembershipType
+  isActive: boolean
   assignedDutyRoleIds: string[]
 }
 
@@ -56,6 +56,7 @@ const emptyForm = (): MemberFormState => ({
   gender: 'female',
   voicePosition: 'soprano-1',
   membershipType: 'regular',
+  isActive: true,
   assignedDutyRoleIds: [],
 })
 
@@ -92,6 +93,7 @@ export function MemberFormDialog({
               gender: member.gender,
               voicePosition: member.voicePosition,
               membershipType: member.membershipType,
+              isActive: member.isActive,
               assignedDutyRoleIds: member.assignedDutyRoleIds ?? [],
             }
           : emptyForm(),
@@ -134,8 +136,9 @@ export function MemberFormDialog({
         voicePosition: form.voicePosition,
         membershipType: form.membershipType,
         assignedDutyRoleIds: form.assignedDutyRoleIds,
+        isActive: form.isActive,
       }
-      // isActive, legacy positions, and notes remain untouched by this editor.
+      // Legacy positions and notes remain untouched by this editor.
       updateMember(member.id, input)
       toast.success('Member updated.')
       onOpenChange(false)
@@ -160,7 +163,7 @@ export function MemberFormDialog({
       voicePosition: form.voicePosition,
       membershipType: form.membershipType,
       assignedDutyRoleIds: form.assignedDutyRoleIds,
-      isActive: true,
+      isActive: form.isActive,
       dateAdded: phtInstantISO(),
     }
     addMember(input)
@@ -298,25 +301,22 @@ export function MemberFormDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label>Membership</Label>
+            <Label>Status</Label>
             <Select
-              value={form.membershipType}
-              onValueChange={(v) => set('membershipType', v as MembershipType)}
+              value={form.isActive ? 'active' : 'inactive'}
+              onValueChange={(v) => set('isActive', v === 'active')}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MEMBERSHIP_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Organista, Tagapagturo, and Assistant Tagapagturo all count as
-              Organists for the Organist Suguan.
+              Inactive keeps the member on the Master List with an Inactive
+              badge; a transfer out moves them to Members History.
             </p>
           </div>
 

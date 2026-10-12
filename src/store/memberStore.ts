@@ -15,7 +15,10 @@ import { useAdminStore } from '@/store/adminStore'
 import { deleteAllRows, deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
 import { isDateKey, toDateKeyFromInstant } from '@/lib/phDate'
-import { transferReasonLabel } from '@/lib/memberHistory'
+import {
+  memberLifecycleStatus,
+  transferReasonLabel,
+} from '@/lib/memberHistory'
 
 function updatedAt(): string {
   return new Date().toISOString()
@@ -153,6 +156,11 @@ interface MemberState {
   updateTrainee: (id: string, input: Partial<TraineeInput>) => void
   promoteTrainee: (id: string) => Member | null
   deactivateTrainee: (id: string) => void
+  transferTrainee: (
+    id: string,
+    input: { date: string; reason: TransferReason; notes?: string },
+  ) => { trainee?: Trainee; error?: string }
+  restoreTrainee: (id: string) => void
   removeTrainee: (id: string) => void
   importData: (members: Member[], trainees: Trainee[]) => void
   /**
@@ -312,7 +320,7 @@ export const useMemberStore = create<MemberState>()(
         const previous = get().members
         const member = previous.find((m) => m.id === id)
         if (!member) return { error: 'Member not found.' }
-        if (!member.isActive) {
+        if (memberLifecycleStatus(member) === 'transferred-out') {
           return { error: 'This member is already transferred out.' }
         }
         if (!isDateKey(input.date)) {
@@ -323,7 +331,15 @@ export const useMemberStore = create<MemberState>()(
           type: 'transferred-out',
           date: input.date,
           reason: input.reason,
-          notes: input.notes?.trim() || undefined,
+          notes:
+            [
+              input.notes?.trim(),
+              member.isActive
+                ? ''
+                : 'Member was inactive at the time of transfer.',
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined,
           voicePosition: member.voicePosition,
           actorName: actor.fullName,
           createdAt: updatedAt(),
@@ -563,6 +579,61 @@ export const useMemberStore = create<MemberState>()(
         deleteTraineeRow(set, previous, id, 'Could not delete the trainee. It was restored.')
       },
 
+      transferTrainee: (id, input) => {
+        const previous = get().trainees
+        const trainee = previous.find((t) => t.id === id)
+        if (!trainee) return { error: 'Trainee not found.' }
+        if (trainee.status === 'transferred-out') {
+          return { error: 'This trainee is already transferred out.' }
+        }
+        if (trainee.status === 'promoted' || trainee.status === 'removed') {
+          return { error: 'This trainee can no longer be transferred out.' }
+        }
+        if (!isDateKey(input.date)) {
+          return { error: 'Choose a valid transfer date.' }
+        }
+        const next: Trainee = {
+          ...trainee,
+          status: 'transferred-out',
+          transferReason: input.reason,
+          transferredOutDate: input.date,
+          transferredWhenInactive: trainee.status === 'inactive',
+          transferNotes: input.notes?.trim() || undefined,
+        }
+        set((s) => ({
+          trainees: s.trainees.map((t) => (t.id === id ? next : t)),
+          lastUpdatedAt: updatedAt(),
+        }))
+        writeTrainee(
+          set,
+          previous,
+          next,
+          'Could not record the trainee transfer. Your change was reverted.',
+        )
+        return { trainee: next }
+      },
+
+      restoreTrainee: (id) => {
+        const previous = get().trainees
+        const trainee = previous.find(
+          (t) => t.id === id && t.status === 'transferred-out',
+        )
+        if (!trainee) return
+        const next: Trainee = {
+          ...trainee,
+          status: trainee.transferredWhenInactive ? 'inactive' : 'active',
+          transferReason: undefined,
+          transferredOutDate: undefined,
+          transferredWhenInactive: undefined,
+          transferNotes: undefined,
+        }
+        set((s) => ({
+          trainees: s.trainees.map((t) => (t.id === id ? next : t)),
+          lastUpdatedAt: updatedAt(),
+        }))
+        writeTrainee(set, previous, next, 'Could not restore the trainee. Your change was reverted.')
+      },
+
       importData: (members, trainees) => {
         set({
           members: normalizeMemberList(members),
@@ -686,7 +757,7 @@ export const useMemberStore = create<MemberState>()(
     }),
     {
       name: 'choir-members',
-      version: 6,
+      version: 7,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as {
           members?: Member[]

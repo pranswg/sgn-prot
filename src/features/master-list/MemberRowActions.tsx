@@ -1,4 +1,4 @@
-import { Eye, LogOut, Pencil, Trash2 } from 'lucide-react'
+import { LogOut, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -11,7 +11,6 @@ import type { Member } from '@/core/types/member'
 
 interface MemberRowActionsProps {
   member: Member
-  onView: (member: Member) => void
   onEdit: (member: Member) => void
   onTransfer: (member: Member) => void
   onDelete: (member: Member) => void
@@ -24,7 +23,6 @@ interface MemberRowActionsProps {
 
 export function MemberRowActions({
   member,
-  onView,
   onEdit,
   onTransfer,
   onDelete,
@@ -38,21 +36,6 @@ export function MemberRowActions({
 
   return (
     <div className={cn('flex items-center justify-end gap-0.5', className)}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`View ${name}`}
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => onView(member)}
-          >
-            <Eye className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>View member</TooltipContent>
-      </Tooltip>
-
       {canEdit && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -70,7 +53,7 @@ export function MemberRowActions({
         </Tooltip>
       )}
 
-      {canTransfer && member.isActive && (
+      {canTransfer && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

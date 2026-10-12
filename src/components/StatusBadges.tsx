@@ -1,9 +1,8 @@
 import { RotateCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { ChoirPosition, Member, MembershipType } from '@/core/types/member'
+import type { ChoirPosition, Member } from '@/core/types/member'
 import { POSITION_SHORT_LABELS } from '@/core/constants/choirPositions'
-import { MEMBERSHIP_SHORT_LABELS } from '@/core/constants/memberMembership'
 import {
   memberLifecycleStatus,
   MEMBER_LIFECYCLE_STATE_LABELS,
@@ -95,15 +94,24 @@ const TRAINEE_STATUS_STYLES: Record<string, string> = {
   inactive: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
   promoted:
     'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
+  'transferred-out':
+    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+}
+
+const TRAINEE_STATUS_LABELS: Record<string, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+  promoted: 'Promoted',
+  'transferred-out': 'Transferred Out',
 }
 
 export function TraineeStatusBadge({ status }: { status: string }) {
   return (
     <Badge
       variant="outline"
-      className={cn('font-medium capitalize', TRAINEE_STATUS_STYLES[status])}
+      className={cn('font-medium', TRAINEE_STATUS_STYLES[status])}
     >
-      {status}
+      {TRAINEE_STATUS_LABELS[status] ?? status}
     </Badge>
   )
 }
@@ -145,27 +153,6 @@ export function VoiceBadge({ name }: { name: string }) {
       )}
     >
       {name}
-    </Badge>
-  )
-}
-
-const MEMBERSHIP_BADGE_STYLES: Record<MembershipType, string> = {
-  regular:
-    'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
-  organista: 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300',
-  tagapagturo:
-    'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
-  'assistant-tagapagturo':
-    'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
-}
-
-export function MembershipBadge({ type }: { type: MembershipType }) {
-  return (
-    <Badge
-      variant="outline"
-      className={cn(badgeBase, MEMBERSHIP_BADGE_STYLES[type])}
-    >
-      {MEMBERSHIP_SHORT_LABELS[type]}
     </Badge>
   )
 }

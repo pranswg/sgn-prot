@@ -12,7 +12,7 @@ import type {
 } from '@/core/types/member'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
-import { deleteRow, upsertRow } from '@/api/db'
+import { deleteAllRows, deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
 import { isDateKey, toDateKeyFromInstant } from '@/lib/phDate'
 import { transferReasonLabel } from '@/lib/memberHistory'
@@ -91,6 +91,14 @@ function normalizeMemberHistory(member: Member): MemberHistoryEvent[] {
   return []
 }
 
+/** Restored/hydrated members always get their history back-filled. */
+function normalizeMemberList(members: Member[]): Member[] {
+  return members.map((member) => ({
+    ...member,
+    history: normalizeMemberHistory(member),
+  }))
+}
+
 /** The signed-in account, when the actor is currently active. */
 function activeActor(actorId: string) {
   const auth = useAuthStore.getState()
@@ -147,6 +155,12 @@ interface MemberState {
   deactivateTrainee: (id: string) => void
   removeTrainee: (id: string) => void
   importData: (members: Member[], trainees: Trainee[]) => void
+  /**
+   * Backup restore. Unlike `importData` (server hydration, local-only), this
+   * reconciles the server: it upserts every restored row and deletes the rows
+   * that were present before but are absent from the backup.
+   */
+  restoreData: (members: Member[], trainees: Trainee[]) => void
   importMasterList: (
     actorId: string,
     members: MemberInput[],
@@ -160,8 +174,8 @@ interface MemberState {
 /**
  * Phase 4b write-through. Members and trainees are one server row each, so a
  * per-action helper upserts (or deletes) that row and restores the previous
- * slice if Supabase rejects the write. Backup `importData` and reset `clear`
- * stay local for now; the bulk bridge is Phase 7.
+ * slice if Supabase rejects the write. `importData` is hydration-only;
+ * `restoreData` and `clear` reconcile the server rows in bulk.
  */
 type MemberStateSetter = (
   partial: Partial<Pick<MemberState, 'members' | 'trainees' | 'lastUpdatedAt'>>,
@@ -551,12 +565,46 @@ export const useMemberStore = create<MemberState>()(
 
       importData: (members, trainees) => {
         set({
-          members: members.map((m) => ({
-            ...m,
-            history: normalizeMemberHistory(m as Member),
-          })),
+          members: normalizeMemberList(members),
           trainees,
           lastUpdatedAt: updatedAt(),
+        })
+      },
+
+      restoreData: (members, trainees) => {
+        const previousMembers = get().members
+        const previousTrainees = get().trainees
+        const nextMembers = normalizeMemberList(members)
+        set({
+          members: nextMembers,
+          trainees,
+          lastUpdatedAt: updatedAt(),
+        })
+
+        const nextMemberIds = new Set(nextMembers.map((member) => member.id))
+        const nextTraineeIds = new Set(trainees.map((trainee) => trainee.id))
+        const removedMemberIds = previousMembers
+          .filter((member) => !nextMemberIds.has(member.id))
+          .map((member) => member.id)
+        const removedTraineeIds = previousTrainees
+          .filter((trainee) => !nextTraineeIds.has(trainee.id))
+          .map((trainee) => trainee.id)
+
+        persistWrite({
+          write: [
+            ...nextMembers.map((member) => upsertRow('members', member.id, member)),
+            ...trainees.map((trainee) => upsertRow('trainees', trainee.id, trainee)),
+            ...removedMemberIds.map((id) => deleteRow('members', id)),
+            ...removedTraineeIds.map((id) => deleteRow('trainees', id)),
+          ],
+          rollback: () =>
+            set({
+              members: previousMembers,
+              trainees: previousTrainees,
+              lastUpdatedAt: updatedAt(),
+            }),
+          failure:
+            'Could not restore the Master List on the server. Your previous data was kept.',
         })
       },
 
@@ -620,7 +668,20 @@ export const useMemberStore = create<MemberState>()(
       },
 
       clear: () => {
+        const previousMembers = get().members
+        const previousTrainees = get().trainees
         set({ members: [], trainees: [], lastUpdatedAt: updatedAt() })
+        persistWrite({
+          write: [deleteAllRows('members'), deleteAllRows('trainees')],
+          rollback: () =>
+            set({
+              members: previousMembers,
+              trainees: previousTrainees,
+              lastUpdatedAt: updatedAt(),
+            }),
+          failure:
+            'Could not clear the Master List on the server. Your data was restored.',
+        })
       },
     }),
     {

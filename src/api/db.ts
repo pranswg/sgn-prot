@@ -41,6 +41,16 @@ export function deleteRow(table: string, id: string): Promise<WriteResult> {
   return run(() => getSupabase().from(table).delete().eq('id', id))
 }
 
+/**
+ * Deletes every row in a text-keyed table. PostgREST refuses an unfiltered
+ * DELETE, so the filter is `id <> ''` — those ids are nanoids, never the empty
+ * string. (The `settings` table has a smallint id, so it is cleared by id
+ * instead.) Used by the reset/restore paths that replace a whole store.
+ */
+export function deleteAllRows(table: string): Promise<WriteResult> {
+  return run(() => getSupabase().from(table).delete().neq('id', ''))
+}
+
 /** Upserts one owner-scoped row (used by per-user tables like presets). */
 export function upsertOwnedRow(
   table: string,

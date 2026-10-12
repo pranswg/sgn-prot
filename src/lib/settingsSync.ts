@@ -1,4 +1,4 @@
-import { upsertSettingsRow } from '@/api/db'
+import { deleteRow, upsertSettingsRow } from '@/api/db'
 import { persist } from '@/lib/writeThrough'
 import { buildSettingsRow } from '@/lib/settingsRow'
 import type { ServerSettingsData } from '@/lib/serverData'
@@ -58,5 +58,33 @@ export function persistSettingsRow(previous: ServerSettingsData) {
     write: upsertSettingsRow(snapshotSettingsRow()),
     rollback: () => applySettingsRow(previous),
     failure: 'Could not save settings. Your change was reverted.',
+  })
+}
+
+/**
+ * Backup restore for the shared row: applies the restored document, then
+ * upserts it. `importData`-only hydration stays local; this is the server path.
+ */
+export function restoreSettingsRow(
+  doc: ServerSettingsData,
+  previous: ServerSettingsData,
+) {
+  applySettingsRow(doc)
+  persist({
+    write: upsertSettingsRow(snapshotSettingsRow()),
+    rollback: () => applySettingsRow(previous),
+    failure: 'Could not restore settings on the server. Your previous settings were kept.',
+  })
+}
+
+/**
+ * Reset for the shared row: deletes it entirely. The caller clears both stores
+ * locally first; rollback re-applies the captured previous document.
+ */
+export function clearSettingsRow(previous: ServerSettingsData) {
+  persist({
+    write: deleteRow('settings', '1'),
+    rollback: () => applySettingsRow(previous),
+    failure: 'Could not clear settings on the server. Your settings were restored.',
   })
 }

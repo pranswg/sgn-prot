@@ -61,6 +61,25 @@ test('Master List import requires the current active Admin at the store boundary
   useMemberStore.getState().clear()
 })
 
+test('Master List restoreData replaces the list and clear empties it', () => {
+  useMemberStore.getState().clear()
+
+  useMemberStore.getState().restoreData(
+    [{ id: 'm_restored', ...memberInput, positions: [], history: [] }] as never,
+    [{ id: 't_restored', firstName: 'Ana', lastName: 'Reyes' }] as never,
+  )
+  const restored = useMemberStore.getState()
+  assert.equal(restored.members.length, 1)
+  assert.equal(restored.members[0]?.id, 'm_restored')
+  assert.equal(restored.trainees.length, 1)
+  assert.equal(restored.trainees[0]?.id, 't_restored')
+
+  useMemberStore.getState().clear()
+  const cleared = useMemberStore.getState()
+  assert.equal(cleared.members.length, 0)
+  assert.equal(cleared.trainees.length, 0)
+})
+
 test('Master List mutations refresh the last-updated timestamp', () => {
   useMemberStore.getState().clear()
   useMemberStore.setState({ lastUpdatedAt: '2000-01-01T00:00:00.000Z' })

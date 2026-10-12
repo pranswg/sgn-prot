@@ -26,9 +26,10 @@ The app is gaining a backend, phased in from easiest to hardest. Phase 1
 restore, read-only profile cache), Phase 3 (read-only reads into the stores on
 load), Phase 4 (write-through stores: every domain mutation persists to
 Supabase), and Phase 5 (RBAC: the admin write path, permission-based RLS, and a
-server-backed audit trail) are done. Offline (Phase 6) was dropped. Still to
-come: backup import only (Phase 7, deferred to last). The migration plan lives on
-the Desktop at `backend-plan.md`, not in this repo.
+server-backed audit trail) are done. Offline (Phase 6) was dropped, and Phase 7
+(backup restore + destructive reset now write to the server, not just local
+state) is done. The migration plan lives on the Desktop at `backend-plan.md`, not
+in this repo.
 
 - The database schema and seed live in `supabase/migrations/`. `npm run db:push`
   applies them to the linked project (`supabase link`), `npm run db:lint` checks
@@ -43,13 +44,21 @@ the Desktop at `backend-plan.md`, not in this repo.
   twenty permissions from `src/lib/rbac.ts`; the seeded login is `admin` /
   `admin1234` (published backstop, must change).
 - Write-through (Phase 4): `src/api/db.ts` is the only domain-write path
-  (`upsertRow`/`deleteRow`/`upsertOwnedRow`/`upsertSettingsRow`); it no-ops when
-  Supabase is unconfigured, so tests and offline dev stay localStorage-only.
-  `src/lib/writeThrough.ts` `persist({ write, rollback, failure })` applies the
-  optimistic change, then on error restores the captured slice and toasts (the
-  notifier is injected in `App.tsx`). `importData` (backup restore / server
-  hydration) and `clear` (reset) deliberately stay local until Phase 7. Settings
-  and worship schedules share one row via `src/lib/settingsSync.ts`.
+  (`upsertRow`/`deleteRow`/`deleteAllRows`/`upsertOwnedRow`/`upsertSettingsRow`);
+  it no-ops when Supabase is unconfigured, so tests and offline dev stay
+  localStorage-only. `src/lib/writeThrough.ts` `persist({ write, rollback,
+  failure })` applies the optimistic change, then on error restores the captured
+  slice and toasts (the notifier is injected in `App.tsx`). Phase 7 added the
+  bulk paths: `deleteAllRows` (PostgREST refuses an unfiltered DELETE, so it
+  filters `id <> ''`) powers the server-backed `clear()` on the member, Suguan
+  and settings stores. Backup restore no longer reuses the local-only
+  `importData`: it splits the two roles — `importData` stays pure (server
+  hydration on load), while `memberStore.restoreData` /
+  `suguanStore.restoreData` upsert the restored rows and delete the rows the
+  backup dropped, `settingsSync.restoreSettingsRow` does the same for the shared
+  settings document, and `settingsSync.clearSettingsRow` deletes the shared
+  `settings` row. Settings and worship schedules share one row via
+  `src/lib/settingsSync.ts`.
 - RBAC + admin write path (Phase 5): migration `0010_admin_rpc.sql` adds
   `profiles.status_reason`, the SQL permission helpers (`all_permissions()`,
   `admin_only_permissions()`, `current_permissions()`, `has_permission()`), and
@@ -278,11 +287,15 @@ change. There is no router, so `page` is the entire navigation model, and the
 list, and it is not keyed by page, so `SuguanBuilderPage` resets `startOpen`
 from `existing` rather than remembering that the user already chose.
 
-Most persisted stores implement `importData()` so Settings' backup/restore can
-round-trip them. **`authStore` deliberately does not** — accounts live in
-Supabase and are never written to the backup file, because restoring a JSON file
-should never install someone else's accounts. Do not add `importData` to it later
-without asking.
+Most persisted stores expose `importData()`, but since Phase 7 that is **only**
+the server-hydration path — it applies a snapshot locally and never writes back.
+Backup restore and the destructive resets go through the server-writing paths
+instead: `memberStore.restoreData` / `suguanStore.restoreData`,
+`settingsSync.restoreSettingsRow`, the server-backed `clear()` methods, and
+`settingsSync.clearSettingsRow`. **`authStore` deliberately has neither** —
+accounts live in Supabase and are never written to the backup file, because
+restoring a JSON file should never install someone else's accounts. Do not add an
+import path to it later without asking.
 
 ### Membership model
 

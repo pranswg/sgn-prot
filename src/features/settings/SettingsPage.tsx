@@ -40,6 +40,11 @@ import { MasterListPdfSetupDialog } from '@/features/master-list/MasterListPdfSe
 import { exportMasterListPdf } from '@/features/master-list/masterListPdfExport'
 import type { MasterListPaperSize } from '@/features/master-list/masterListPaperSizes'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import {
+  clearSettingsRow,
+  restoreSettingsRow,
+  snapshotSettingsRow,
+} from '@/lib/settingsSync'
 
 interface BackupFile {
   app: string
@@ -169,22 +174,25 @@ export function SettingsPage() {
           toast.error('Not a valid choir manager backup file.')
           return
         }
-        memberStore.importData(
+        const previousSettings = snapshotSettingsRow()
+        memberStore.restoreData(
           data.members as never,
           data.trainees as never,
         )
-        suguanStore.importData(data.suguan as never)
-        settingsStore.importData(
-          data.serviceTypes as never,
-          data.dutyRoles as never,
-          data.voices as never,
+        suguanStore.restoreData(data.suguan as never)
+        restoreSettingsRow(
+          {
+            ...previousSettings,
+            serviceTypes: data.serviceTypes as never,
+            dutyRoles: data.dutyRoles as never,
+            voices: data.voices as never,
+            midweek: (data.worshipSchedules?.midweek ??
+              previousSettings.midweek) as never,
+            weekend: (data.worshipSchedules?.weekend ??
+              previousSettings.weekend) as never,
+          },
+          previousSettings,
         )
-        if (data.worshipSchedules) {
-          useWorshipScheduleStore.getState().importData(
-            data.worshipSchedules.midweek as never,
-            data.worshipSchedules.weekend as never,
-          )
-        }
         logAdminAction('Restored System Backup', 'Imported a browser backup file.')
         toast.success('Backup imported successfully.')
       } catch {
@@ -194,7 +202,6 @@ export function SettingsPage() {
     reader.readAsText(file)
   }
 
-// AFTER:
   return (
     <div className="flex flex-col gap-4 w-full">
       {exportPreview}
@@ -365,9 +372,9 @@ export function SettingsPage() {
             <CardHeader>
               <CardTitle>Data Management</CardTitle>
               <CardDescription>
-                All data is stored in this browser via LocalStorage. Export a
-                backup to move data between devices, or to prepare for cloud
-                migration.
+                Choir data is stored on the server and shared with every
+                signed-in device. Export a backup to keep an offline copy or to
+                move data into a fresh database.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -454,8 +461,8 @@ export function SettingsPage() {
                 <AlertDialogTitle>Clear all data?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This will permanently delete all members, trainees, Suguan
-                  records, and settings from this browser. Export a backup
-                  first if you need to keep your data.
+                  records, and settings for everyone. Export a backup first if
+                  you need to keep your data.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -463,10 +470,12 @@ export function SettingsPage() {
                 <AlertDialogAction
                   className="bg-destructive text-white"
                   onClick={() => {
+                    const previousSettings = snapshotSettingsRow()
                     memberStore.clear()
                     suguanStore.clear()
                     settingsStore.clear()
                     useWorshipScheduleStore.getState().clear()
+                    clearSettingsRow(previousSettings)
                     logAdminAction('Cleared System Data', 'Cleared members, trainees, Suguan records, and settings.')
                     toast.success('All data cleared.')
                   }}
@@ -485,8 +494,8 @@ export function SettingsPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear the Master List?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete all members and trainees from
-                  this browser. Suguan history and settings are kept.
+                  This will permanently delete all members and trainees for
+                  everyone. Suguan history and settings are kept.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { ExtraOccasionSuguanConfig, Suguan, SuguanAssignment, SuguanDutyRole, SuguanEvent, SuguanGroup, SuguanDocFormat, SuguanCoverage, SuguanScheduleSection } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
-import { deleteRow, upsertRow } from '@/api/db'
+import { deleteAllRows, deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
 import { useSettingsStore } from '@/store/settingsStore'
 import { defaultEventsFor, normalizeSuguanList } from '@/lib/suguanUtils'
@@ -38,14 +38,19 @@ interface SuguanState {
   deleteSuguan: (id: string) => void
   deleteMany: (ids: string[]) => void
   importData: (suguan: Suguan[]) => void
+  /**
+   * Backup restore. Unlike `importData` (server hydration, local-only), this
+   * reconciles the server: it upserts every restored row and deletes the rows
+   * that were present before but are absent from the backup.
+   */
+  restoreData: (suguan: Suguan[]) => void
   clear: () => void
 }
 
 /**
  * Phase 4c write-through. A saved Suguan is one server row in `suguans`, so
  * each action upserts or deletes that row and restores the previous list if the
- * write fails. Backup `importData` and reset `clear` stay local (Phase 7 is the
- * bulk bridge).
+ * write fails. Backup restore and reset delete/replace the `suguans` rows too.
  */
 type SuguanStateSetter = (partial: Partial<Pick<SuguanState, 'suguan'>>) => void
 
@@ -210,8 +215,36 @@ export const useSuguanStore = create<SuguanState>()(
         set({ suguan: normalizeSuguanList(suguan, voices) })
       },
 
+      restoreData: (suguan) => {
+        const previous = get().suguan
+        const voices = useSettingsStore.getState().allVoices()
+        const next = normalizeSuguanList(suguan, voices)
+        set({ suguan: next })
+
+        const nextIds = new Set(next.map((su) => su.id))
+        const removedIds = previous
+          .filter((su) => !nextIds.has(su.id))
+          .map((su) => su.id)
+
+        persistWrite({
+          write: [
+            ...next.map((su) => upsertRow('suguans', su.id, su)),
+            ...removedIds.map((id) => deleteRow('suguans', id)),
+          ],
+          rollback: () => set({ suguan: previous }),
+          failure:
+            'Could not restore Suguan History on the server. Your previous data was kept.',
+        })
+      },
+
       clear: () => {
+        const previous = get().suguan
         set({ suguan: [] })
+        persistWrite({
+          write: deleteAllRows('suguans'),
+          rollback: () => set({ suguan: previous }),
+          failure: 'Could not clear Suguan History on the server. Your data was restored.',
+        })
       },
     }),
     {

@@ -189,8 +189,9 @@ export const useSettingsStore = create<SettingsState>()(
         allDutyRoles: () => get().dutyRoles,
         allVoices: () => get().voices,
 
-        // Backup restore and reset stay local for now; the bulk server write is
-        // Phase 7's bridge, deliberately not a side effect of this action.
+        // Local-only: server hydration on load, and the rollback half of the
+        // shared settings row in `settingsSync`. Server-writing changes go
+        // through `settingsSync` (see `commit` above), not this action.
         importData: (serviceTypes, dutyRoles, voices) => {
           const configuredServiceTypes = serviceTypes.filter((item) => item.custom !== false)
           const configuredDutyRoles = dutyRoles.filter((item) => item.custom !== false)

@@ -133,8 +133,9 @@ export const useWorshipScheduleStore = create<WorshipScheduleState>()(
         setSchedules: (midweek, weekend) =>
           commit(() => ({ midweek, weekend })),
 
-        // Hydration (Phase 3) and backup restore stay local; the bulk server
-        // write belongs to Phase 7, not to this action.
+        // Local-only: server hydration on load, and the rollback half of the
+        // shared settings row in `settingsSync`. Server-writing changes go
+        // through `settingsSync` (see `commit` above), not this action.
         importData: (midweek, weekend) =>
           set((s) => ({
             midweek: midweek ?? s.midweek,

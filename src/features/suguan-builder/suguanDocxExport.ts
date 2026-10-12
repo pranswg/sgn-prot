@@ -67,7 +67,7 @@ export async function createSuguanDocxBlob(
   const border = {
     style: BorderStyle.SINGLE,
     size: 4,
-    color: '8B8B8B',
+    color: '000000',
   }
   const borders = {
     top: border,

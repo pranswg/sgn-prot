@@ -20,7 +20,7 @@ import {
   type SuguanSheetLayout,
 } from '@/lib/suguanExport'
 
-const BORDER = '#8b8b8b'
+const BORDER = '#000000'
 const PT_TO_PX = 96 / 72
 const PX_TO_MM = 25.4 / 96
 

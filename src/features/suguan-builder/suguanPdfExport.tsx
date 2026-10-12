@@ -19,7 +19,7 @@ import {
 import sheetRegularUrl from '@/assets/fonts/Inter-Regular.ttf?url'
 import sheetBoldUrl from '@/assets/fonts/Inter-Bold.ttf?url'
 
-const BORDER = { r: 139, g: 139, b: 139 }
+const BORDER = { r: 0, g: 0, b: 0 }
 const HEADER_FILL = { r: 242, g: 242, b: 242 }
 const PAGSASANAY_FILL = { r: 255, g: 242, b: 204 }
 
@@ -96,6 +96,7 @@ export async function exportSuguanPdf(
     format: [layout.paperWidthMm, layout.paperHeightMm],
   })
   doc.setLineWidth(0.13)
+  doc.setTextColor(0, 0, 0)
   doc.addFileToVFS('Inter-Regular.ttf', regularB64)
   doc.addFont('Inter-Regular.ttf', 'SuguanSheet', 'normal')
   doc.addFileToVFS('Inter-Bold.ttf', boldB64)

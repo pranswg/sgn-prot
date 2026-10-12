@@ -72,7 +72,7 @@ function thinBorder(): {
   style: 'thin'
   color: { argb: string }
 } {
-  return { style: 'thin', color: { argb: 'FF404040' } }
+  return { style: 'thin', color: { argb: 'FF000000' } }
 }
 
 function fullBorder(): {

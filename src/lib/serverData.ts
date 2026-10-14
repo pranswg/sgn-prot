@@ -10,6 +10,7 @@ import type {
 } from '@/store/settingsStore'
 import type { StoredWorshipSchedule } from '@/store/worshipScheduleStore'
 import type { AssignmentPreset } from '@/store/assignmentPresetStore'
+import type { ExtraOccasionBatch } from '@/store/extraOccasionBatchStore'
 
 /**
  * Server reads for Phase 3. Every domain table stores one store record per row
@@ -44,15 +45,36 @@ export interface ServerDataSnapshot {
   suguan: Suguan[]
   koro: KoroDocument[]
   organistaSuguan: OrganistaSuguanRecord[]
+  /** Multiple Extra Occasion planning sessions. */
+  batches: ExtraOccasionBatch[]
   /** Per-user presets; RLS already scopes the read to the signed-in owner. */
   presets: AssignmentPreset[]
   /** `null` when no settings row exists yet (leave local defaults untouched). */
   settings: ServerSettingsData | null
 }
 
-/** Unwraps the `data` column out of each row, tolerating `null`/`undefined`. */
+/**
+ * Unwraps the `data` column out of each row, tolerating `null`/`undefined`.
+ */
 export function unwrapRows<T>(rows: DataRow<T>[] | null | undefined): T[] {
   return (rows ?? []).map((row) => row.data)
+}
+
+/**
+ * True when PostgREST reports that a table does not exist yet. PostgREST returns
+ * `PGRST205` (schema cache miss) for a table it has never seen and `42P01` for
+ * the underlying "undefined table" error. A newly added migration can leave the
+ * hosted database a step behind the client, so additive reads degrade to empty
+ * instead of failing the whole app load.
+ */
+export function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  if (code === 'PGRST205' || code === '42P01') return true
+  return (
+    typeof message === 'string' &&
+    /does not exist|schema cache/i.test(message)
+  )
 }
 
 /**
@@ -90,6 +112,7 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
     koroRes,
     organistaRes,
     presetsRes,
+    batchesRes,
     settingsRes,
   ] = await Promise.all([
     client.from('members').select('id, data').order('updated_at'),
@@ -102,6 +125,7 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
       .from('assignment_presets')
       .select('id, data')
       .order('updated_at', { ascending: false }),
+    client.from('extra_occasion_batches').select('id, data').order('updated_at'),
     client.from('settings').select('data').eq('id', 1).maybeSingle(),
   ])
 
@@ -111,6 +135,17 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
   if (koroRes.error) throw koroRes.error
   if (organistaRes.error) throw organistaRes.error
   if (presetsRes.error) throw presetsRes.error
+  // Additive table: tolerate a database that has not run migration 0013 yet so
+  // the rest of the app still loads. Planning sessions start working once the
+  // migration is applied; until then the batch list is simply empty.
+  if (batchesRes.error && !isMissingTableError(batchesRes.error)) {
+    throw batchesRes.error
+  }
+  if (batchesRes.error) {
+    console.warn(
+      'extra_occasion_batches is missing on the server; run `npm run db:push` to enable planning sessions.',
+    )
+  }
   if (settingsRes.error) throw settingsRes.error
 
   return {
@@ -123,6 +158,9 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
     ),
     presets: unwrapRows<AssignmentPreset>(
       presetsRes.data as DataRow<AssignmentPreset>[] | null,
+    ),
+    batches: unwrapRows<ExtraOccasionBatch>(
+      batchesRes.data as DataRow<ExtraOccasionBatch>[] | null,
     ),
     settings: settingsRowToStoreData(
       settingsRes.data as DataRow<unknown> | null,

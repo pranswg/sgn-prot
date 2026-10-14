@@ -62,9 +62,9 @@ export function buildExtraOccasionSections(
 
   return suguan.schedules.map((schedule) => ({
     id: schedule.id,
-    label: [schedule.scheduleDay, schedule.scheduleTime]
+    label: [schedule.scheduleLabel, schedule.scheduleTime]
       .filter(Boolean)
-      .join(' ')
+      .join(' · ')
       .trim() || schedule.scheduleLabel,
     voiceSections: voiceSections
       .map((voice) => ({

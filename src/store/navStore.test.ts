@@ -19,6 +19,8 @@ function reset(page: Page = 'dashboard') {
     selectedSuguanId: null,
     builderSuguanId: null,
     extraOccasionSuguanId: null,
+    extraOccasionBatchId: null,
+    extraOccasionMode: null,
     builderReturnPage: null,
     previousPage: null,
     directoryStart: null,
@@ -109,9 +111,36 @@ test('editing an Extra Occasion record opens its maker and plain navigation clea
   useNavStore.getState().editExtraOccasionSuguan('extra-1')
   assert.equal(useNavStore.getState().page, 'extra-occasion-suguan')
   assert.equal(useNavStore.getState().extraOccasionSuguanId, 'extra-1')
+  assert.equal(useNavStore.getState().extraOccasionMode, 'single')
 
   useNavStore.getState().navigate('suguan-history')
   assert.equal(useNavStore.getState().extraOccasionSuguanId, null)
+})
+
+test('navigating to the Extra Occasion page opens the chooser', () => {
+  reset('dashboard')
+  useNavStore.getState().navigate('extra-occasion-suguan')
+  assert.equal(useNavStore.getState().extraOccasionMode, 'choose')
+  assert.equal(useNavStore.getState().extraOccasionBatchId, null)
+})
+
+test('leaving the Extra Occasion page clears its workflow state', () => {
+  reset('dashboard')
+  useNavStore.getState().openExtraOccasionBatch('batch-1')
+  assert.equal(useNavStore.getState().extraOccasionMode, 'multi')
+  assert.equal(useNavStore.getState().extraOccasionBatchId, 'batch-1')
+
+  useNavStore.getState().navigate('dashboard')
+  assert.equal(useNavStore.getState().extraOccasionMode, null)
+  assert.equal(useNavStore.getState().extraOccasionBatchId, null)
+})
+
+test('switching workflow keeps the page but changes the mode', () => {
+  reset('dashboard')
+  useNavStore.getState().navigate('extra-occasion-suguan')
+  useNavStore.getState().setExtraOccasionMode('multi')
+  assert.equal(useNavStore.getState().page, 'extra-occasion-suguan')
+  assert.equal(useNavStore.getState().extraOccasionMode, 'multi')
 })
 
 test('re-entering the builder from the builder does not arm a self-return', () => {

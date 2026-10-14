@@ -25,6 +25,7 @@ import {
 import { GenderBadge } from '@/components/StatusBadges'
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
+import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { phtInstantISO } from '@/lib/phDate'
@@ -57,6 +58,8 @@ interface BackupFile {
   dutyRoles: unknown[]
   voices: unknown[]
   worshipSchedules?: { midweek: unknown[]; weekend: unknown[] }
+  /** Multiple Extra Occasion planning sessions (version 3+). */
+  batches?: unknown[]
 }
 
 export function SettingsPage() {
@@ -102,11 +105,12 @@ export function SettingsPage() {
   const runBackupExport = (fileName: string) => {
     const backup: BackupFile = {
       app: 'inc-choir-manager',
-      version: 2,
+      version: 3,
       exportedAt: phtInstantISO(),
       members: memberStore.members,
       trainees: memberStore.trainees,
       suguan: suguanStore.suguan,
+      batches: useExtraOccasionBatchStore.getState().batches,
       serviceTypes: settingsStore.serviceTypes,
       dutyRoles: settingsStore.dutyRoles,
       voices: settingsStore.voices,
@@ -180,6 +184,11 @@ export function SettingsPage() {
           data.trainees as never,
         )
         suguanStore.restoreData(data.suguan as never)
+        if (Array.isArray(data.batches)) {
+          useExtraOccasionBatchStore
+            .getState()
+            .restoreData(data.batches as never)
+        }
         restoreSettingsRow(
           {
             ...previousSettings,
@@ -473,6 +482,7 @@ export function SettingsPage() {
                     const previousSettings = snapshotSettingsRow()
                     memberStore.clear()
                     suguanStore.clear()
+                    useExtraOccasionBatchStore.getState().clear()
                     settingsStore.clear()
                     useWorshipScheduleStore.getState().clear()
                     clearSettingsRow(previousSettings)

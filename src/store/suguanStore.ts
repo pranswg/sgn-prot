@@ -24,6 +24,8 @@ export interface SuguanConfigInput {
   dutyRoles?: SuguanDutyRole[]
   destinadoName?: string
   extraOccasion?: ExtraOccasionSuguanConfig
+  /** Links an Extra Occasion to its Multiple planning session, if any. */
+  extraOccasionBatchId?: string
   copiedFromId?: string
 }
 

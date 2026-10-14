@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  isMissingTableError,
   settingsRowToStoreData,
   unwrapRows,
   type DataRow,
@@ -63,4 +64,33 @@ test('settingsRowToStoreData tolerates a partial or malformed document', () => {
 test('settingsRowToStoreData rejects a non-object row payload', () => {
   assert.equal(settingsRowToStoreData({ data: null }), null)
   assert.equal(settingsRowToStoreData({ data: 'nope' }), null)
+})
+
+test('isMissingTableError detects a table the server has not seen yet', () => {
+  assert.equal(isMissingTableError({ code: 'PGRST205' }), true)
+  assert.equal(isMissingTableError({ code: '42P01' }), true)
+  assert.equal(
+    isMissingTableError({
+      code: 'PGRST205',
+      message:
+        "Could not find the table 'public.extra_occasion_batches' in the schema cache",
+    }),
+    true,
+  )
+  assert.equal(
+    isMissingTableError({ message: 'relation "public.foo" does not exist' }),
+    true,
+  )
+})
+
+test('isMissingTableError ignores other errors and non-objects', () => {
+  assert.equal(isMissingTableError(null), false)
+  assert.equal(isMissingTableError(undefined), false)
+  assert.equal(isMissingTableError('nope'), false)
+  assert.equal(isMissingTableError({ code: '42501' }), false)
+  assert.equal(isMissingTableError({ code: 'PGRST301', message: 'JWT expired' }), false)
+  assert.equal(
+    isMissingTableError({ message: 'permission denied for table members' }),
+    false,
+  )
 })

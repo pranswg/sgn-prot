@@ -15,6 +15,7 @@ const KNOWN = new Set<string>(
 const migrations = [
   '1791641611_0011_rls_write_policies.sql',
   '1791641612_0012_audit_login.sql',
+  '1791641613_0013_extra_occasion_batches.sql',
 ]
 
 function policyPermissions(file: string): string[] {

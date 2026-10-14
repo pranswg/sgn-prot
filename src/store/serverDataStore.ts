@@ -7,6 +7,7 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useKoroStore } from '@/store/koroStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
 import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
+import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
 
 type ServerDataStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -34,6 +35,7 @@ function applyServerData(snapshot: ServerDataSnapshot) {
   useKoroStore.getState().importData(snapshot.koro)
   useOrganistaSuguanStore.getState().importData(snapshot.organistaSuguan)
   useAssignmentPresetStore.getState().importData(snapshot.presets)
+  useExtraOccasionBatchStore.getState().importData(snapshot.batches)
 }
 
 /**

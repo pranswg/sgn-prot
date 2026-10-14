@@ -6,6 +6,7 @@ import {
   FileDown,
   FileSpreadsheet,
   FileText,
+  Layers,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -55,6 +56,7 @@ import {
 } from '@/components/ui/table'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
+import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
 import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
@@ -166,6 +168,10 @@ export function SuguanHistoryPage() {
   const editExtraOccasionSuguan = useNavStore(
     (state) => state.editExtraOccasionSuguan,
   )
+  const openExtraOccasionBatch = useNavStore(
+    (state) => state.openExtraOccasionBatch,
+  )
+  const batches = useExtraOccasionBatchStore((state) => state.batches)
   const startNewSuguan = useNavStore((state) => state.startNewSuguan)
   const allServiceTypes = useSettingsStore((state) => state.allServiceTypes)
   const allVoices = useSettingsStore((state) => state.allVoices)
@@ -192,6 +198,8 @@ export function SuguanHistoryPage() {
   const allTypes = allServiceTypes()
   const serviceName = (id: string) =>
     allTypes.find((service) => service.id === id)?.name ?? id
+  const batchName = (id: string) =>
+    batches.find((batch) => batch.id === id)?.name ?? 'Planning session'
   const historyItems: HistoryItem[] = [
     ...suguan.map((record) => ({
       kind: 'suguan' as const,
@@ -576,7 +584,16 @@ export function SuguanHistoryPage() {
                   </TableCell>
                   <TableCell>{createdAtDate(item.record.createdAt)}</TableCell>
                   <TableCell>{createdAtTime(item.record.createdAt)}</TableCell>
-                  <TableCell>{historyService(item)}</TableCell>
+                  <TableCell>
+                    <span className="block">{historyService(item)}</span>
+                    {item.kind === 'suguan' &&
+                      item.record.extraOccasionBatchId && (
+                        <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                          <Layers className="size-3" />
+                          {batchName(item.record.extraOccasionBatchId)}
+                        </span>
+                      )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {historyGroup(item)}
                   </TableCell>
@@ -617,6 +634,21 @@ export function SuguanHistoryPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
+                              {item.record.extraOccasionBatchId && canEditSuguan && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openExtraOccasionBatch(
+                                        item.record.extraOccasionBatchId as string,
+                                      )
+                                    }
+                                  >
+                                    <Layers className="size-4" />
+                                    Open planning session
+                                  </DropdownMenuItem>
+                                  {canExportDocuments && <DropdownMenuSeparator />}
+                                </>
+                              )}
                               {canExportDocuments && (
                                 <>
                                   <DropdownMenuItem

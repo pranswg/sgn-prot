@@ -16,11 +16,21 @@ export type Page =
   | 'settings'
   | 'administration'
 
+/**
+ * Which Extra Occasion workflow the page should show. `choose` shows the
+ * Single/Multiple dialog; the other two render their workflow. `null` when the
+ * user is not on the Extra Occasion page.
+ */
+export type ExtraOccasionMode = 'choose' | 'single' | 'multi'
+
 interface NavState {
   page: Page
   selectedSuguanId: string | null
   builderSuguanId: string | null
   extraOccasionSuguanId: string | null
+  /** A saved planning session to open on the next visit to the page. */
+  extraOccasionBatchId: string | null
+  extraOccasionMode: ExtraOccasionMode | null
   /**
    * The member whose Members History timeline should open on the next visit
    * to the Members History page. Set when "View History" is chosen from the
@@ -75,6 +85,10 @@ interface NavState {
   clearBuilderReturnPage: () => void
   editSuguanInBuilder: (id: string) => void
   editExtraOccasionSuguan: (id: string) => void
+  /** Switch the Extra Occasion page to a workflow (or back to the chooser). */
+  setExtraOccasionMode: (mode: ExtraOccasionMode) => void
+  /** Open a saved Multiple Extra Occasion planning session. */
+  openExtraOccasionBatch: (id: string) => void
 }
 
 export const useNavStore = create<NavState>()(
@@ -84,6 +98,8 @@ export const useNavStore = create<NavState>()(
       selectedSuguanId: null,
       builderSuguanId: null,
       extraOccasionSuguanId: null,
+      extraOccasionBatchId: null,
+      extraOccasionMode: null,
       selectedHistoryMemberId: null,
       builderReturnPage: null,
       previousPage: null,
@@ -94,6 +110,9 @@ export const useNavStore = create<NavState>()(
           selectedSuguanId: null,
           builderSuguanId: null,
           extraOccasionSuguanId: null,
+          // Entering the page shows the chooser; leaving it clears the mode.
+          extraOccasionBatchId: null,
+          extraOccasionMode: page === 'extra-occasion-suguan' ? 'choose' : null,
           // A plain navigation must not re-open a remembered history timeline.
           selectedHistoryMemberId: null,
           // Tapping the page you are already on leaves the back destination alone,
@@ -117,6 +136,8 @@ export const useNavStore = create<NavState>()(
           selectedSuguanId: null,
           builderSuguanId: null,
           extraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
           selectedHistoryMemberId: null,
           previousPage: s.page === 'master-list' ? s.previousPage : s.page,
           builderReturnPage: null,
@@ -136,6 +157,8 @@ export const useNavStore = create<NavState>()(
           selectedSuguanId: id,
           builderSuguanId: null,
           extraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,
           directoryStart: null,
@@ -147,6 +170,8 @@ export const useNavStore = create<NavState>()(
           selectedSuguanId: null,
           builderSuguanId: null,
           extraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
           builderReturnPage: null,
           directoryStart: null,
         }),
@@ -164,6 +189,8 @@ export const useNavStore = create<NavState>()(
           page: 'suguan-builder',
           builderSuguanId: null,
           extraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           // Already in the builder means this is a deliberate "start over", not a
@@ -191,6 +218,8 @@ export const useNavStore = create<NavState>()(
           page: 'suguan-builder',
           builderSuguanId: id,
           extraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,
@@ -200,12 +229,28 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'extra-occasion-suguan',
           extraOccasionSuguanId: id,
+          extraOccasionBatchId: null,
+          extraOccasionMode: 'single',
           builderSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,
           directoryStart: null,
         }),
+      setExtraOccasionMode: (mode) => set({ extraOccasionMode: mode }),
+      openExtraOccasionBatch: (id) =>
+        set((s) => ({
+          page: 'extra-occasion-suguan',
+          extraOccasionSuguanId: null,
+          extraOccasionBatchId: id,
+          extraOccasionMode: 'multi',
+          builderSuguanId: null,
+          selectedSuguanId: null,
+          selectedHistoryMemberId: null,
+          builderReturnPage: null,
+          previousPage: s.page === 'extra-occasion-suguan' ? s.previousPage : s.page,
+          directoryStart: null,
+        })),
     }),
     {
       name: 'choir-nav',

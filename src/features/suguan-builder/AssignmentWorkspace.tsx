@@ -72,6 +72,13 @@ interface AssignmentWorkspaceProps {
   members: Member[]
   /** Id of the Suguan being edited, excluded from double-booking checks. */
   editingId?: string | null
+  /**
+   * Extra member ids to flag as conflicting, on top of the same-timestamp
+   * double-booking check. Used by the Multiple Extra Occasion planner.
+   */
+  conflictIds?: Set<string>
+  /** Called with the ids newly added to the roster, in one assignment edit. */
+  onMembersAdded?: (memberIds: string[]) => void
 }
 
 type DragPayload =
@@ -169,6 +176,8 @@ export function AssignmentWorkspace({
   patch,
   members,
   editingId,
+  conflictIds,
+  onMembersAdded,
 }: AssignmentWorkspaceProps) {
   const { can } = usePermissions()
   const canAssignMembers = can('assign-members')
@@ -200,6 +209,15 @@ export function AssignmentWorkspace({
   const [dutiesOpen, setDutiesOpen] = useState(false)
 
   const setAssignments = (next: SuguanAssignment[]) => {
+    if (onMembersAdded) {
+      const before = new Set((section?.assignments ?? []).map((a) => a.memberId))
+      const added = [
+        ...new Set(
+          next.map((a) => a.memberId).filter((id) => !before.has(id)),
+        ),
+      ]
+      if (added.length > 0) onMembersAdded(added)
+    }
     const schedules = draft.schedules.map((s) =>
       s.id === section?.id ? { ...s, assignments: next } : s,
     )
@@ -240,6 +258,15 @@ export function AssignmentWorkspace({
     }
     return ids
   }, [allSuguan, draft.date, draft.time, editingId])
+
+  // Same-timestamp clashes plus any externally-supplied conflicts (the Multiple
+  // Extra Occasion planner passes the members already booked on a shared date).
+  const bookedIds = useMemo(() => {
+    if (!conflictIds || conflictIds.size === 0) return doubleBooked
+    const merged = new Set(doubleBooked)
+    for (const id of conflictIds) merged.add(id)
+    return merged
+  }, [doubleBooked, conflictIds])
 
   const available = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -606,7 +633,7 @@ export function AssignmentWorkspace({
                       {memberRefs.get(a.memberId) ?? '—'}
                     </p>
                   </div>
-                  {doubleBooked.has(a.memberId) && (
+                  {bookedIds.has(a.memberId) && (
                     <AlertTriangle
                       className="size-3.5 shrink-0 text-amber-500"
                       aria-label="Already assigned to another Suguan on this date"
@@ -702,7 +729,7 @@ export function AssignmentWorkspace({
                 member={memberById.get(a.memberId)}
                 reference={memberRefs.get(a.memberId)}
                 voices={voices}
-                conflicting={doubleBooked.has(a.memberId)}
+                conflicting={bookedIds.has(a.memberId)}
                 reorderable={isManual}
                 first={indexOfAssignment(a) === 0}
                 last={indexOfAssignment(a) === lastIndexInVoice(a.voicePosition)}
@@ -1046,7 +1073,7 @@ export function AssignmentWorkspace({
                       {memberRefs.get(m.id) ?? '—'}
                     </span>
                     <span className="mt-1.5 flex items-center gap-1.5 xl:hidden">
-                      {doubleBooked.has(m.id) && (
+                      {bookedIds.has(m.id) && (
                         <AlertTriangle
                           className="size-3.5 text-amber-500"
                           aria-label="Already assigned to another Suguan on this date"
@@ -1056,7 +1083,7 @@ export function AssignmentWorkspace({
                     </span>
                   </span>
                   <span className="hidden shrink-0 items-center gap-1.5 xl:flex">
-                    {doubleBooked.has(m.id) && (
+                    {bookedIds.has(m.id) && (
                       <AlertTriangle
                         className="size-3.5 text-amber-500"
                         aria-label="Already assigned to another Suguan on this date"
@@ -1169,7 +1196,7 @@ export function AssignmentWorkspace({
             <MemberSelector
               candidates={replaceCandidates}
               excludedIds={[]}
-              conflictIds={new Set()}
+              conflictIds={bookedIds}
               singleSelect
               onSelect={(picked) => {
                 const member = picked[0]
@@ -1295,7 +1322,7 @@ export function AssignmentWorkspace({
                       {getVoiceName(m.voicePosition, voices)}
                     </p>
                   </div>
-                  {doubleBooked.has(m.id) && (
+                  {bookedIds.has(m.id) && (
                     <AlertTriangle
                       className="size-4 shrink-0 text-amber-500"
                       aria-label="Already assigned to another Suguan on this date"

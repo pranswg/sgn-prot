@@ -129,11 +129,31 @@ export interface ExtraOccasionOrganistaAssignment {
 }
 
 export interface ExtraOccasionSuguanConfig {
+  /** An optional plan name for a Multiple Extra Occasion session ("Wedding",
+   *  "Funeral"). The single maker leaves it unset; the sheet titles fall back to
+   *  the service type either way. */
+  name?: string
   localeName: string
   pagsasanay: ExtraOccasionDateColumn
   pagtupad: ExtraOccasionDateColumn
   showFooterSignatories: boolean
   organistaAssignments: Record<string, ExtraOccasionOrganistaAssignment[]>
+  /**
+   * An officer's deliberate "keep this member on both occasions" decisions,
+   * recorded from the member-assignment conflict dialog. A pair is
+   * `memberId` + `otherSuguanId`; the decision stops the dialog re-opening for
+   * that pair but never hides a genuine time-overlap warning.
+   */
+  straightDecisions?: ExtraOccasionStraightDecision[]
+}
+
+export interface ExtraOccasionStraightDecision {
+  memberId: string
+  otherSuguanId: string
+  /** A display snapshot of the other occasion, so the record is understandable
+   *  even after that occasion is renamed or deleted. */
+  otherLabel: string
+  at: string
 }
 
 export interface Suguan {
@@ -153,6 +173,13 @@ export interface Suguan {
   dutyRoles: SuguanDutyRole[]
   destinadoName?: string
   extraOccasion?: ExtraOccasionSuguanConfig
+  /**
+   * The planning session (batch) this Extra Occasion belongs to. The inverse —
+   * which occasions a batch contains — is derived by filtering `suguans` on this
+   * field, so there is a single source of truth for membership. Absent for a
+   * standalone Extra Occasion.
+   */
+  extraOccasionBatchId?: string
   copiedFromId?: string
   createdAt: string
   updatedAt: string

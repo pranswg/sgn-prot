@@ -133,3 +133,27 @@ test('Extra Occasion organista entries only include active organist-family membe
     ],
   )
 })
+
+test('Extra Occasion section label uses service type and time', () => {
+  const members = [
+    makeMember('member-b', 'Kimberly', 'Andao'),
+    makeMember('member-a', 'Sarah', 'Bautista'),
+  ]
+
+  const withTime: Suguan = {
+    ...suguan,
+    schedules: [
+      {
+        ...suguan.schedules[0],
+        scheduleLabel: 'Graduation Mass',
+        scheduleTime: '10:00 AM',
+      },
+    ],
+  }
+
+  const result = buildExtraOccasionSections(withTime, [
+    { id: 'soprano-1', name: 'Soprano', shortName: 'S', gender: 'female' },
+  ], members, {})
+
+  assert.equal(result[0].label, 'Graduation Mass · 10:00 AM')
+})

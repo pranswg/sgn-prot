@@ -44,6 +44,13 @@ unavailable; verify schema/data through the dashboard or the REST API instead.
      cleared after a self-service change.
    - `AuthPage` is sign-in only (public registration removed);
      `AdministrationPage` is read-only (`READ_ONLY` flag).
+   - **Repair (`0005_repair_admin_auth.sql`).** The `0003` seed created the Admin
+     by raw SQL but left GoTrue's token columns NULL and wrote no
+     `auth.identities` row, so every `signInWithPassword` failed and the app
+     reported the generic "do not match". `0005` is idempotent and heals an
+     existing row (fills the token columns, resets the published password,
+     inserts the email identity); the corrected `0003` prevents it on fresh
+     environments. `admin` / `admin1234` works again after this.
 
 ## How to run
 

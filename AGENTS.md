@@ -379,6 +379,14 @@ The occasion layout also **drops the mobile voice-balance chips**. The Assigned
 panel already counts every voice group, and on a phone the chip row was the same
 numbers twice. The builder's mobile step keeps them.
 
+**"Add members" is a floating window, not a bottom sheet.** It is a `Dialog` with
+a fixed `h-[32rem] max-h-[85dvh]`, opened from the mobile Add Members button of
+both layouts. A sheet sizes itself to its content, so a short result list left it
+hugging the screen's bottom edge, where the mobile nav bar crowded the rows; a
+centred window is always fully visible. It stays open as members are added, and
+the builder's desktop step does not use it — there the Available Members panel
+adds on its own `+`.
+
 **The Extra Occasion form folds on phones.** `ExtraOccasionOccasionForm` renders
 two `DisclosureSection`s under `lg` — "Occasion details" (name, choir, time,
 service type, locale, signatories) and "Pagsasanay & Pagtupad" — each closed by

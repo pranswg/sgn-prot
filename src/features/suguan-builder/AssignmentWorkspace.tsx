@@ -36,6 +36,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -49,13 +50,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { VoiceBadge } from '@/components/StatusBadges'
 import { DisclosureSection } from '@/components/DisclosureSection'
 import { getVoiceName } from '@/core/constants/voicePositions'
@@ -509,7 +503,7 @@ export function AssignmentWorkspace({
   const toggleVoice = (key: string) =>
     setOpenVoices((prev) => ({ ...prev, [key]: !(prev[key] ?? true) }))
 
-  /** The Add Members sheet always opens with a fresh voice filter and query. */
+  /** The Add members window always opens with a fresh voice filter and query. */
   const openAddMembers = () => {
     setVoiceFilter('all')
     setQuery('')
@@ -1449,24 +1443,22 @@ export function AssignmentWorkspace({
         </DialogContent>
       </Dialog>
 
-      {/* Add members — mobile bottom sheet */}
-      <Sheet open={addOpen} onOpenChange={setAddOpen}>
-        <SheetContent
-          side="bottom"
-          showCloseButton={false}
-          className="max-h-[85vh] gap-0 rounded-t-3xl border-border/70 bg-background p-0"
-        >
-          <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-border" />
-          <SheetHeader className="gap-1 border-b border-border/70 px-4 pb-3 pt-2">
-            <SheetTitle className="text-base font-semibold text-foreground">
+      {/* Add members — a floating window on phones rather than a bottom sheet.
+          A short result list left the sheet hugging the screen's bottom edge,
+          where the mobile nav bar crowded the last rows; a centred window of a
+          fixed height is always fully visible. */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="flex h-[32rem] max-h-[85dvh] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="gap-1 border-b border-border/70 px-4 pb-3 pt-4 pr-12">
+            <DialogTitle className="text-base font-semibold text-foreground">
               Add members
-            </SheetTitle>
-            <SheetDescription className="text-xs">
+            </DialogTitle>
+            <DialogDescription className="text-xs">
               Search the roster, then tap + to add a member.
-            </SheetDescription>
-          </SheetHeader>
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="flex shrink-0 flex-col gap-2 px-4">
+          <div className="flex shrink-0 flex-col gap-2 px-4 py-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -1531,8 +1523,8 @@ export function AssignmentWorkspace({
               ))}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -38,6 +38,7 @@ export type Permission =
   | 'view-login-history'
   | 'manage-sessions'
   | 'manage-membership-history'
+  | 'koro-maker'
 
 /**
  * Which KDF produced `passwordHash`. `pbkdf2` needs WebCrypto's `subtle`, which

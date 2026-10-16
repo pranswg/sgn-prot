@@ -39,9 +39,9 @@ in this repo.
   authenticated user (except `audit_logs`/`login_history`, which are gated by
   their `view-*` permission). Phase 4 added interim **authenticated** write
   policies per data table (migrations `0006`–`0009`); Phase 5e (`0011`) replaced
-  them with the twenty-permission RLS. `assignment_presets` is owner-scoped
+  them with the twenty-one-permission RLS. `assignment_presets` is owner-scoped
   (`auth.uid() = owner_id`). `roles` seeds the builtin `admin` role with all
-  twenty permissions from `src/lib/rbac.ts`; the seeded login is `admin` /
+  twenty-one permissions from `src/lib/rbac.ts`; the seeded login is `admin` /
   `admin1234` (published backstop, must change).
 - Write-through (Phase 4): `src/api/db.ts` is the only domain-write path
   (`upsertRow`/`deleteRow`/`deleteAllRows`/`upsertOwnedRow`/`upsertSettingsRow`);
@@ -68,7 +68,18 @@ in this repo.
   through `auth.uid()` + `has_permission()`, are revoked from `public` and
   granted to `authenticated`, and name params `p_*` to dodge column/param
   ambiguity. `src/lib/rbacParity.test.ts` parses the marker-delimited permission
-  lists in that migration and fails if they drift from `src/lib/rbac.ts`. The
+  lists across the migrations (the last `@permissions`/`@admin-only` block wins)
+  and fails if they drift from `src/lib/rbac.ts`. **No permission is Admin-only
+  any more** (Phase 5f, `0014_open_permissions.sql` empties
+  `admin_only_permissions()`): the administrator decides who holds each one, so
+  the role matrix and the per-user permission checkboxes are all checkable. The
+  `admin_only_permissions()` function stays as the single place to re-restrict a
+  permission later; Admin still holds every one through `all_permissions()`.
+  `koro-maker` is a real permission now (Choir Management); `canAccessPage`
+  accepts it **or** `edit-members` for the Koro Maker page, and the Settings /
+  Administration pages follow `change-settings` / any `ADMINISTRATION_PERMISSIONS`
+  instead of the Admin role (the Administration screen also hides each section
+  the caller cannot act on). The
   three GoTrue-only operations (create user, reset password, ban/unban) run
   through the `admin` Edge Function (`supabase/functions/admin/index.ts`,
   deployed with `npm run functions:deploy`, held under `.oxlintrc.json`

@@ -12,6 +12,7 @@ export const PERMISSION_DEFINITIONS: {
   { id: 'delete-members', label: 'Delete Members', module: 'Choir Management' },
   { id: 'manage-trainees', label: 'Manage Trainees', module: 'Choir Management' },
   { id: 'manage-membership-history', label: 'Manage Members History', module: 'Choir Management' },
+  { id: 'koro-maker', label: 'Koro Maker', module: 'Choir Management' },
   { id: 'view-suguan', label: 'View Suguan History', module: 'Suguan' },
   { id: 'create-suguan', label: 'Create Suguan', module: 'Suguan' },
   { id: 'edit-suguan', label: 'Edit Suguan', module: 'Suguan' },
@@ -27,15 +28,27 @@ export const PERMISSION_DEFINITIONS: {
   { id: 'manage-sessions', label: 'Manage Active Sessions', module: 'Security' },
 ]
 
-export const ADMIN_ONLY_PERMISSIONS: Permission[] = [
+/**
+ * Permissions that only the builtin Admin role may hold.
+ *
+ * Deliberately empty: the administrator decides which role holds which
+ * permission, so every option in the role matrix is grantable. The list is kept
+ * as the single place to re-restrict a permission later, and mirrors
+ * `public.admin_only_permissions()` in the migrations (pinned by
+ * `rbacParity.test.ts`).
+ */
+export const ADMIN_ONLY_PERMISSIONS: Permission[] = []
+
+/**
+ * Any one of these shows the Administration screen. Each section inside it
+ * re-checks its own permission, so a delegate only sees what they may use.
+ */
+export const ADMINISTRATION_PERMISSIONS: Permission[] = [
   'manage-users',
   'manage-roles',
   'view-audit-logs',
-  'change-settings',
-  'restore-data',
   'view-login-history',
   'manage-sessions',
-  'manage-membership-history',
 ]
 
 export const ACCOUNT_ROLES: {
@@ -90,8 +103,13 @@ export function canAccessPage(
   account: Pick<Account, 'role' | 'customPermissions'> | null | undefined,
   rolePermissions: Partial<Record<AccountRole, Permission[]>>,
 ): boolean {
-  if (page === 'settings' || page === 'administration') {
-    return account?.role === 'admin'
+  if (page === 'settings') {
+    return hasPermission(account, 'change-settings', rolePermissions)
+  }
+  if (page === 'administration') {
+    return ADMINISTRATION_PERMISSIONS.some((permission) =>
+      hasPermission(account, permission, rolePermissions),
+    )
   }
   if (page === 'suguan-builder') {
     return (
@@ -102,12 +120,19 @@ export function canAccessPage(
   if (page === 'extra-occasion-suguan') {
     return hasPermission(account, 'create-suguan', rolePermissions)
   }
+  if (page === 'koro-maker') {
+    // The dedicated permission is new; Edit Members keeps working so a role
+    // granted before it existed does not lose the Koro Maker.
+    return (
+      hasPermission(account, 'koro-maker', rolePermissions) ||
+      hasPermission(account, 'edit-members', rolePermissions)
+    )
+  }
   const pagePermission: Record<string, Permission> = {
     dashboard: 'view-dashboard',
     'master-list': 'view-master-list',
     'members-history': 'view-master-list',
     trainees: 'manage-trainees',
-    'koro-maker': 'edit-members',
     'organista-suguan-maker': 'create-suguan',
 
     'suguan-history': 'view-suguan',

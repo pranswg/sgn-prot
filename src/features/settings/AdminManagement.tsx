@@ -61,6 +61,7 @@ import type {
 } from '@/core/types/auth'
 import { initialsFor } from '@/lib/credentials'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   ADMIN_ONLY_PERMISSIONS,
   ACCOUNT_ROLES,
@@ -94,13 +95,18 @@ const EMPTY_NEW_USER: CreateManagedAccountInput = {
   customPermissions: null,
 }
 
-const sectionItems: { id: AdminSection; label: string }[] = [
+const sectionItems: {
+  id: AdminSection
+  label: string
+  /** Omitted on Overview, which is always shown. */
+  permission?: Permission
+}[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'users', label: 'User Management' },
-  { id: 'roles', label: 'Roles & Permissions' },
-  { id: 'audit', label: 'Audit Logs' },
-  { id: 'logins', label: 'Login History' },
-  { id: 'sessions', label: 'Active Sessions' },
+  { id: 'users', label: 'User Management', permission: 'manage-users' },
+  { id: 'roles', label: 'Roles & Permissions', permission: 'manage-roles' },
+  { id: 'audit', label: 'Audit Logs', permission: 'view-audit-logs' },
+  { id: 'logins', label: 'Login History', permission: 'view-login-history' },
+  { id: 'sessions', label: 'Active Sessions', permission: 'manage-sessions' },
 ]
 
 function roleLabel(role: AccountRole) {
@@ -864,12 +870,18 @@ function UserProfileDialog({
 function Overview({
   users,
   actionsToday,
+  canCreate,
+  canRoles,
+  canAudit,
   onCreate,
   onRoles,
   onAudit,
 }: {
   users: Account[]
   actionsToday: number
+  canCreate: boolean
+  canRoles: boolean
+  canAudit: boolean
   onCreate: () => void
   onRoles: () => void
   onAudit: () => void
@@ -908,18 +920,24 @@ function Overview({
           <CardDescription>Common system administration tasks.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <Button onClick={onCreate} disabled={READ_ONLY}>
-            <Plus className="size-4" />
-            Create User
-          </Button>
-          <Button variant="outline" onClick={onRoles}>
-            <Shield className="size-4" />
-            Manage Permissions
-          </Button>
-          <Button variant="outline" onClick={onAudit}>
-            <Activity className="size-4" />
-            View Audit Logs
-          </Button>
+          {canCreate && (
+            <Button onClick={onCreate} disabled={READ_ONLY}>
+              <Plus className="size-4" />
+              Create User
+            </Button>
+          )}
+          {canRoles && (
+            <Button variant="outline" onClick={onRoles}>
+              <Shield className="size-4" />
+              Manage Permissions
+            </Button>
+          )}
+          {canAudit && (
+            <Button variant="outline" onClick={onAudit}>
+              <Activity className="size-4" />
+              View Audit Logs
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -927,6 +945,7 @@ function Overview({
 }
 
 export function AdminManagement({ actorId }: { actorId: string }) {
+  const { can } = usePermissions()
   const accounts = useAuthStore((state) => state.accounts)
   const updateManagedRolePermissions = useAuthStore(
     (state) => state.updateManagedRolePermissions,
@@ -1034,27 +1053,32 @@ export function AdminManagement({ actorId }: { actorId: string }) {
         description="Manage system accounts, roles, permissions, and security activity."
       />
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
-        {sectionItems.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-current={section === item.id ? 'page' : undefined}
-            onClick={() => changeTab(item.id)}
-            className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              section === item.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
+        {sectionItems
+          .filter((item) => !item.permission || can(item.permission))
+          .map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={section === item.id ? 'page' : undefined}
+              onClick={() => changeTab(item.id)}
+              className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                section === item.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
       </div>
 
       {section === 'overview' && (
         <Overview
           users={accounts}
           actionsToday={actionsToday}
+          canCreate={can('manage-users')}
+          canRoles={can('manage-roles')}
+          canAudit={can('view-audit-logs')}
           onCreate={() => setCreateOpen(true)}
           onRoles={() => changeTab('roles')}
           onAudit={() => changeTab('audit')}

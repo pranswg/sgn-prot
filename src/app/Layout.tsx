@@ -151,7 +151,7 @@ const PAGE_META: Record<
   'extra-occasion-suguan': {
     group: 'Suguan',
     title: 'Extra Occasion Suguan',
-    subtitle: 'Create a custom-date choir sign-up sheet for special occasions.',
+    subtitle: 'Create a choir sign-up sheet with the dates and labels you choose.',
   },
   'suguan-history': {
     group: 'Suguan',
@@ -217,7 +217,8 @@ function Breadcrumb() {
   )
 }
 
-function useNow(intervalMs = 30_000) {
+/** The header prints seconds, so it has to tick once a second to look live. */
+function useNow(intervalMs = 1_000) {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), intervalMs)

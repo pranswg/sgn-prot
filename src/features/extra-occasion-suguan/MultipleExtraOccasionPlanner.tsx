@@ -5,7 +5,9 @@ import {
   FileDown,
   FileSpreadsheet,
   FileText,
+  Pencil,
   Save,
+  Trash2,
   TriangleAlert,
   X,
 } from 'lucide-react'
@@ -21,6 +23,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/PageHeader'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useMemberStore } from '@/store/memberStore'
@@ -155,6 +159,7 @@ export function MultipleExtraOccasionPlanner() {
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState<ExtraOccasionExportKind | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
 
   const selected =
@@ -457,6 +462,24 @@ export function MultipleExtraOccasionPlanner() {
     ? plannerOccasionLabel(selected, Math.max(selectedIndex, 0))
     : ''
 
+  /** Any occasion that has never been saved, or has edits since the last save. */
+  const hasUnsavedChanges = session.occasions.some(
+    (occasion) => occasion.dirty || !occasion.savedId,
+  )
+
+  /**
+   * Leaving the planner drops the in-memory session, so a session holding work
+   * that was never saved asks first. A clean session returns to the chooser
+   * straight away.
+   */
+  const requestCancel = () => {
+    if (hasUnsavedChanges) {
+      setConfirmCancel(true)
+      return
+    }
+    setExtraOccasionMode('choose')
+  }
+
   return (
     <div className="flex flex-col gap-5 pb-10">
       {exportPreview}
@@ -465,11 +488,26 @@ export function MultipleExtraOccasionPlanner() {
         description="Plan several occasions together. Members booked on a shared date are flagged before you commit."
       />
 
-      <section className="space-y-4 rounded-xl border border-border/70 bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button variant="outline" onClick={addEmptyOccasion}>
-            <CalendarPlus className="size-4" />
-            Add occasion
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <CalendarPlus className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg leading-tight font-bold">
+              {selected?.savedId ? selectedLabel : 'Add Occasion'}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {selected?.savedId
+                ? 'Update this occasion and its details.'
+                : 'Create a new occasion and set up its details.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={requestCancel}>
+            <X className="size-4" />
+            Cancel
           </Button>
           <Button
             onClick={saveSession}
@@ -478,6 +516,44 @@ export function MultipleExtraOccasionPlanner() {
           >
             <Save className="size-4" />
             Save session
+          </Button>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+        <div className="space-y-1.5">
+          <Label htmlFor="extra-occasion-draft-name">
+            Draft name (optional)
+          </Label>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Input
+              id="extra-occasion-draft-name"
+              className="max-w-xl"
+              value={session.batchName}
+              onChange={(event) =>
+                setSession((current) => ({
+                  ...current,
+                  batchName: event.target.value,
+                }))
+              }
+              placeholder="e.g. Holy Week 2026"
+            />
+            {hasUnsavedChanges && (
+              <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                <Pencil className="size-3.5" aria-hidden="true" />
+                Unsaved changes
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Occasions</h2>
+          <Button variant="outline" size="sm" onClick={addEmptyOccasion}>
+            <CalendarPlus className="size-4" />
+            Add occasion
           </Button>
         </div>
 
@@ -537,19 +613,25 @@ export function MultipleExtraOccasionPlanner() {
 
       {selected ? (
         <>
-          <section className="space-y-4 rounded-xl border border-border/70 bg-card p-4">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={duplicateSelected}>
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-primary hover:text-primary"
+                onClick={duplicateSelected}
+              >
                 <Copy className="size-4" />
                 Duplicate
               </Button>
+              <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 onClick={removeSelected}
               >
-                <X className="size-4" />
+                <Trash2 className="size-4" />
                 Remove occasion
               </Button>
             </div>
@@ -565,47 +647,46 @@ export function MultipleExtraOccasionPlanner() {
             />
           </section>
 
-          <section className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
-              {can('export-documents') && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={() => requestOccasionExport('pdf', 'PDF')}
-                    loading={exporting === 'pdf'}
-                    disabled={exporting !== null}
-                  >
-                    <FileDown className="size-4" />
-                    Export PDF
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => requestOccasionExport('xlsx', 'Excel')}
-                    loading={exporting === 'xlsx'}
-                    disabled={exporting !== null}
-                  >
-                    <FileSpreadsheet className="size-4" />
-                    Export Excel
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => requestOccasionExport('docx', 'Word')}
-                    loading={exporting === 'docx'}
-                    disabled={exporting !== null}
-                  >
-                    <FileText className="size-4" />
-                    Export Word
-                  </Button>
-                </>
-              )}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExtraOccasionMode('choose')}
-            >
-              Switch workflow
-            </Button>
+          {/* One row of short export buttons on a phone; the labelled buttons
+              from sm up, where there is room for them. */}
+          <section className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+            {can('export-documents') && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => requestOccasionExport('pdf', 'PDF')}
+                  loading={exporting === 'pdf'}
+                  disabled={exporting !== null}
+                >
+                  <FileDown className="size-4" />
+                  <span>
+                    <span className="hidden sm:inline">Export </span>PDF
+                  </span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => requestOccasionExport('xlsx', 'Excel')}
+                  loading={exporting === 'xlsx'}
+                  disabled={exporting !== null}
+                >
+                  <FileSpreadsheet className="size-4" />
+                  <span>
+                    <span className="hidden sm:inline">Export </span>Excel
+                  </span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => requestOccasionExport('docx', 'Word')}
+                  loading={exporting === 'docx'}
+                  disabled={exporting !== null}
+                >
+                  <FileText className="size-4" />
+                  <span>
+                    <span className="hidden sm:inline">Export </span>Word
+                  </span>
+                </Button>
+              </>
+            )}
           </section>
         </>
       ) : (
@@ -642,6 +723,27 @@ export function MultipleExtraOccasionPlanner() {
               onClick={confirmRemoveSelected}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard this planning session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your unsaved occasions will be lost. Anything already saved stays
+              in Suguan History.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => setExtraOccasionMode('choose')}
+            >
+              Discard
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

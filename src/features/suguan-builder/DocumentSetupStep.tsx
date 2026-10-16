@@ -135,11 +135,18 @@ export function DisclosureButton({
   open,
   onToggle,
   icon: Icon,
+  summary,
   children,
 }: {
   open: boolean
   onToggle: () => void
   icon: typeof FileText
+  /**
+   * Optional second line saying what the folded group currently holds (and
+   * what it still needs). The Extra Occasion form uses it on phones, where the
+   * groups fold away; a caller that passes nothing keeps the one-line row.
+   */
+  summary?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -147,15 +154,25 @@ export function DisclosureButton({
       type="button"
       variant="outline"
       onClick={onToggle}
-      className="w-full justify-between"
+      className={cn(
+        'w-full justify-between',
+        summary != null && 'h-auto min-h-9 py-2 text-left',
+      )}
     >
-      <span className="flex items-center gap-2">
-        <Icon className="size-4 text-muted-foreground" />
-        {children}
+      <span className="flex min-w-0 items-center gap-2">
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0">
+          <span className="block truncate">{children}</span>
+          {summary != null && (
+            <span className="block truncate text-xs font-normal text-muted-foreground">
+              {summary}
+            </span>
+          )}
+        </span>
       </span>
       <ChevronDown
         className={cn(
-          'size-4 text-muted-foreground transition-transform',
+          'size-4 shrink-0 text-muted-foreground transition-transform',
           open && 'rotate-180',
         )}
       />

@@ -32,6 +32,9 @@ step4_backendplan.md
 step5_backendplan.md
 step3_read_test_seed.md
 
+# OpenChamber session artefacts (screenshots and captures from agent sessions)
+.openchamber/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

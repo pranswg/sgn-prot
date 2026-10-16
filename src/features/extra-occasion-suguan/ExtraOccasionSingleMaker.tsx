@@ -139,10 +139,10 @@ export function ExtraOccasionSingleMaker() {
       {exportPreview}
       <PageHeader
         title="Extra Occasion Suguan"
-        description="Create a voice-sectioned choir sign-up sheet with custom dates, labels, and signatories."
+        description="Create a voice-sectioned choir sign-up sheet with its own dates, labels, and signatories."
       />
 
-      <section className="space-y-5 rounded-xl border border-border/70 bg-card p-4">
+      <section className="space-y-5">
         <ExtraOccasionOccasionForm
           state={state}
           onChange={setState}
@@ -153,7 +153,7 @@ export function ExtraOccasionSingleMaker() {
       </section>
 
       {can('export-documents') && (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-wrap">
           <Button
             variant="outline"
             onClick={() => requestFileExport('pdf', 'PDF')}
@@ -161,7 +161,9 @@ export function ExtraOccasionSingleMaker() {
             disabled={exporting !== null}
           >
             <FileDown className="size-4" />
-            Export PDF
+            <span>
+              <span className="hidden lg:inline">Export </span>PDF
+            </span>
           </Button>
           <Button
             variant="outline"
@@ -170,7 +172,9 @@ export function ExtraOccasionSingleMaker() {
             disabled={exporting !== null}
           >
             <FileSpreadsheet className="size-4" />
-            Export Excel
+            <span>
+              <span className="hidden lg:inline">Export </span>Excel
+            </span>
           </Button>
           <Button
             variant="outline"
@@ -179,13 +183,16 @@ export function ExtraOccasionSingleMaker() {
             disabled={exporting !== null}
           >
             <FileText className="size-4" />
-            Export Word
+            <span>
+              <span className="hidden lg:inline">Export </span>Word
+            </span>
           </Button>
         </div>
       )}
       {can(existingRecord ? 'edit-suguan' : 'create-suguan') && (
         <div className="flex justify-end">
           <Button
+            className="w-full justify-center lg:w-auto"
             onClick={saveRecord}
             loading={saving}
             disabled={saving || exporting !== null}

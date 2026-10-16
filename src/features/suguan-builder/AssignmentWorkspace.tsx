@@ -4,7 +4,9 @@ import {
   ArrowDown,
   ArrowUp,
   BadgeCheck,
+  Bookmark,
   CalendarClock,
+  Check,
   ChevronDown,
   Eraser,
   GripVertical,
@@ -43,6 +45,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -86,6 +90,17 @@ interface AssignmentWorkspaceProps {
    * organista rows.
    */
   organista?: OrganistaAssignmentsConfig
+  /**
+   * `builder` (the default) is the Choir Suguan wizard's step: the schedule
+   * tabs switch between sections, Special Duties is the third of three
+   * columns, and presets get their own card above them.
+   *
+   * `occasion` is the Extra Occasion makers, which render one sheet section on
+   * a full-width page. There is nothing to switch between and no room to
+   * crowd, so the picker drops to two panels under a single header row and
+   * Special Duties folds away underneath.
+   */
+  layout?: 'builder' | 'occasion'
 }
 
 type DragPayload =
@@ -186,7 +201,9 @@ export function AssignmentWorkspace({
   conflictIds,
   onMembersAdded,
   organista,
+  layout = 'builder',
 }: AssignmentWorkspaceProps) {
+  const isOccasion = layout === 'occasion'
   const { can } = usePermissions()
   const canAssignMembers = can('assign-members')
   const allVoices = useSettingsStore((s) => s.allVoices)
@@ -465,6 +482,13 @@ export function AssignmentWorkspace({
     toast.success(`Assignment preset "${name}" saved.`)
   }
 
+  /** Empties the active section's roster, whichever layout asked for it. */
+  const clearRoster = (message: string) => {
+    setAssignments([])
+    setPresetId('')
+    toast.info(message)
+  }
+
   const replaceCandidates = useMemo(() => {
     if (!replaceTarget) return []
     return members
@@ -597,6 +621,143 @@ export function AssignmentWorkspace({
 
   const visibleVoiceGroups = assignedByVoice.groups.filter(
     (g) => g.items.length > 0,
+  )
+
+  /**
+   * The occasion layout's preset control: one button where the builder's card
+   * has a labelled select, a save button and a delete button. It offers the
+   * same three actions — load, save, and delete the loaded one — so no
+   * capability is lost by hiding the card.
+   */
+  const presetMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Bookmark className="size-4" />
+          Presets
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuItem
+          disabled={assignments.length === 0}
+          onSelect={() => setSaveOpen(true)}
+        >
+          <Save className="size-4" />
+          Save roster as preset
+        </DropdownMenuItem>
+        {presets.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Load a preset</DropdownMenuLabel>
+            {presets.map((preset) => (
+              <DropdownMenuItem
+                key={preset.id}
+                onSelect={() => loadPreset(preset.id)}
+              >
+                <Check
+                  className={cn(
+                    'size-4',
+                    presetId === preset.id
+                      ? 'text-brand-navy'
+                      : 'opacity-0',
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{preset.name}</span>
+                <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {preset.assignments.length}
+                </span>
+              </DropdownMenuItem>
+            ))}
+            {presetId && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => {
+                    deletePreset(presetId)
+                    setPresetId('')
+                    toast.info('Preset deleted.')
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                  Delete preset
+                </DropdownMenuItem>
+              </>
+            )}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
+  /** Presets + Clear, shared by the occasion layout's two breakpoints. */
+  const presetActions = (iconOnlyClear: boolean) => (
+    <span className="flex shrink-0 items-center gap-1">
+      {presetMenu}
+      <Button
+        variant="ghost"
+        size={iconOnlyClear ? 'icon-sm' : 'sm'}
+        className="text-muted-foreground hover:text-destructive"
+        disabled={assignments.length === 0}
+        title="Remove every member from this occasion"
+        aria-label="Clear the roster"
+        onClick={() => clearRoster('Roster cleared for this occasion.')}
+      >
+        <Eraser className="size-4" />
+        {!iconOnlyClear && 'Clear'}
+      </Button>
+    </span>
+  )
+
+  /**
+   * The folded Special Duties header. Destinado is required before the sheet
+   * can be saved or exported, so the occasion layout says whether it is still
+   * missing — otherwise folding the panel would hide the one field that blocks
+   * a save.
+   */
+  const dutiesSubtitle = draft.destinadoName.trim() ? (
+    `Destinado: ${draft.destinadoName.trim()}`
+  ) : isOccasion ? (
+    <span className="font-medium text-amber-600 dark:text-amber-400">
+      Destinado required
+    </span>
+  ) : (
+    'Officers and special roles'
+  )
+
+  /**
+   * The folded Special Duties header. The panel starts collapsed so the roster
+   * stays on screen; the subtitle keeps the required Destinado field visible
+   * even while it is folded away.
+   */
+  const dutiesToggle = (subtitle: ReactNode) => (
+    <button
+      type="button"
+      onClick={() => setDutiesOpen((open) => !open)}
+      aria-expanded={dutiesOpen}
+      className="flex w-full items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:bg-accent/50 xl:rounded-lg"
+    >
+      <BadgeCheck className="size-4 shrink-0 text-brand-navy/70" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">
+          Special duties
+        </span>
+        <span className="block text-xs text-muted-foreground">{subtitle}</span>
+      </span>
+      {specialDutiesCount > 0 && (
+        <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+          {specialDutiesCount}
+        </span>
+      )}
+      <ChevronDown
+        className={cn(
+          'size-4 shrink-0 text-muted-foreground transition-transform',
+          dutiesOpen && 'rotate-180',
+        )}
+      />
+    </button>
   )
 
   const renderMobileGroup = (
@@ -790,75 +951,94 @@ export function AssignmentWorkspace({
       <div className="flex flex-col gap-3 xl:hidden">
         {/* Header / schedule context */}
         <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04)]">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold tracking-tight text-foreground">
-                Assignments
+          {isOccasion ? (
+            <div className="flex items-center justify-between gap-3">
+              {/* No count pill here: the Assigned Members card just below
+                  already carries it, and the title would truncate with it. */}
+              <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground">
+                Choir assignments
               </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Assign members and duty roles
-              </p>
-            </div>
-            <span className="shrink-0 rounded-full bg-brand-navy-soft px-2.5 py-1 text-xs font-semibold tabular-nums text-brand-navy">
-              {assignments.length} assigned
-            </span>
-          </div>
-
-          {sections.length === 0 ? (
-            <p className="mt-3 rounded-xl border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground">
-              No schedules yet — add one in the Schedules step.
-            </p>
-          ) : sections.length === 1 ? (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-brand-navy px-3.5 py-3 text-sm font-semibold uppercase tracking-wide text-white">
-              <CalendarClock className="size-4 shrink-0 text-white/70" />
-              <span className="truncate">{sections[0].scheduleLabel}</span>
+              {presetActions(true)}
             </div>
           ) : (
-            <Select value={section?.id ?? ''} onValueChange={selectSection}>
-              <SelectTrigger className="mt-3 h-12 w-full gap-2 border-0 bg-brand-navy px-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-none hover:bg-brand-navy/90 focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&_svg]:text-white/70">
-                <SelectValue placeholder="Choose schedule" />
-              </SelectTrigger>
-              <SelectContent>
-              {sections.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.scheduleLabel} ({s.assignments.length})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {renderPresetCard(
-          'mt-3 border-0 bg-transparent p-0 shadow-none xl:rounded-none',
-        )}
-      </div>
-
-        {/* Voice balance chips */}
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
-          {choirVoices.map((v) => {
-            const count = assignments.filter(
-              (a) => a.voicePosition === v.id,
-            ).length
-            return (
-              <div
-                key={v.id}
-                className="flex shrink-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-[0_1px_2px_rgba(16,42,67,0.04)]"
-              >
-                <span className="text-xs font-medium text-muted-foreground">
-                  {v.name}
-                </span>
-                <span
-                  className={cn(
-                    'text-sm font-bold tabular-nums',
-                    count > 0 ? 'text-brand-navy' : 'text-muted-foreground/50',
-                  )}
-                >
-                  {count}
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">
+                    Assignments
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Assign members and duty roles
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-brand-navy-soft px-2.5 py-1 text-xs font-semibold tabular-nums text-brand-navy">
+                  {assignments.length} assigned
                 </span>
               </div>
-            )
-          })}
+
+              {sections.length === 0 ? (
+                <p className="mt-3 rounded-xl border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground">
+                  No schedules yet — add one in the Schedules step.
+                </p>
+              ) : sections.length === 1 ? (
+                <div className="mt-3 flex items-center gap-2 rounded-xl bg-brand-navy px-3.5 py-3 text-sm font-semibold uppercase tracking-wide text-white">
+                  <CalendarClock className="size-4 shrink-0 text-white/70" />
+                  <span className="truncate">{sections[0].scheduleLabel}</span>
+                </div>
+              ) : (
+                <Select value={section?.id ?? ''} onValueChange={selectSection}>
+                  <SelectTrigger className="mt-3 h-12 w-full gap-2 border-0 bg-brand-navy px-3.5 text-sm font-semibold uppercase tracking-wide text-white shadow-none hover:bg-brand-navy/90 focus-visible:ring-2 focus-visible:ring-brand-navy/40 [&_svg]:text-white/70">
+                    <SelectValue placeholder="Choose schedule" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sections.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.scheduleLabel} ({s.assignments.length})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {renderPresetCard(
+                'mt-3 border-0 bg-transparent p-0 shadow-none xl:rounded-none',
+              )}
+            </>
+          )}
         </div>
+
+        {/* Voice balance chips. The occasion layout skips them: the Assigned
+            panel below already counts every voice group, and a phone does not
+            need the same numbers twice. */}
+        {!isOccasion && (
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+            {choirVoices.map((v) => {
+              const count = assignments.filter(
+                (a) => a.voicePosition === v.id,
+              ).length
+              return (
+                <div
+                  key={v.id}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-[0_1px_2px_rgba(16,42,67,0.04)]"
+                >
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {v.name}
+                  </span>
+                  <span
+                    className={cn(
+                      'text-sm font-bold tabular-nums',
+                      count > 0
+                        ? 'text-brand-navy'
+                        : 'text-muted-foreground/50',
+                    )}
+                  >
+                    {count}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Assigned members — main area */}
         <div className="rounded-2xl border border-border/70 bg-card shadow-[0_1px_2px_rgba(16,42,67,0.04)]">
@@ -928,33 +1108,7 @@ export function AssignmentWorkspace({
 
         {/* Special duties — collapsed behind a dropdown so the roster stays on screen */}
         <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => setDutiesOpen((o) => !o)}
-            aria-expanded={dutiesOpen}
-            className="flex w-full items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:bg-accent/50"
-          >
-            <BadgeCheck className="size-4 shrink-0 text-brand-navy/70" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-foreground">
-                Special duties
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                Officers and special roles
-              </span>
-            </span>
-            {specialDutiesCount > 0 && (
-              <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
-                {specialDutiesCount}
-              </span>
-            )}
-            <ChevronDown
-              className={cn(
-                'size-4 shrink-0 text-muted-foreground transition-transform',
-                dutiesOpen && 'rotate-180',
-              )}
-            />
-          </button>
+          {dutiesToggle(dutiesSubtitle)}
 
           {dutiesOpen && (
             <DutyRolesPanel
@@ -971,7 +1125,10 @@ export function AssignmentWorkspace({
         </div>
       </div>
 
-      {/* Desktop layout — center column of the builder's three-column step */}
+      {/* Desktop layout — the builder's three-column step, or the Extra
+          Occasion makers' two-panel page. The schedule header card, the tabs,
+          and the preset card belong to the builder, which has several
+          sections to move between; an occasion has exactly one. */}
       <div className="hidden flex-col gap-4 xl:flex">
         <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
           <header className="flex items-center gap-2.5 border-b border-border/70 px-4 py-3">
@@ -979,55 +1136,68 @@ export function AssignmentWorkspace({
               <UserRoundCheck className="size-4" />
             </span>
             <h3 className="text-sm font-semibold text-foreground">
-              Assign Members
+              {isOccasion ? 'Choir assignments' : 'Assign Members'}
             </h3>
             <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-brand-navy">
               {assignments.length} assigned
             </span>
-            <span className="ml-auto truncate text-[11px] text-muted-foreground">
-              {section
-                ? [section.scheduleDay, section.scheduleTime]
-                    .filter(Boolean)
-                    .join(' · ')
-                : ''}
-            </span>
+            {isOccasion ? (
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {presetActions(false)}
+              </span>
+            ) : (
+              <span className="ml-auto truncate text-[11px] text-muted-foreground">
+                {section
+                  ? [section.scheduleDay, section.scheduleTime]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : ''}
+              </span>
+            )}
           </header>
 
-          {sections.length === 0 ? (
-            <p className="px-4 py-3 text-xs text-muted-foreground">
-              No schedules yet — add one in the Schedules panel.
-            </p>
-          ) : (
-            <Tabs
-              value={section?.id ?? ''}
-              onValueChange={selectSection}
-              className="min-w-0 px-3 py-2.5"
-            >
-              <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-lg bg-muted p-1">
-                {sections.map((s) => (
-                  <TabsTrigger
-                    key={s.id}
-                    value={s.id}
-                    className="gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground data-[state=active]:bg-brand-navy data-[state=active]:text-white"
-                  >
-                    {s.scheduleLabel}
-                    <span className="rounded-full bg-current/15 px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums">
-                      {s.assignments.length}
-                    </span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          )}
+          {!isOccasion &&
+            (sections.length === 0 ? (
+              <p className="px-4 py-3 text-xs text-muted-foreground">
+                No schedules yet — add one in the Schedules panel.
+              </p>
+            ) : (
+              <Tabs
+                value={section?.id ?? ''}
+                onValueChange={selectSection}
+                className="min-w-0 px-3 py-2.5"
+              >
+                <TabsList className="h-auto w-full justify-start gap-1.5 overflow-x-auto rounded-lg bg-muted p-1">
+                  {sections.map((s) => (
+                    <TabsTrigger
+                      key={s.id}
+                      value={s.id}
+                      className="gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground data-[state=active]:bg-brand-navy data-[state=active]:text-white"
+                    >
+                      {s.scheduleLabel}
+                      <span className="rounded-full bg-current/15 px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums">
+                        {s.assignments.length}
+                      </span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            ))}
 
-          {renderPresetCard(
-            'rounded-none border-x-0 border-b-0 border-t border-border/60 bg-transparent shadow-none',
-          )}
+          {!isOccasion &&
+            renderPresetCard(
+              'rounded-none border-x-0 border-b-0 border-t border-border/60 bg-transparent shadow-none',
+            )}
         </section>
 
       {/* Available | Assigned | Special duties */}
-      <div className="grid min-w-0 grid-cols-3 items-stretch gap-4">
-      <div className="h-[560px] min-h-0">
+      <div
+        className={cn(
+          'grid min-w-0 items-stretch gap-4',
+          isOccasion ? 'grid-cols-2' : 'grid-cols-3',
+        )}
+      >
+      <div className={cn('min-h-0', isOccasion ? 'h-[480px]' : 'h-[560px]')}>
       <PanelShell
         icon={<Users className="size-4" />}
         title="Available Members"
@@ -1127,7 +1297,7 @@ export function AssignmentWorkspace({
       />
       </div>
 
-      <div className="h-[560px] min-h-0">
+      <div className={cn('min-h-0', isOccasion ? 'h-[480px]' : 'h-[560px]')}>
       <PanelShell
         icon={<UsersRound className="size-4" />}
         title="Assigned"
@@ -1191,18 +1361,42 @@ export function AssignmentWorkspace({
       />
       </div>
 
-      <div className="h-[560px] min-h-0">
-      <DutyRolesPanel
-        dutyRoles={draft.dutyRoles}
-        onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
-        destinadoName={draft.destinadoName}
-        onDestinadoChange={(destinadoName) => patch({ destinadoName })}
-        members={members}
-        scrollClassName="h-full flex-1 min-h-0"
-        organista={organista}
-      />
+      {!isOccasion && (
+        <div className="h-[560px] min-h-0">
+          <DutyRolesPanel
+            dutyRoles={draft.dutyRoles}
+            onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+            destinadoName={draft.destinadoName}
+            onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+            members={members}
+            scrollClassName="h-full flex-1 min-h-0"
+            organista={organista}
+          />
+        </div>
+      )}
       </div>
-      </div>
+
+      {/* An occasion has one sheet section and no column to spare, so its
+          Special Duties fold away under the roster instead of standing
+          beside it. */}
+      {isOccasion && (
+        <div className="flex flex-col gap-3">
+          {dutiesToggle(dutiesSubtitle)}
+          {dutiesOpen && (
+            <DutyRolesPanel
+              hideHeader
+              wide
+              scrollClassName="h-auto"
+              dutyRoles={draft.dutyRoles}
+              onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+              destinadoName={draft.destinadoName}
+              onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+              members={members}
+              organista={organista}
+            />
+          )}
+        </div>
+      )}
     </div>
 
       <Dialog

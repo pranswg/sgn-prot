@@ -333,24 +333,69 @@ no suggestions), the **Organista** picker when the caller passes an `organista`
 config, and **OIC**. Pangulong Mang-aawit and Kalihim are read from the Master
 List, and Mang-aawit is the plain-singer default, so none of them gets a picker.
 The **OIC** field offers only active members the Master List marks with the OIC
-ranking (`assignedDutyRoleIds` includes `oic`, or a legacy stored `oic`
-position — the same rule the Master List PDF's OIC section uses). **Destinado is
-required**: both `saveBlockers` (Choir builder) and `validateOccasion` (Extra
+ranking. The ranking's duty role is resolved by `resolveOicDutyRole` in
+`src/core/constants/dutyRoles.ts` — the canonical `oic` id first, else a role the
+user named "OIC", because duty roles created in Settings carry a generated id.
+Candidates are active members whose `assignedDutyRoleIds` includes that role's
+id, or who hold a legacy stored `oic` position (the same rule the Master List
+PDF's OIC section uses); those legacy members alone also keep the field visible
+when no OIC duty role is configured. The panel always stores the chosen member
+under the canonical `dutyRoleId: 'oic'`, which is what `suguanExport` and
+`extraOccasionData` key on to suffix the printed row with ` - OIC`. **Destinado
+is required**: both `saveBlockers` (Choir builder) and `validateOccasion` (Extra
 Occasion) block save and export until it is filled.
 
 The Choir Suguan builder **never assigns the `organista` or
 `organista-reserve` duty roles** — those duties belong to the Organist Suguan
 feature, and the standard Choir Suguan sheet has no organista slot, so the
 builder never passes the `organista` config. The Extra Occasion Suguan makers
-do: the per-schedule Organista picker renders **inside** the Special Duties
-panel (`OrganistaAssignments.tsx`, reached through `AssignmentWorkspace`'s
-optional `organista` prop) instead of a separate box, so organists are assigned
-in one place. `CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in
+do: the Organista picker renders **inside** the Special Duties panel
+(`OrganistaAssignments.tsx`, reached through `AssignmentWorkspace`'s optional
+`organista` prop) instead of a separate box, so organists are assigned in one
+place. It is **two single-member fields** — Organista and Reserbang Organista —
+for the occasion's single sheet section; there is no schedule picker (an Extra
+Occasion always renders exactly one section) and each field replaces that role's
+row, so the stored per-schedule row list holds at most one row per role.
+`CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in
 `src/core/constants/dutyRoles.ts` still makes `createDraftFromSuguan` strip
 stored organist duty roles on load/edit, so already-saved records keep their
 data until re-saved. The roles themselves stay in Settings for the Master List
 PDF's Organists section, which resolves through `memberIsOrganist`, not the
 duty-role assignments.
+
+`AssignmentWorkspace` has two layouts, chosen by its `layout` prop and not by a
+fork: `builder` (the default) is the Choir Suguan wizard's step, with the
+schedule tabs, a three-column grid, and the preset card above it; `occasion` is
+what the Extra Occasion makers pass, because an occasion renders exactly one
+sheet section on a full-width page. The occasion layout drops the schedule tabs
+and the schedule-label meta, keeps one header row (title, count, a `Presets`
+dropdown that loads/saves/deletes, and Clear), puts the two panels side by side,
+and folds Special Duties underneath. The folded header states the Destinado
+state, because Destinado is required to save and would otherwise be invisible.
+`DutyRolesPanel`'s `wide` prop lays its fields out in two columns for that
+full-width spot; the builder's narrow third column keeps the stacked default.
+
+The occasion layout also **drops the mobile voice-balance chips**. The Assigned
+panel already counts every voice group, and on a phone the chip row was the same
+numbers twice. The builder's mobile step keeps them.
+
+**The Extra Occasion form folds on phones.** `ExtraOccasionOccasionForm` renders
+two `DisclosureButton`s under `lg` — "Occasion details" (name, choir, time,
+service type, locale, signatories) and "Pagsasanay & Pagtupad" — each closed by
+default, and the same fields as two open columns from `lg` up. One definition per
+field (`occasionNameField`, `choirField`, …) is composed into both arrangements,
+so a new field lands in both. Each folded row carries a `summary`: what the group
+holds, or, in amber, the one thing still blocking a save ("Service type
+required", "Pagsasanay date and Pagtupad date required"). `DisclosureButton`
+grew that optional `summary` for this; a caller that passes nothing keeps the
+one-line row it had. The point is that a phone opens on the roster instead of six
+cards of setup, and never has to scroll past the fields to reach the members or
+the export buttons.
+
+The two makers' export rows are a three-column grid of short buttons (`PDF`,
+`Excel`, `Word`) below `sm`/`lg`, with the `Export ` prefix in a
+`hidden …:inline` span, because three labelled buttons wrapped to two rows at
+390px.
 
 ## Sidebar
 
@@ -616,6 +661,12 @@ inside the `onExport` handler) so the two dialogs are never open at once.
   them rather than hand-rolling a new primitive, and reuse
   `Popover` + `Command` for anything searchable. `tw-animate-css` supplies the
   animations.
+- `FieldCard` / `FieldCardGroup` in `src/components/FieldCard.tsx` are the
+  app-level *composition* for a labelled field: a tinted icon badge, the label
+  (with `required` appending the red marker), then the control. They render the
+  card chrome themselves, so a host must not wrap a form built from them in a
+  second card. `required` is for a field the save gate actually blocks — never
+  mark a field the user can leave blank.
 - Never nest a Radix `Select` portal inside another portal; use a text field or
   a segmented toggle.
 - Icons come from `lucide-react`. There is also a stray `cn` package in
@@ -624,10 +675,10 @@ inside the `onExport` handler) so the two dialogs are never open at once.
 
 ## Things that will bite you
 
-- `AssignmentWorkspace.tsx` is 1075 lines and holds five inline components
+- `AssignmentWorkspace.tsx` is 1740 lines and holds five inline components
   (`PanelShell`, `EmptyState`, `VoiceGroupHeader`, `MemberAvatar`,
   `AssignmentRow`), but only 6 `useState` calls and a four-field props
-  interface. `MasterListPage.tsx` is 736 lines with 3 `useState` calls and takes
+  interface. `MasterListPage.tsx` is 1130 lines with 3 `useState` calls and takes
   no props. These files are long because logic is colocated, not because props
   sprawl. Touching one means reading the whole file; extract rather than append.
   Re-measure before quoting these numbers again; they drift as code changes.

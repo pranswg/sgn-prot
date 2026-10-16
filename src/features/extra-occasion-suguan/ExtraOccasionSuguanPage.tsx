@@ -36,7 +36,7 @@ function ExtraOccasionChooser({
     <div className="flex flex-col gap-5 pb-10">
       <PageHeader
         title="Extra Occasion Suguan"
-        description="Build one custom-date sign-up sheet, or plan several occasions together with shared member-conflict checks."
+        description="Build one sign-up sheet, or plan several occasions together with shared member-conflict checks."
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -50,7 +50,7 @@ function ExtraOccasionChooser({
           </span>
           <span className="text-sm font-semibold">Single Extra Occasion</span>
           <span className="text-xs text-muted-foreground">
-            One sheet with custom dates, labels, and signatories.
+            One sheet with its own dates, labels, and signatories.
           </span>
         </button>
         <button

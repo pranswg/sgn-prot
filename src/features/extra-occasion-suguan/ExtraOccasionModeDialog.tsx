@@ -29,8 +29,8 @@ export function ExtraOccasionModeDialog({
         <DialogHeader>
           <DialogTitle>Which Extra Occasion workflow?</DialogTitle>
           <DialogDescription>
-            Build one custom-date sign-up sheet, or plan several occasions
-            together with shared member-conflict checks.
+            Build one sign-up sheet, or plan several occasions together with
+            shared member-conflict checks.
           </DialogDescription>
         </DialogHeader>
 
@@ -45,7 +45,7 @@ export function ExtraOccasionModeDialog({
             </span>
             <span className="text-sm font-semibold">Single Extra Occasion</span>
             <span className="text-xs text-muted-foreground">
-              One sheet with custom dates, labels, and signatories.
+              One sheet with its own dates, labels, and signatories.
             </span>
           </button>
           <button

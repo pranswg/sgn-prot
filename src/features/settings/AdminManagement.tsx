@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
+import { PasswordInput } from '@/components/PasswordInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -329,9 +330,8 @@ function CreateUserDialog({
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="admin-new-password">Temporary password</Label>
-                <Input
+                <PasswordInput
                   id="admin-new-password"
-                  type="password"
                   autoComplete="new-password"
                   value={form.password}
                   onChange={(event) => set('password', event.target.value)}
@@ -824,9 +824,9 @@ function UserProfileDialog({
                   <section className="grid gap-2 rounded-lg border p-3">
                     <Label htmlFor="admin-reset-password">Set a new password</Label>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Input
+                      <PasswordInput
                         id="admin-reset-password"
-                        type="password"
+                        containerClassName="flex-1"
                         autoComplete="new-password"
                         placeholder="Enter the new password"
                         value={newPassword}

@@ -3,8 +3,8 @@ import type { FormEvent } from 'react'
 import { KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/PasswordInput'
 import { passwordStrengthProblems } from '@/lib/credentials'
 import { useAuthStore } from '@/store/authStore'
 
@@ -59,9 +59,8 @@ export function PasswordChangePage() {
         </header>
         <div className="grid gap-2">
           <Label htmlFor="required-new-password">New password</Label>
-          <Input
+          <PasswordInput
             id="required-new-password"
-            type="password"
             autoComplete="new-password"
             required
             value={password}
@@ -75,9 +74,8 @@ export function PasswordChangePage() {
         </div>
         <div className="grid gap-2">
           <Label htmlFor="required-confirm-password">Confirm new password</Label>
-          <Input
+          <PasswordInput
             id="required-confirm-password"
-            type="password"
             autoComplete="new-password"
             required
             value={confirmation}

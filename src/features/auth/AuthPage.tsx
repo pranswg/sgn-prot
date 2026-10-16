@@ -1,10 +1,11 @@
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Eye, EyeOff, Music4 } from 'lucide-react'
+import { Music4 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/PasswordInput'
 import { useAuthStore } from '@/store/authStore'
 
 /**
@@ -20,7 +21,6 @@ export function AuthPage() {
   const signIn = useAuthStore((s) => s.signIn)
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const fieldId = useId()
@@ -78,30 +78,15 @@ export function AuthPage() {
 
             <div className="grid gap-2">
               <Label htmlFor={`${fieldId}-password`}>Password</Label>
-              <div className="relative">
-                <Input
-                  id={`${fieldId}-password`}
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  className="h-10 pr-10"
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                >
-                  {showPassword ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
-                </button>
-              </div>
+              <PasswordInput
+                id={`${fieldId}-password`}
+                name="password"
+                autoComplete="current-password"
+                className="h-10"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
 
             {error && (

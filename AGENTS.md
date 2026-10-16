@@ -585,7 +585,9 @@ Rules if you touch it:
   not re-check a rule locally or the two will drift. Its hashing helpers
   (`hashPassword`/`verifyPassword`/`sha256Hex`) are now **unused by the app** but
   still pinned by `credentials.test.ts`; do not reintroduce client-side hashing.
-- Never log, toast, or render a password.
+- Never log, toast, or render a password. Every password field is
+  `src/components/PasswordInput.tsx` (an `Input` with the show/hide toggle), so
+  the eye button lives in one place — do not hand-roll another one.
 - `signIn` resolves the identifier with `resolveSignInAddress`, then calls
   `supabase.auth.signInWithPassword`, refuses a
   profile whose `status` is not `active` (and signs straight back out), and

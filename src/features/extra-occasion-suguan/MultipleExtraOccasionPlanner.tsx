@@ -11,8 +11,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -468,35 +466,19 @@ export function MultipleExtraOccasionPlanner() {
       />
 
       <section className="space-y-4 rounded-xl border border-border/70 bg-card p-4">
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="extra-session-name">Planning session name</Label>
-            <Input
-              id="extra-session-name"
-              value={session.batchName}
-              onChange={(event) =>
-                setSession((current) => ({
-                  ...current,
-                  batchName: event.target.value,
-                }))
-              }
-              placeholder="e.g. Holy Week 2026"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={addEmptyOccasion}>
-              <CalendarPlus className="size-4" />
-              Add occasion
-            </Button>
-            <Button
-              onClick={saveSession}
-              loading={saving}
-              disabled={saving || session.occasions.length === 0}
-            >
-              <Save className="size-4" />
-              Save session
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button variant="outline" onClick={addEmptyOccasion}>
+            <CalendarPlus className="size-4" />
+            Add occasion
+          </Button>
+          <Button
+            onClick={saveSession}
+            loading={saving}
+            disabled={saving || session.occasions.length === 0}
+          >
+            <Save className="size-4" />
+            Save session
+          </Button>
         </div>
 
         {session.occasions.length === 0 ? (
@@ -510,7 +492,7 @@ export function MultipleExtraOccasionPlanner() {
           </div>
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {session.occasions.map((occasion, index) => {
+            {session.occasions.map((occasion) => {
               const active = selected?.localId === occasion.localId
               const conflictCount = allConflicts.get(occasion.localId)?.size ?? 0
               return (
@@ -527,11 +509,17 @@ export function MultipleExtraOccasionPlanner() {
                   >
                     <span className="min-w-0">
                       <span className="block truncate font-medium">
-                        {plannerOccasionLabel(occasion, index)}
+                        {occasion.state.name.trim() || 'Draft'}
                       </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {occasion.dirty ? 'Unsaved changes' : occasion.savedId ? 'Saved' : 'Draft'}
-                      </span>
+                      {occasion.dirty ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Unsaved changes
+                        </span>
+                      ) : occasion.savedId ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Saved
+                        </span>
+                      ) : null}
                     </span>
                     {conflictCount > 0 && (
                       <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
@@ -550,23 +538,20 @@ export function MultipleExtraOccasionPlanner() {
       {selected ? (
         <>
           <section className="space-y-4 rounded-xl border border-border/70 bg-card p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">{selectedLabel}</h2>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="ghost" size="sm" onClick={duplicateSelected}>
-                  <Copy className="size-4" />
-                  Duplicate
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={removeSelected}
-                >
-                  <X className="size-4" />
-                  Remove occasion
-                </Button>
-              </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={duplicateSelected}>
+                <Copy className="size-4" />
+                Duplicate
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={removeSelected}
+              >
+                <X className="size-4" />
+                Remove occasion
+              </Button>
             </div>
             <ExtraOccasionOccasionForm
               state={selected.state}

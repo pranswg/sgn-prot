@@ -13,7 +13,7 @@ import type { PlannerOccasion } from './extraOccasionSession'
  */
 export const TIME_CONFLICT_THRESHOLD_MIN = 90
 
-export type MemberConflictKind = 'time-overlap' | 'same-day'
+export type MemberConflictKind = 'time-overlap' | 'same-day' | 'unknown-date'
 
 /** A reference to one occasion for conflict comparison. */
 export interface OccasionRef {
@@ -143,7 +143,10 @@ function sharedDates(target: OccasionRef, other: OccasionRef): string[] {
 /**
  * Conflicts for every member shared between `target` and any of `others`.
  * Different authoritative dates never warn; a shared date is `time-overlap`
- * when the times are within the threshold, otherwise `same-day`.
+ * when the times are within the threshold, otherwise `same-day`. When either
+ * occasion has no valid date yet the overlap cannot be ruled out, so the pair
+ * is reported as `unknown-date` — this is what flags two fresh drafts that
+ * share a member before any Pagsasanay/Pagtupad date is entered.
  */
 export function detectMemberConflicts(
   target: OccasionRef,
@@ -155,14 +158,16 @@ export function detectMemberConflicts(
   for (const other of others) {
     if (other.key === target.key) continue
     const dates = sharedDates(target, other)
-    if (dates.length === 0) continue
-    const kind: MemberConflictKind = isTimeConflict(
-      target.time,
-      other.time,
-      thresholdMin,
-    )
-      ? 'time-overlap'
-      : 'same-day'
+    let kind: MemberConflictKind
+    if (dates.length > 0) {
+      kind = isTimeConflict(target.time, other.time, thresholdMin)
+        ? 'time-overlap'
+        : 'same-day'
+    } else if (target.dates.length === 0 || other.dates.length === 0) {
+      kind = 'unknown-date'
+    } else {
+      continue
+    }
     for (const memberId of other.memberIds) {
       if (!targetMembers.has(memberId)) continue
       const list = result.get(memberId) ?? []

@@ -63,6 +63,29 @@ test('different authoritative dates produce no conflict', () => {
   assert.equal(detectMemberConflicts(target, [other]).size, 0)
 })
 
+test('two draft occasions with no dates yet conflict as unknown-date', () => {
+  const target = ref({ key: 't', memberIds: ['m1'], dates: [], time: '' })
+  const other = ref({ key: 'o', memberIds: ['m1'], dates: [], time: '' })
+  const conflicts = detectMemberConflicts(target, [other])
+  assert.equal(conflicts.get('m1')?.[0]?.kind, 'unknown-date')
+  assert.deepEqual(conflicts.get('m1')?.[0]?.dates, [])
+})
+
+test('a dated occasion and an undated one conflict as unknown-date', () => {
+  const target = ref({ key: 't', memberIds: ['m1'], dates: ['2026-01-04'] })
+  const other = ref({ key: 'o', memberIds: ['m1'], dates: [], time: '19:00' })
+  assert.equal(
+    detectMemberConflicts(target, [other]).get('m1')?.[0]?.kind,
+    'unknown-date',
+  )
+})
+
+test('undated occasions that share no member still report nothing', () => {
+  const target = ref({ key: 't', memberIds: ['m1'], dates: [] })
+  const other = ref({ key: 'o', memberIds: ['m2'], dates: [] })
+  assert.equal(detectMemberConflicts(target, [other]).size, 0)
+})
+
 test('only shared members are reported', () => {
   const target = ref({ key: 't', memberIds: ['m1'] })
   const other = ref({ key: 'o', memberIds: ['m2'] })

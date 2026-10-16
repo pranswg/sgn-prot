@@ -43,6 +43,12 @@ export function ExtraOccasionConflictDialog({
   }
   const name = member ? `${member.firstName} ${member.lastName}` : 'This member'
   const hasActual = conflicts.some((c) => c.kind === 'time-overlap')
+  const hasSameDay = conflicts.some((c) => c.kind === 'same-day')
+  const description = hasActual
+    ? `${name} is already committed to another occasion at an overlapping time.`
+    : hasSameDay
+      ? `${name} is already assigned to another occasion on the same date.`
+      : `${name} is already assigned to another occasion. Set the dates on both occasions to confirm whether they overlap.`
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
@@ -58,9 +64,7 @@ export function ExtraOccasionConflictDialog({
             />
             {hasActual ? 'Member already committed' : 'Member also assigned'}
           </DialogTitle>
-          <DialogDescription>
-            {name} is already assigned to another occasion on the same date.
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <ul className="space-y-2">
@@ -73,9 +77,15 @@ export function ExtraOccasionConflictDialog({
               <p className="text-xs text-muted-foreground">
                 {conflict.kind === 'time-overlap'
                   ? 'Overlapping time'
-                  : 'Same day, different time'}
-                {' · '}
-                {conflict.dates.map(formatDateKeyNumeric).join(', ')}
+                  : conflict.kind === 'same-day'
+                    ? 'Same day, different time'
+                    : 'Dates not set'}
+                {conflict.dates.length > 0 && (
+                  <>
+                    {' · '}
+                    {conflict.dates.map(formatDateKeyNumeric).join(', ')}
+                  </>
+                )}
               </p>
             </li>
           ))}

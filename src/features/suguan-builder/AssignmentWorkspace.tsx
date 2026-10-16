@@ -57,6 +57,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { VoiceBadge } from '@/components/StatusBadges'
+import { DisclosureSection } from '@/components/DisclosureSection'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -728,36 +729,42 @@ export function AssignmentWorkspace({
   )
 
   /**
-   * The folded Special Duties header. The panel starts collapsed so the roster
-   * stays on screen; the subtitle keeps the required Destinado field visible
-   * even while it is folded away.
+   * Special Duties as one card: the row and the panel it reveals share a
+   * border, so opening it extends the row rather than stacking a second box
+   * beneath it. The panel starts collapsed so the roster stays on screen, and
+   * Destinado is required before the sheet can be saved or exported, so the
+   * occasion layout's row says whether it is still missing — otherwise folding
+   * the panel would hide the one field that blocks a save.
    */
-  const dutiesToggle = (subtitle: ReactNode) => (
-    <button
-      type="button"
-      onClick={() => setDutiesOpen((open) => !open)}
-      aria-expanded={dutiesOpen}
-      className="flex w-full items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-4 py-3 text-left shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:bg-accent/50 xl:rounded-lg"
+  const specialDutiesSection = (wide: boolean) => (
+    <DisclosureSection
+      open={dutiesOpen}
+      onToggle={() => setDutiesOpen((open) => !open)}
+      icon={BadgeCheck}
+      title="Special duties"
+      summary={dutiesSubtitle}
+      trailing={
+        specialDutiesCount > 0 && (
+          <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+            {specialDutiesCount}
+          </span>
+        )
+      }
+      className="rounded-2xl xl:rounded-lg"
     >
-      <BadgeCheck className="size-4 shrink-0 text-brand-navy/70" />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-foreground">
-          Special duties
-        </span>
-        <span className="block text-xs text-muted-foreground">{subtitle}</span>
-      </span>
-      {specialDutiesCount > 0 && (
-        <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
-          {specialDutiesCount}
-        </span>
-      )}
-      <ChevronDown
-        className={cn(
-          'size-4 shrink-0 text-muted-foreground transition-transform',
-          dutiesOpen && 'rotate-180',
-        )}
+      <DutyRolesPanel
+        flat
+        hideHeader
+        wide={wide}
+        scrollClassName="h-auto"
+        dutyRoles={draft.dutyRoles}
+        onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
+        destinadoName={draft.destinadoName}
+        onDestinadoChange={(destinadoName) => patch({ destinadoName })}
+        members={members}
+        organista={organista}
       />
-    </button>
+    </DisclosureSection>
   )
 
   const renderMobileGroup = (
@@ -1107,22 +1114,7 @@ export function AssignmentWorkspace({
         </div>
 
         {/* Special duties — collapsed behind a dropdown so the roster stays on screen */}
-        <div className="flex flex-col gap-3">
-          {dutiesToggle(dutiesSubtitle)}
-
-          {dutiesOpen && (
-            <DutyRolesPanel
-              hideHeader
-              scrollClassName="h-auto"
-              dutyRoles={draft.dutyRoles}
-              onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
-              destinadoName={draft.destinadoName}
-              onDestinadoChange={(destinadoName) => patch({ destinadoName })}
-              members={members}
-              organista={organista}
-            />
-          )}
-        </div>
+        {specialDutiesSection(false)}
       </div>
 
       {/* Desktop layout — the builder's three-column step, or the Extra
@@ -1379,24 +1371,7 @@ export function AssignmentWorkspace({
       {/* An occasion has one sheet section and no column to spare, so its
           Special Duties fold away under the roster instead of standing
           beside it. */}
-      {isOccasion && (
-        <div className="flex flex-col gap-3">
-          {dutiesToggle(dutiesSubtitle)}
-          {dutiesOpen && (
-            <DutyRolesPanel
-              hideHeader
-              wide
-              scrollClassName="h-auto"
-              dutyRoles={draft.dutyRoles}
-              onDutyRolesChange={(dutyRoles) => patch({ dutyRoles })}
-              destinadoName={draft.destinadoName}
-              onDestinadoChange={(destinadoName) => patch({ destinadoName })}
-              members={members}
-              organista={organista}
-            />
-          )}
-        </div>
-      )}
+      {isOccasion && specialDutiesSection(true)}
     </div>
 
       <Dialog

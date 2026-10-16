@@ -12,7 +12,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FieldCard, FieldCardGroup } from '@/components/FieldCard'
+import { DisclosureSection } from '@/components/DisclosureSection'
+import { FieldCard, FieldCardGroup, FieldCardList } from '@/components/FieldCard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -26,10 +27,7 @@ import { formatDateKeyNumeric, isDateKey } from '@/lib/phDate'
 import type { Member } from '@/core/types/member'
 import type { ServiceType, SuguanGroup } from '@/core/types/suguan'
 import { AssignmentWorkspace } from '@/features/suguan-builder/AssignmentWorkspace'
-import {
-  DisclosureButton,
-  DocumentSetupStep,
-} from '@/features/suguan-builder/DocumentSetupStep'
+import { DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import {
   applyServiceType,
   applyTime,
@@ -74,7 +72,8 @@ interface ExtraOccasionOccasionFormProps {
  *
  * Choir assignments are the shared `AssignmentWorkspace` in its `occasion`
  * layout: one sheet section, so no schedule picker, two panels, and Special
- * Duties folded underneath.
+ * Duties folded underneath. Every fold here is a `DisclosureSection`, which draws
+ * one border around the row and the body it reveals.
  */
 export function ExtraOccasionOccasionForm({
   state,
@@ -408,40 +407,32 @@ export function ExtraOccasionOccasionForm({
       */}
       <div>
         <div className="space-y-3 lg:hidden">
-          <div>
-            <DisclosureButton
-              open={detailsOpen}
-              onToggle={() => setDetailsOpen((open) => !open)}
-              icon={CalendarDays}
-              summary={detailsSummary}
-            >
-              Occasion details
-            </DisclosureButton>
-            {detailsOpen && (
-              <FieldCardGroup className="mt-3">
-                {occasionNameField}
-                {choirField}
-                {timeField}
-                {serviceTypeField}
-                {localeField}
-                {signatoriesField}
-              </FieldCardGroup>
-            )}
-          </div>
+          <DisclosureSection
+            open={detailsOpen}
+            onToggle={() => setDetailsOpen((open) => !open)}
+            icon={CalendarDays}
+            title="Occasion details"
+            summary={detailsSummary}
+          >
+            <FieldCardList>
+              {occasionNameField}
+              {choirField}
+              {timeField}
+              {serviceTypeField}
+              {localeField}
+              {signatoriesField}
+            </FieldCardList>
+          </DisclosureSection>
 
-          <div>
-            <DisclosureButton
-              open={columnsOpen}
-              onToggle={() => setColumnsOpen((open) => !open)}
-              icon={CalendarRange}
-              summary={columnsSummary}
-            >
-              Pagsasanay &amp; Pagtupad
-            </DisclosureButton>
-            {columnsOpen && (
-              <FieldCardGroup className="mt-3">{columnsField}</FieldCardGroup>
-            )}
-          </div>
+          <DisclosureSection
+            open={columnsOpen}
+            onToggle={() => setColumnsOpen((open) => !open)}
+            icon={CalendarRange}
+            title="Pagsasanay &amp; Pagtupad"
+            summary={columnsSummary}
+          >
+            <FieldCardList>{columnsField}</FieldCardList>
+          </DisclosureSection>
         </div>
 
         {/* The design lays both columns open from lg up. */}
@@ -461,28 +452,23 @@ export function ExtraOccasionOccasionForm({
         </div>
       </div>
 
-      <div>
-        <DisclosureButton
-          open={documentSetupOpen}
-          onToggle={() => setDocumentSetupOpen((open) => !open)}
-          icon={FileText}
-        >
-          Document setup
-        </DisclosureButton>
-
-        {documentSetupOpen && (
-          <div className="mt-4 space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Applies to the exported PDF, Excel, and Word files.
-            </p>
-            <DocumentSetupStep
-              value={draft.docFormat}
-              onChange={(docFormat) => patch({ docFormat })}
-              embedded
-            />
-          </div>
-        )}
-      </div>
+      <DisclosureSection
+        open={documentSetupOpen}
+        onToggle={() => setDocumentSetupOpen((open) => !open)}
+        icon={FileText}
+        title="Document setup"
+      >
+        <div className="space-y-4 p-4">
+          <p className="text-xs text-muted-foreground">
+            Applies to the exported PDF, Excel, and Word files.
+          </p>
+          <DocumentSetupStep
+            value={draft.docFormat}
+            onChange={(docFormat) => patch({ docFormat })}
+            embedded
+          />
+        </div>
+      </DisclosureSection>
 
       {/* The workspace brings its own header, panels, and folded Special
           Duties, so this is not wrapped in a second card. */}

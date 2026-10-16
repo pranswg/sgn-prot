@@ -137,10 +137,7 @@ export function ExtraOccasionSingleMaker() {
   return (
     <div className="flex flex-col gap-5 pb-10">
       {exportPreview}
-      <PageHeader
-        title="Extra Occasion Suguan"
-        description="Create a voice-sectioned choir sign-up sheet with its own dates, labels, and signatories."
-      />
+      <PageHeader title="Extra Occasion Suguan" />
 
       <section className="space-y-5">
         <ExtraOccasionOccasionForm

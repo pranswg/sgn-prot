@@ -77,9 +77,28 @@ export function FieldCard({
 }
 
 /**
- * The bordered card that holds one column of `FieldCard`s, separated by hairline
- * dividers. Standalone on the page: the host does not wrap the form in a second
- * card of its own.
+ * A column of `FieldCard`s separated by hairline dividers, with no card chrome
+ * of its own. Use it inside a container that already draws the border — a
+ * `DisclosureSection` body, for instance — so the fields do not sit in a second
+ * card.
+ */
+export function FieldCardList({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div className={cn('flex flex-col divide-y divide-border/70', className)}>
+      {children}
+    </div>
+  )
+}
+
+/**
+ * The bordered card that holds one column of `FieldCard`s. Standalone on the
+ * page: the host does not wrap the form in a second card of its own.
  */
 export function FieldCardGroup({
   className,
@@ -95,7 +114,7 @@ export function FieldCardGroup({
         className,
       )}
     >
-      <div className="flex flex-col divide-y divide-border/70">{children}</div>
+      <FieldCardList>{children}</FieldCardList>
     </div>
   )
 }

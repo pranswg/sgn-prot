@@ -380,17 +380,31 @@ panel already counts every voice group, and on a phone the chip row was the same
 numbers twice. The builder's mobile step keeps them.
 
 **The Extra Occasion form folds on phones.** `ExtraOccasionOccasionForm` renders
-two `DisclosureButton`s under `lg` — "Occasion details" (name, choir, time,
+two `DisclosureSection`s under `lg` — "Occasion details" (name, choir, time,
 service type, locale, signatories) and "Pagsasanay & Pagtupad" — each closed by
 default, and the same fields as two open columns from `lg` up. One definition per
 field (`occasionNameField`, `choirField`, …) is composed into both arrangements,
 so a new field lands in both. Each folded row carries a `summary`: what the group
 holds, or, in amber, the one thing still blocking a save ("Service type
-required", "Pagsasanay date and Pagtupad date required"). `DisclosureButton`
-grew that optional `summary` for this; a caller that passes nothing keeps the
-one-line row it had. The point is that a phone opens on the roster instead of six
-cards of setup, and never has to scroll past the fields to reach the members or
-the export buttons.
+required", "Pagsasanay date and Pagtupad date required"). The point is that a
+phone opens on the roster instead of six cards of setup, and never has to scroll
+past the fields to reach the members or the export buttons.
+
+**A fold is one card, not a row plus a box.** `DisclosureSection`
+(`src/components/DisclosureSection.tsx`) draws the border around the trigger row
+*and* the body it reveals, so opening a row reads as the row unfolding rather
+than a second container appearing underneath. Its chevron always sits at the
+row's right edge (a `Button` wraps its children, so `justify-between` on it never
+put it there), and the body brings its own padding. Every disclosure on the Extra
+Occasion screens is one: the two folds, the Document setup row, and the
+workspace's Special Duties row, whose `DutyRolesPanel` drops its own chrome with
+`flat` so the panel does not sit in a card inside a card. A body of `FieldCard`s
+uses `FieldCardList` — the divided column without the card — for the same reason.
+
+`DisclosureButton` is the older, looser variant: a bare trigger whose body the
+caller lays out below it. It still dresses the Choir builder's Document setup and
+Margins & scaling rows and the Organist maker's Coverage and Document setup rows,
+which keep their `mt-4` body. Do not reach for it on the occasion screens.
 
 The two makers' export rows are a three-column grid of short buttons (`PDF`,
 `Excel`, `Word`) below `sm`/`lg`, with the `Export ` prefix in a

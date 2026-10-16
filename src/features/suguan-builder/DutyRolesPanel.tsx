@@ -45,6 +45,11 @@ interface DutyRolesPanelProps {
    */
   wide?: boolean
   /**
+   * Drop the panel's own card chrome, for a host that already draws the border
+   * around it (the Extra Occasion Special Duties disclosure section).
+   */
+  flat?: boolean
+  /**
    * When present, the schedule-based Organista picker renders inside this panel.
    * Only the Extra Occasion makers pass it: their sheet prints organista rows,
    * while the standard Choir Suguan sheet has no organista slot.
@@ -71,6 +76,7 @@ export function DutyRolesPanel({
   scrollClassName = 'h-[460px]',
   hideHeader = false,
   wide = false,
+  flat = false,
   organista,
 }: DutyRolesPanelProps) {
   const allDutyRoles = useSettingsStore((s) => s.allDutyRoles)
@@ -144,7 +150,12 @@ export function DutyRolesPanel({
   }
 
   return (
-    <section className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
+    <section
+      className={cn(
+        'flex h-full min-w-0 flex-col overflow-hidden',
+        !flat && 'rounded-2xl border border-border/70 bg-card xl:rounded-lg',
+      )}
+    >
       {!hideHeader && (
         <header className="flex items-start gap-2.5 border-b border-border/70 px-4 py-3">
           <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand-navy/70" />

@@ -63,6 +63,7 @@ import type { Member } from '@/core/types/member'
 import type { SuguanAssignment, SuguanScheduleSection } from '@/core/types/suguan'
 import { MemberSelector } from './MemberSelector'
 import { DutyRolesPanel } from './DutyRolesPanel'
+import type { OrganistaAssignmentsConfig } from './OrganistaAssignments'
 import { groupGendersFor, type SuguanDraft } from './builderState'
 import { usePermissions } from '@/hooks/usePermissions'
 
@@ -79,6 +80,12 @@ interface AssignmentWorkspaceProps {
   conflictIds?: Set<string>
   /** Called with the ids newly added to the roster, in one assignment edit. */
   onMembersAdded?: (memberIds: string[]) => void
+  /**
+   * When present, the Organista picker renders inside the Special Duties panel.
+   * Only the Extra Occasion makers pass it, since only their sheet carries
+   * organista rows.
+   */
+  organista?: OrganistaAssignmentsConfig
 }
 
 type DragPayload =
@@ -178,6 +185,7 @@ export function AssignmentWorkspace({
   editingId,
   conflictIds,
   onMembersAdded,
+  organista,
 }: AssignmentWorkspaceProps) {
   const { can } = usePermissions()
   const canAssignMembers = can('assign-members')
@@ -207,6 +215,17 @@ export function AssignmentWorkspace({
   const [orderMode, setOrderMode] = useState<'alpha' | 'manual'>('alpha')
   /** Mobile only: the special duties panel starts collapsed under its dropdown. */
   const [dutiesOpen, setDutiesOpen] = useState(false)
+
+  // The collapsed toggle's badge: selected duty roles plus any Organista
+  // assignments, so the Extra Occasion makers show the picker's content too.
+  const specialDutiesCount =
+    draft.dutyRoles.length +
+    (organista
+      ? Object.values(organista.assignments).reduce(
+          (total, rows) => total + rows.length,
+          0,
+        )
+      : 0)
 
   const setAssignments = (next: SuguanAssignment[]) => {
     if (onMembersAdded) {
@@ -924,9 +943,9 @@ export function AssignmentWorkspace({
                 Officers and special roles
               </span>
             </span>
-            {draft.dutyRoles.length > 0 && (
+            {specialDutiesCount > 0 && (
               <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
-                {draft.dutyRoles.length}
+                {specialDutiesCount}
               </span>
             )}
             <ChevronDown
@@ -946,6 +965,7 @@ export function AssignmentWorkspace({
               destinadoName={draft.destinadoName}
               onDestinadoChange={(destinadoName) => patch({ destinadoName })}
               members={members}
+              organista={organista}
             />
           )}
         </div>
@@ -1179,6 +1199,7 @@ export function AssignmentWorkspace({
         onDestinadoChange={(destinadoName) => patch({ destinadoName })}
         members={members}
         scrollClassName="h-full flex-1 min-h-0"
+        organista={organista}
       />
       </div>
       </div>

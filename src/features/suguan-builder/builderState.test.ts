@@ -10,7 +10,7 @@ import {
   DEFAULT_SCHEDULE_CATEGORIES,
   type WorshipScheduleCategories,
 } from '@/core/constants/worshipSchedules'
-import { createCopyDraft, createDraftFromSuguan, weekScheduleSections } from './builderState.ts'
+import { createCopyDraft, createDraftFromSuguan, saveBlockers, weekScheduleSections } from './builderState.ts'
 
 const customCategories: WorshipScheduleCategories = {
   midweek: [
@@ -181,6 +181,16 @@ test('organist duty roles are stripped from loaded and copied drafts', () => {
   )
   // Only the draft is cleaned; the saved record keeps what it stored.
   assert.equal(stored.dutyRoles.length, 3)
+})
+
+test('saveBlockers requires a Destinado name', () => {
+  const complete = createDraftFromSuguan(source, voices)
+  assert.deepEqual(saveBlockers(complete), [])
+
+  complete.destinadoName = '   '
+  assert.deepEqual(saveBlockers(complete), [
+    'Enter the Destinado name in Special Duties.',
+  ])
 })
 
 test('weekScheduleSections builds the whole detected week and keeps assignments by key', () => {

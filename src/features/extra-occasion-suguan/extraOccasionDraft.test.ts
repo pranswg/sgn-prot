@@ -74,5 +74,8 @@ test('validateOccasion requires a service type and valid enabled dates', () => {
 
   state.pagsasanay = { enabled: true, label: 'Pagsasanay', date: '2026-01-04' }
   state.pagtupad = { enabled: false, label: 'Pagtupad', date: '' }
+  assert.match(validateOccasion(state) ?? '', /Destinado/i)
+
+  state.draft.destinadoName = 'Juan Dela Cruz'
   assert.equal(validateOccasion(state), null)
 })

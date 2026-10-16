@@ -352,5 +352,7 @@ export function saveBlockers(draft: SuguanDraft): string[] {
   if (!draft.serviceTypeId) blockers.push('Choose a service type.')
   if (draft.schedules.length === 0) blockers.push('Add at least one worship schedule.')
   if (totalAssigned(draft) === 0) blockers.push('Assign at least one member.')
+  if (!draft.destinadoName.trim())
+    blockers.push('Enter the Destinado name in Special Duties.')
   return blockers
 }

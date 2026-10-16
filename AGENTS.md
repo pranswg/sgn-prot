@@ -327,17 +327,30 @@ status for exactly this reason: the deactivate toggle flips the flag without
 appending an event, so a stale `joined`/`returned` event must not read as
 active. Do not re-derive lifecycle status from events alone.
 
+The Special Duties panel (`DutyRolesPanel`) is a **fixed set of fields**, not one
+picker per configured ranking: **Destinado** (a required plain-text field, with
+no suggestions), the **Organista** picker when the caller passes an `organista`
+config, and **OIC**. Pangulong Mang-aawit and Kalihim are read from the Master
+List, and Mang-aawit is the plain-singer default, so none of them gets a picker.
+The **OIC** field offers only active members the Master List marks with the OIC
+ranking (`assignedDutyRoleIds` includes `oic`, or a legacy stored `oic`
+position — the same rule the Master List PDF's OIC section uses). **Destinado is
+required**: both `saveBlockers` (Choir builder) and `validateOccasion` (Extra
+Occasion) block save and export until it is filled.
+
 The Choir Suguan builder **never assigns the `organista` or
 `organista-reserve` duty roles** — those duties belong to the Organist Suguan
-feature, and the standard Choir Suguan sheet has no organista slot. Extra
-Occasion Suguan is separate: it offers an optional per-schedule Organista
-section without changing the standard builder or its saved records.
-`CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in `src/core/constants/dutyRoles.ts` is
-the single source: `DutyRolesPanel` hides those selectors and
-`createDraftFromSuguan` strips stored entries on load/edit, so already-saved
-records keep their data until re-saved. The roles themselves stay in Settings
-and `DEFAULT_DUTY_ROLES` for the Master List PDF's Organists section, which
-resolves through `memberIsOrganist`, not the duty-role assignments.
+feature, and the standard Choir Suguan sheet has no organista slot, so the
+builder never passes the `organista` config. The Extra Occasion Suguan makers
+do: the per-schedule Organista picker renders **inside** the Special Duties
+panel (`OrganistaAssignments.tsx`, reached through `AssignmentWorkspace`'s
+optional `organista` prop) instead of a separate box, so organists are assigned
+in one place. `CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in
+`src/core/constants/dutyRoles.ts` still makes `createDraftFromSuguan` strip
+stored organist duty roles on load/edit, so already-saved records keep their
+data until re-saved. The roles themselves stay in Settings for the Master List
+PDF's Organists section, which resolves through `memberIsOrganist`, not the
+duty-role assignments.
 
 ## Sidebar
 

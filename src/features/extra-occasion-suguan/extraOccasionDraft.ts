@@ -306,6 +306,9 @@ export function validateOccasion(state: ExtraOccasionOccasionState): string | nu
   ) {
     return 'Enter a valid date and label for the Pagtupad column.'
   }
+  if (!state.draft.destinadoName.trim()) {
+    return 'Enter the Destinado name in Special Duties.'
+  }
   return null
 }
 

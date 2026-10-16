@@ -1,6 +1,4 @@
-import { useMemo, useState } from 'react'
-import { CalendarDays, Plus, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { CalendarDays } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,11 +15,6 @@ import type { ServiceType, SuguanGroup } from '@/core/types/suguan'
 import { AssignmentWorkspace } from '@/features/suguan-builder/AssignmentWorkspace'
 import { DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import {
-  memberIsEligibleExtraOrganista,
-  type ExtraOrganistaAssignment,
-  type ExtraOrganistaRole,
-} from './extraOccasionData'
-import {
   applyServiceType,
   applyTime,
   type ExtraOccasionOccasionState,
@@ -33,17 +26,8 @@ const GROUP_OPTIONS: { id: SuguanGroup; label: string }[] = [
   { id: 'mixed', label: 'Mixed Choir' },
 ]
 
-const ORGANISTA_ROLES: { id: ExtraOrganistaRole; label: string }[] = [
-  { id: 'organista', label: 'Organista' },
-  { id: 'reserve', label: 'Reserbang Organista' },
-]
-
 function isSuguanGroup(value: string): value is SuguanGroup {
   return GROUP_OPTIONS.some((group) => group.id === value)
-}
-
-function isOrganistaRole(value: string): value is ExtraOrganistaRole {
-  return ORGANISTA_ROLES.some((role) => role.id === value)
 }
 
 interface ExtraOccasionOccasionFormProps {
@@ -62,9 +46,9 @@ interface ExtraOccasionOccasionFormProps {
 
 /**
  * The configuration half of an Extra Occasion: locale, choir, service, custom
- * time, the Pagsasanay/Pagtupad columns, signatories, document setup, choir
- * assignments, and the Organista section. Shared by the single maker and the
- * Multiple planner so both stay identical.
+ * time, the Pagsasanay/Pagtupad columns, signatories, document setup, and choir
+ * assignments (whose Special Duties panel carries the Organista picker). Shared
+ * by the single maker and the Multiple planner so both stay identical.
  */
 export function ExtraOccasionOccasionForm({
   state,
@@ -77,48 +61,9 @@ export function ExtraOccasionOccasionForm({
   onMembersAdded,
 }: ExtraOccasionOccasionFormProps) {
   const { draft, churchName, pagsasanay, pagtupad, showFooterSignatories } = state
-  const [organistaScheduleId, setOrganistaScheduleId] = useState('')
-  const [organistaMemberId, setOrganistaMemberId] = useState('')
-  const [organistaRole, setOrganistaRole] =
-    useState<ExtraOrganistaRole>('organista')
 
   const patch = (value: Partial<typeof draft>) =>
     onChange({ ...state, draft: { ...draft, ...value } })
-
-  const eligibleOrganistas = useMemo(
-    () => members.filter(memberIsEligibleExtraOrganista),
-    [members],
-  )
-  const assignedOrganistaIds = new Set(
-    (state.organistaAssignments[organistaScheduleId] ?? []).map(
-      (assignment) => assignment.memberId,
-    ),
-  )
-
-  const setOrganistaAssignments = (
-    next: Record<string, ExtraOrganistaAssignment[]>,
-  ) => onChange({ ...state, organistaAssignments: next })
-
-  const addOrganista = () => {
-    if (!organistaScheduleId || !organistaMemberId) return
-    setOrganistaAssignments({
-      ...state.organistaAssignments,
-      [organistaScheduleId]: [
-        ...(state.organistaAssignments[organistaScheduleId] ?? []),
-        { memberId: organistaMemberId, role: organistaRole },
-      ],
-    })
-    setOrganistaMemberId('')
-  }
-
-  const removeOrganista = (scheduleId: string, memberId: string) => {
-    setOrganistaAssignments({
-      ...state.organistaAssignments,
-      [scheduleId]: (state.organistaAssignments[scheduleId] ?? []).filter(
-        (assignment) => assignment.memberId !== memberId,
-      ),
-    })
-  }
 
   return (
     <>
@@ -312,7 +257,8 @@ export function ExtraOccasionOccasionForm({
         <h3 className="mb-2 text-sm font-semibold">Choir assignments</h3>
         <p className="mb-3 text-xs text-muted-foreground">
           Assign members to this Extra Occasion. All assignments appear in one
-          voice-sectioned list.
+          voice-sectioned list, and the Organista picker lives in Special
+          Duties.
         </p>
         <AssignmentWorkspace
           draft={draft}
@@ -320,132 +266,15 @@ export function ExtraOccasionOccasionForm({
           members={members}
           conflictIds={conflictIds}
           onMembersAdded={onMembersAdded}
+          organista={{
+            schedules: draft.schedules,
+            assignments: state.organistaAssignments,
+            members,
+            canAssign: canAssignMembers,
+            onChange: (organistaAssignments) =>
+              onChange({ ...state, organistaAssignments }),
+          }}
         />
-      </div>
-
-      <div className="space-y-3 rounded-lg border p-3">
-        <div>
-          <h3 className="text-sm font-semibold">Organista section</h3>
-          <p className="text-xs text-muted-foreground">
-            Add active Organista members to each schedule and choose their role.
-          </p>
-        </div>
-        {draft.schedules.length > 0 ? (
-          <>
-            {canAssignMembers ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Select
-                  value={organistaScheduleId}
-                  onValueChange={setOrganistaScheduleId}
-                >
-                  <SelectTrigger aria-label="Organista schedule">
-                    <SelectValue placeholder="Choose schedule" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {draft.schedules.map((schedule) => (
-                      <SelectItem key={schedule.id} value={schedule.id}>
-                        {schedule.scheduleLabel}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={organistaMemberId}
-                  onValueChange={setOrganistaMemberId}
-                >
-                  <SelectTrigger aria-label="Organista member">
-                    <SelectValue placeholder="Choose active Organista" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eligibleOrganistas
-                      .filter((member) => !assignedOrganistaIds.has(member.id))
-                      .map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.lastName}, {member.firstName}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-2">
-                  <Select
-                    value={organistaRole}
-                    onValueChange={(value) => {
-                      if (isOrganistaRole(value)) setOrganistaRole(value)
-                    }}
-                  >
-                    <SelectTrigger aria-label="Organista role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ORGANISTA_ROLES.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
-                          {role.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={addOrganista}
-                    disabled={!organistaScheduleId || !organistaMemberId}
-                    aria-label="Add Organista assignment"
-                  >
-                    <Plus className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Your role does not have permission to assign Organista members.
-              </p>
-            )}
-            {draft.schedules.map((schedule) => {
-              const rows = state.organistaAssignments[schedule.id] ?? []
-              if (rows.length === 0) return null
-              return (
-                <div key={schedule.id} className="space-y-2">
-                  <h4 className="text-xs font-semibold">
-                    {schedule.scheduleLabel}
-                  </h4>
-                  {rows.map((assignment) => {
-                    const member = members.find(
-                      (candidate) => candidate.id === assignment.memberId,
-                    )
-                    if (!member) return null
-                    return (
-                      <div
-                        key={assignment.memberId}
-                        className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                      >
-                        <span>
-                          {member.lastName}, {member.firstName} —{' '}
-                          {ORGANISTA_ROLES.find(
-                            (role) => role.id === assignment.role,
-                          )?.label}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remove ${member.firstName} from ${schedule.scheduleLabel}`}
-                          onClick={() => removeOrganista(schedule.id, member.id)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Add a service type and at least one Pagsasanay or Pagtupad date with
-            assignments to assign Organista members.
-          </p>
-        )}
       </div>
     </>
   )

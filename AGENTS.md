@@ -387,6 +387,13 @@ centred window is always fully visible. It stays open as members are added, and
 the builder's desktop step does not use it — there the Available Members panel
 adds on its own `+`.
 
+**"How do you want to start?" is the same floating window on phones.**
+`StartModeDialog` renders one `Dialog` at every width rather than a `Sheet` under
+a breakpoint: its option cards and scrollable copy list read better centred and
+fully visible than pinned to the bottom edge under the mobile nav bar. Keep the
+mobile branch's padding (the drag handle is gone; the header carries its own close
+button) in step with the desktop one.
+
 **The Extra Occasion form folds on phones.** `ExtraOccasionOccasionForm` renders
 two `DisclosureSection`s under `lg` — "Occasion details" (name, choir, time,
 service type, locale, signatories) and "Pagsasanay & Pagtupad" — each closed by
@@ -612,6 +619,26 @@ boundaries, so a change in one feature rarely reaches another.
 `src/features/suguan-builder/builderState.ts` is the pattern to copy: draft
 state, pure transforms, and step metadata with no React inside. Prefer adding
 pure functions there over growing a step component.
+
+### Choir Suguan step 1 is one card of fields
+
+`CoverageStep` owns the whole of step 1 — service type, coverage,
+Pagsasanay/Pagtupad, choir, and the folded `DocumentSetupStep` — and brings its
+own card chrome: one `FieldCardGroup` plus one `DisclosureSection`, so
+`SuguanBuilderPage` must not wrap it in a second card. The page header is only
+the title, `{title} · {subtitle}` (a new Suguan, or the date being edited), and
+the actions: the step count is already in the stepper and the choir in its own
+field, so repeating them there was the clutter that got removed. The schedule
+badge is hidden on step 1, where it could only read "No schedule", and the
+disabled Next carries a `title` instead of a visible sentence.
+
+The coverage choices are named ("Midweek", "Weekend", "One week") and nothing
+explains them: the line under the row reads back the schedules that coverage
+covers, from `worshipDayName` and `schedulesForTemplate` (or every worship day
+for One Week), so a time the admin edited in Settings shows as it is. Do not
+hardcode a schedule string here — that is what the read-back is for. The
+Pagsasanay/Pagtupad columns the sheet will print are chips under the dates they
+come from, not a section of their own.
 
 ## Roster import and export
 

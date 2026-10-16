@@ -25,9 +25,7 @@ import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import type { Suguan } from '@/core/types/suguan'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/format'
-import { groupLabel } from '@/lib/suguanUtils'
 import { CoverageStep } from './CoverageStep'
-import { DocumentSetupStep } from './DocumentSetupStep'
 import { SchedulesStep } from './SchedulesStep'
 import { AssignmentWorkspace } from './AssignmentWorkspace'
 import { PreviewStep } from './PreviewStep'
@@ -230,19 +228,12 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
 <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
                 Choir Suguan
               </h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Create and manage your choir service schedules and assignments.
-              </p>
-              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <span className="truncate font-medium text-foreground">
-                  {title} · {subtitle}
-                </span>
-                <span>·</span>
-                <span>{groupLabel(draft.group)}</span>
-                <span>·</span>
-                <span>
-                  Step {step + 1} of {BUILDER_STEPS.length}
-                </span>
+              {/* The step count and the group are both on screen already — in
+                  the stepper and in step 1's own fields — so this line only
+                  says whether this is a new Suguan or which date is being
+                  edited. */}
+              <p className="mt-0.5 truncate text-xs font-medium text-muted-foreground">
+                {title} · {subtitle}
               </p>
             </div>
           </div>
@@ -257,11 +248,15 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
               <ArrowLeft className="size-4" />
               Back
             </Button>
-            <Badge variant="outline" className="tabular-nums">
-              {draft.schedules.length > 0
-                ? `${draft.schedules.length} schedule${draft.schedules.length !== 1 ? 's' : ''}`
-                : 'No schedule'}
-            </Badge>
+            {/* Not on step 1: there the count is always "No schedule" until the
+                user has been offered a schedule to choose. */}
+            {step > 0 && (
+              <Badge variant="outline" className="tabular-nums">
+                {draft.schedules.length > 0
+                  ? `${draft.schedules.length} schedule${draft.schedules.length !== 1 ? 's' : ''}`
+                  : 'No schedule'}
+              </Badge>
+            )}
             {can('create-suguan') && !existing && !startOpen && (
               <Button
                 variant="ghost"
@@ -272,11 +267,6 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
                 <RotateCcw className="size-4" />
                 Start over
               </Button>
-            )}
-{!isLast && !stepComplete && (
-              <p className="hidden text-xs text-muted-foreground xl:block">
-                Complete the required fields for this step to continue.
-              </p>
             )}
             {can('create-suguan') && (
               <Button variant="outline" size="sm" onClick={() => setStartOpen(true)}>
@@ -340,7 +330,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
                   </button>
                   <span
                     className={cn(
-                      'w-full truncate text-center text-xs font-medium leading-tight',
+                      'w-full text-center text-xs font-medium leading-tight',
                       passed || isCurrent
                         ? 'text-brand-navy-deep dark:text-blue-300'
                         : 'text-muted-foreground',
@@ -369,24 +359,18 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
             editingId={editingId}
           />
         </div>
+      ) : step === 0 ? (
+        // Step 1 comes as its own cards, so it is not wrapped in a second one.
+        <div className="min-w-0">
+          <CoverageStep draft={draft} patch={patch} />
+        </div>
       ) : (
         <div className="min-w-0 rounded-xl border border-border/70 bg-card p-4">
-          {step === 0 && (
-            <div className="flex flex-col gap-6">
-              <CoverageStep draft={draft} patch={patch} />
-              <DocumentSetupStep
-                value={draft.docFormat}
-                onChange={(docFormat) => patch({ docFormat })}
-              />
-            </div>
-          )}
-          {step === 3 && (
-            <PreviewStep
-              draft={draft}
-              onSave={handleSave}
-              isExisting={Boolean(existing)}
-            />
-          )}
+          <PreviewStep
+            draft={draft}
+            onSave={handleSave}
+            isExisting={Boolean(existing)}
+          />
         </div>
       )}
 
@@ -405,7 +389,16 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
           </Button>
           ) : null
         ) : (
-          <Button size="sm" onClick={goNext} disabled={!stepComplete}>
+          <Button
+            size="sm"
+            onClick={goNext}
+            disabled={!stepComplete}
+            title={
+              stepComplete
+                ? undefined
+                : 'Finish the required fields in this step first.'
+            }
+          >
             Next
             <ArrowRight className="size-4" />
           </Button>
@@ -442,7 +435,16 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
           </Button>
           ) : null
         ) : (
-          <Button className="flex-1" onClick={goNext} disabled={!stepComplete}>
+          <Button
+            className="flex-1"
+            onClick={goNext}
+            disabled={!stepComplete}
+            title={
+              stepComplete
+                ? undefined
+                : 'Finish the required fields in this step first.'
+            }
+          >
             Next
             <ArrowRight className="size-4" />
           </Button>

@@ -4,6 +4,7 @@ import {
   emailToUsername,
   nameParts,
   profileToAccount,
+  resolveSignInAddress,
   toAccountStatus,
   usernameToEmail,
 } from './authIdentity.ts'
@@ -18,6 +19,36 @@ test('emailToUsername is the inverse for synthetic addresses', () => {
   assert.equal(emailToUsername('maria.santos@choir.local'), 'maria.santos')
   assert.equal(emailToUsername(null), '')
   assert.equal(emailToUsername(undefined), '')
+})
+
+test('resolveSignInAddress uses an email as typed', async () => {
+  let asked = false
+  const email = await resolveSignInAddress('  Juan@Example.com ', async () => {
+    asked = true
+    return 'nope@choir.local'
+  })
+  assert.equal(email, 'juan@example.com')
+  assert.equal(asked, false)
+})
+
+test('resolveSignInAddress resolves a username through its stored address', async () => {
+  const email = await resolveSignInAddress('juan', async (username) => {
+    assert.equal(username, 'juan')
+    return 'juan@example.com'
+  })
+  assert.equal(email, 'juan@example.com')
+})
+
+test('resolveSignInAddress falls back to the synthetic address', async () => {
+  // No account, or an account that was created without an email.
+  assert.equal(
+    await resolveSignInAddress('juan', async () => null),
+    'juan@choir.local',
+  )
+  assert.equal(
+    await resolveSignInAddress('  Juan ', async () => '   '),
+    'juan@choir.local',
+  )
 })
 
 test('toAccountStatus falls back to active on unknown values', () => {

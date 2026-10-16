@@ -7,7 +7,7 @@ import {
   validateUsername,
   type FieldProblem,
 } from '@/lib/credentials'
-import { profileToAccount, resolveSignInEmail, type ProfileRow } from '@/lib/authIdentity'
+import { profileToAccount, resolveSignInAddress, type ProfileRow } from '@/lib/authIdentity'
 import { getSupabase } from '@/lib/supabase'
 import {
   createRole,
@@ -262,9 +262,18 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signIn: async (identifier, password) => {
     const browser = browserContext()
     const normalized = normalizeUsername(identifier)
-    const email = resolveSignInEmail(identifier)
     try {
       const client = getSupabase()
+      const email = await resolveSignInAddress(identifier, async (username) => {
+        const { data, error } = await client.rpc('resolve_login_email', {
+          p_username: username,
+        })
+        if (error) {
+          console.error('resolve_login_email failed:', error)
+          return null
+        }
+        return typeof data === 'string' ? data : null
+      })
       const { data, error } = await client.auth.signInWithPassword({
         email,
         password,

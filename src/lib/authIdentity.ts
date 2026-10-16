@@ -5,9 +5,12 @@ import type { Account, AccountStatus, Permission } from '@/core/types/auth'
  * Kept free of React and of the Supabase client so it can be tested under
  * `node:test`, exactly like `credentials.ts` was before the auth swap.
  *
- * Login is by username, but Supabase Auth keys on email, so every system
- * account carries a synthetic `<username>@choir.local` address. The seeded
- * backstop Admin is `admin@choir.local` for the same reason.
+ * Login accepts a username or an email, but Supabase Auth keys on an email. A
+ * username resolves through `resolveSignInAddress`, because an account an admin
+ * created with the Create User form's Email field carries that real address as
+ * its Auth identity rather than a synthetic `<username>@choir.local` one; that
+ * synthetic form is still the fallback, and the seeded backstop Admin uses it
+ * (`admin@choir.local`).
  */
 export const AUTH_EMAIL_DOMAIN = 'choir.local'
 
@@ -27,6 +30,24 @@ export function isEmail(input: string): boolean {
 export function resolveSignInEmail(input: string): string {
   const trimmed = input.trim().toLowerCase()
   return isEmail(trimmed) ? trimmed : usernameToEmail(trimmed)
+}
+
+/**
+ * Resolves a sign-in identifier to the address Supabase Auth should check.
+ * An email is used as typed. A username asks `lookup` for the account's Auth
+ * address (the Create User form's Email field becomes the GoTrue identity, so it
+ * need not be the synthetic address) and falls back to the synthetic
+ * `<username>@choir.local` when the lookup finds nothing — no such account, or
+ * the lookup itself failed.
+ */
+export async function resolveSignInAddress(
+  input: string,
+  lookup: (username: string) => Promise<string | null>,
+): Promise<string> {
+  const trimmed = input.trim()
+  if (isEmail(trimmed)) return resolveSignInEmail(trimmed)
+  const stored = await lookup(trimmed)
+  return stored?.trim() ? stored.trim().toLowerCase() : resolveSignInEmail(trimmed)
 }
 
 /** The columns the client reads from `public.profiles`. */

@@ -565,10 +565,18 @@ It must never colour a nav row, a button, or a state.
 the sign-in form. There is no router, so the sign-in screen is the whole
 pre-shell UI; it is sign-in only (public registration was removed with the swap).
 
-**Login is by username, but Supabase Auth keys on email**, so every account
-carries a synthetic `<username>@choir.local` address (`src/lib/authIdentity.ts`).
-The seeded backstop Admin is `admin` / `admin1234` → `admin@choir.local`.
-`supabase-js` persists the session itself; the app stores no password material.
+**Login accepts a username or an email, but Supabase Auth keys on email.** An
+admin-created account carries the Create User form's Email field as its GoTrue
+identity — a real address like `juan@example.com`, not necessarily a synthetic
+one — so a username is resolved through `resolve_login_email(p_username)`
+(migration `0015`) before sign-in, falling back to the synthetic
+`<username>@choir.local` when it finds no account (`resolveSignInAddress` in
+`src/lib/authIdentity.ts`). That function reads `auth.users.email` rather than
+`profiles.email`, because the Administration screen edits the profile's display
+email without touching the GoTrue identity; only `auth.users` is what
+`signInWithPassword` checks. The seeded backstop Admin is `admin` / `admin1234`
+→ `admin@choir.local`. `supabase-js` persists the session itself; the app stores
+no password material.
 
 Rules if you touch it:
 
@@ -578,10 +586,16 @@ Rules if you touch it:
   (`hashPassword`/`verifyPassword`/`sha256Hex`) are now **unused by the app** but
   still pinned by `credentials.test.ts`; do not reintroduce client-side hashing.
 - Never log, toast, or render a password.
-- `signIn` calls `supabase.auth.signInWithPassword` (username → email), refuses a
+- `signIn` resolves the identifier with `resolveSignInAddress`, then calls
+  `supabase.auth.signInWithPassword`, refuses a
   profile whose `status` is not `active` (and signs straight back out), and
   returns the same message for an unknown username and a wrong password. Do not
   "helpfully" split those cases.
+- `resolve_login_email` is the one `anon`-executable surface over `profiles`
+  (it runs before a session exists). It returns a single address for an exact
+  username, and NULL both for an unknown username and for an account without an
+  email, so it is not a list endpoint. If that exposure is ever unacceptable,
+  move every account's Auth identity onto the synthetic address and drop it.
 - `authStore.initialize()` restores the Supabase session once on load (memoised
   so StrictMode's double mount is harmless), refetches `public.profiles` into
   `accounts`, and subscribes to `onAuthStateChange` to clear the current account

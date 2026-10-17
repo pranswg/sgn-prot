@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/store/settingsStore'
-import { memberEffectivePositions } from '@/core/constants/memberMembership'
+import { memberRankIds } from '@/lib/memberRanks'
 import {
   OIC_DUTY_ROLE_ID,
   resolveOicDutyRole,
@@ -84,7 +84,8 @@ export function DutyRolesPanel({
   const voices = allVoices()
   const destinadoId = 'suguan-destinado-name'
 
-  const oicRole = resolveOicDutyRole(allDutyRoles())
+  const allRoles = allDutyRoles()
+  const oicRole = resolveOicDutyRole(allRoles)
 
   const activeMembers = useMemo(
     () =>
@@ -100,20 +101,18 @@ export function DutyRolesPanel({
     [members],
   )
 
-  // Only members the Master List marks with the OIC ranking can be picked,
-  // mirroring how the Master List PDF groups its OIC section. The ranking is
-  // whichever duty role `resolveOicDutyRole` found, whose id is usually
-  // generated rather than the canonical `'oic'`; a legacy stored `oic` position
-  // still counts.
+  // Only members the Master List marks with the OIC rank can be picked,
+  // mirroring how the Master List PDF groups its OIC section. The rank is
+  // whichever configured duty role is named "OIC"; a legacy stored `oic`
+  // position still counts when no such role is configured.
   const oicCandidates = useMemo(
     () =>
-      activeMembers.filter(
-        (m) =>
-          (oicRole
-            ? m.assignedDutyRoleIds?.includes(oicRole.id) === true
-            : false) || memberEffectivePositions(m).includes('oic'),
+      activeMembers.filter((m) =>
+        oicRole
+          ? memberRankIds(m, allRoles).includes(oicRole.id)
+          : (m.positions ?? []).includes('oic'),
       ),
-    [activeMembers, oicRole],
+    [activeMembers, oicRole, allRoles],
   )
 
   // A member can hold the legacy `oic` position without any OIC duty role being

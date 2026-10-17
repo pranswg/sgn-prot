@@ -112,7 +112,17 @@ test('master list PDF groups regular singers, special positions, and current tra
       'Men singer',
     ])
   }
-  assert.equal(sectionByTitle.has('SAN JOSE CHOIR - Organists'), true)
+  // The organist-family memberships count as the configured Organista rank, so
+  // the section is titled after the role the administrator named.
+  const organistaSection = sectionByTitle.get('SAN JOSE CHOIR - Organista')
+  assert.equal(organistaSection?.kind, 'members')
+  if (organistaSection?.kind === 'members') {
+    assert.deepEqual(organistaSection.members.map((member) => member.id), [
+      'Organist',
+      'Assistant',
+      'Officer',
+    ])
+  }
   assert.equal(sectionByTitle.has('SAN JOSE CHOIR - OIC'), true)
   const traineeSection = sectionByTitle.get(
     'SAN JOSE CHOIR - Nagsasanay Women',
@@ -126,7 +136,7 @@ test('master list PDF groups regular singers, special positions, and current tra
   }
 })
 
-test('ranking tables follow the requested hierarchy and include future configured roles', () => {
+test('ranking tables follow the configured duty-role order and include future configured roles', () => {
   const members = [
     makeMember('President', {
       positions: ['pangulong-mang-aawit'],
@@ -159,11 +169,14 @@ test('ranking tables follow the requested hierarchy and include future configure
       'STA. MONICA CHOIR - Men',
     ],
   )
+  // One section per configured role, in the order Settings holds them, and a
+  // role nobody holds is skipped. The ids are not the old fixed ones, so the
+  // legacy stored positions only match their role by name.
   assert.deepEqual(rankingTitles, [
+    'STA. MONICA CHOIR - OIC',
     'STA. MONICA CHOIR - Pangulong Mang-aawit',
     'STA. MONICA CHOIR - Kalihim ng Mang-aawit',
-    'STA. MONICA CHOIR - Organists',
-    'STA. MONICA CHOIR - OIC',
+    'STA. MONICA CHOIR - Organista',
     'STA. MONICA CHOIR - Choir Coordinator',
   ])
 })
@@ -191,7 +204,7 @@ test('singer tables are ordered by voice section and then by surname', () => {
   )
 })
 
-test('PDF summary uses stored gender, voice family, positions, and active status', () => {
+test('PDF summary uses stored gender, voice family, ranks, and active status', () => {
   const members = [
     makeMember('Soprano', { voicePosition: 'soprano-2' }),
     makeMember('Alto', { voicePosition: 'alto', isActive: false }),
@@ -218,6 +231,7 @@ test('PDF summary uses stored gender, voice family, positions, and active status
         makeTrainee('Promoted trainee', { status: 'promoted' }),
       ],
       TEST_VOICES,
+      DUTY_ROLES,
     )
       .filter((row) => row.kind === 'item')
       .map(({ category, count }) => [category, count]),
@@ -231,7 +245,10 @@ test('PDF summary uses stored gender, voice family, positions, and active status
   assert.equal(rows.get('Tenors'), 1)
   assert.equal(rows.get('Basses'), 1)
   assert.equal(rows.get('Organists'), 1)
-  assert.equal(rows.get('OIC / Other Positions'), 1)
+  // One row per configured rank, so the summary names them as Settings does.
+  assert.equal(rows.get('OIC'), 1)
+  assert.equal(rows.get('Organista'), 1)
+  assert.equal(rows.get('Pangulong Mang-aawit'), 0)
   assert.equal(rows.get('Active Members'), 4)
   assert.equal(rows.get('Inactive Members'), 1)
   assert.equal(rows.get('Total Trainees'), 2)
@@ -241,7 +258,7 @@ test('PDF summary uses stored gender, voice family, positions, and active status
   assert.equal(rows.get('Inactive Trainees'), 1)
 })
 
-test('PDF rows preserve full member names and show stored positions', () => {
+test('PDF rows preserve full member names and show configured ranks', () => {
   const member = makeMember('Ana', {
     firstName: 'Ana',
     middleName: 'Maria',
@@ -251,9 +268,9 @@ test('PDF rows preserve full member names and show stored positions', () => {
   })
 
   assert.equal(masterListPdfName(member), 'Santos, Ana Maria Jr.')
-  assert.equal(masterListPdfPosition(member), 'OIC')
+  assert.equal(masterListPdfPosition(member, DUTY_ROLES), 'OIC')
   assert.equal(
-    masterListPdfPosition(makeMember('Singer')),
+    masterListPdfPosition(makeMember('Singer'), DUTY_ROLES),
     'Mang-aawit',
   )
 })

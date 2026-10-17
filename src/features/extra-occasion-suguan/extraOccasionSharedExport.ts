@@ -57,3 +57,19 @@ export async function exportExtraOccasionPdf(
     options.filename ?? exportFileName('Extra Occasion Suguan', 'pdf'),
   )
 }
+
+export async function createExtraOccasionPdfPreview(
+  options: ExtraOccasionExportOptions,
+): Promise<Blob> {
+  const blob = await exportSuguanPdf(
+    sharedSheetSuguan(options),
+    options.members,
+    options.docFormat,
+    undefined,
+    'preview',
+  )
+  if (!(blob instanceof Blob)) {
+    throw new Error('PDF preview did not produce a document.')
+  }
+  return blob
+}

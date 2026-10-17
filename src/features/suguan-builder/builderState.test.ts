@@ -55,6 +55,8 @@ const source: Suguan = {
     margins: 'narrow',
     scaling: 'fit-width',
     fontSize: 'large',
+    tableSpacingBeforePt: 2,
+    tableSpacingAfterPt: 3,
   },
   coverage: {
     template: 'midweek-2w',
@@ -87,6 +89,7 @@ const source: Suguan = {
   assignments: [assignment('m1', 'soprano'), assignment('m2', 'alto')],
   dutyRoles: [
     { memberId: 'm1', memberName: 'Test Member', dutyRoleId: 'pangulong' },
+    { memberId: 'm2', memberName: 'OIC Member', dutyRoleId: 'oic' },
   ],
   destinadoName: 'Km. Dennis',
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -103,7 +106,10 @@ test('copy carries options, document format, schedules, and voice assignments', 
   assert.deepEqual(copy.docFormat, { ...source.docFormat })
 
   assert.deepEqual(copy.voiceCapacities, { soprano: 4, alto: 3, tenor: 2 })
-  assert.deepEqual(copy.dutyRoles, source.dutyRoles)
+  // A copy keeps only the OIC slot: the other duties are re-picked per copy.
+  assert.deepEqual(copy.dutyRoles, [
+    { memberId: 'm2', memberName: 'OIC Member', dutyRoleId: 'oic' },
+  ])
 
   assert.equal(copy.schedules.length, 2)
   assert.deepEqual(

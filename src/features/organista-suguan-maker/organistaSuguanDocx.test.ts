@@ -19,7 +19,11 @@ test('Organist Suguan DOCX builder creates a Word document blob', async () => {
     'Sta. Monica',
     '2026-10-11',
     services,
-    DEFAULT_DOC_FORMAT,
+    {
+      ...DEFAULT_DOC_FORMAT,
+      tableSpacingBeforePt: 2,
+      tableSpacingAfterPt: 3,
+    },
     'Juan Dela Cruz',
     'Pedro Santos',
   )

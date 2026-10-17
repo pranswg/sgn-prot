@@ -14,7 +14,10 @@ import type {
   DocFontSize,
 } from '@/core/types/suguan'
 import { useSettingsStore } from '@/store/settingsStore'
-import type { ChoirPosition } from '@/core/types/member'
+import type { ChoirPosition, MembershipType } from '@/core/types/member'
+import type { DutyRole } from '@/core/types/suguan'
+import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
+import { memberRankIds } from '@/lib/memberRanks'
 import {
   formatDateKeyLongDate,
   formatDateKeyNumeric,
@@ -53,20 +56,34 @@ interface SignatureMember {
   lastName: string
   isActive?: boolean
   positions?: ChoirPosition[]
+  assignedDutyRoleIds?: string[]
+  membershipType?: MembershipType
 }
+
+/**
+ * The `dutyRoleId` a Suguan saved before ranks became configurable stored the
+ * Pangulong Mang-aawit under. The master list is the source of truth; the stored
+ * duty role only fills in for records that predate the lookup.
+ */
+const LEGACY_PM_DUTY_ROLE_ID = 'pangulong-mang-aawit'
 
 export function resolveSignatureNames(
   suguan: Pick<Suguan, 'dutyRoles' | 'destinadoName'>,
   members: SignatureMember[],
+  dutyRoles: readonly DutyRole[] = useSettingsStore.getState().allDutyRoles(),
 ): SignatureNames {
-  // The Pangulong Mang-aawit is whoever holds that position in the master
+  // The Pangulong Mang-aawit is whoever holds that configured rank in the master
   // list. The old step-3 picker is gone, so a leftover duty role only fills in
   // for legacy records that predate the master-list lookup.
+  const pmRole = resolvePmDutyRole(dutyRoles)
   const fromMasterList = members.find(
-    (m) => (m.isActive ?? false) && (m.positions ?? []).includes('pangulong-mang-aawit'),
+    (member) =>
+      (member.isActive ?? false) &&
+      pmRole !== undefined &&
+      memberRankIds(member, dutyRoles).includes(pmRole.id),
   )
   const fromDutyRole = suguan.dutyRoles.find(
-    (d) => d.dutyRoleId === 'pangulong-mang-aawit',
+    (role) => role.dutyRoleId === LEGACY_PM_DUTY_ROLE_ID,
   )?.memberName
   return {
     pmName: fromMasterList
@@ -103,6 +120,8 @@ export const DEFAULT_DOC_FORMAT: SuguanDocFormat = {
   margins: 'normal',
   scaling: 'auto',
   fontSize: 'normal',
+  tableSpacingBeforePt: 0,
+  tableSpacingAfterPt: 0,
 }
 
 export interface FontSizePreset {
@@ -196,6 +215,7 @@ const FONT_SIZE_OPTIONS = new Set<string>(['small', 'normal', 'large', 'custom']
  */
 export const CUSTOM_BODY_FONT_MIN = 6
 export const CUSTOM_BODY_FONT_MAX = 20
+export const TABLE_SPACING_MAX_PT = 72
 
 /** Clamps a user-entered custom body size into the supported range. */
 export function clampCustomBodyFontSize(value: unknown): number {
@@ -271,6 +291,11 @@ export function normalizeDocFormat(
   const fontSize: DocFontSize = valid(FONT_SIZE_OPTIONS, f?.fontSize)
     ? (f?.fontSize as DocFontSize)
     : DEFAULT_DOC_FORMAT.fontSize
+  const normalizeTableSpacing = (value: unknown) => {
+    const spacing = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(spacing)) return 0
+    return Math.min(TABLE_SPACING_MAX_PT, Math.max(0, spacing))
+  }
   return {
     paperSize,
     orientation,
@@ -287,6 +312,8 @@ export function normalizeDocFormat(
     // geometry in every renderer, so a NaN or a negative value typed into the
     // input must not reach the layout maths.
     customBodyFontSize: clampCustomBodyFontSize(f?.customBodyFontSize),
+    tableSpacingBeforePt: normalizeTableSpacing(f?.tableSpacingBeforePt),
+    tableSpacingAfterPt: normalizeTableSpacing(f?.tableSpacingAfterPt),
   }
 }
 

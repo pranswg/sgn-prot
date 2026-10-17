@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FileDown, FileSpreadsheet, FileText, Save } from 'lucide-react'
+import { Eye, FileDown, FileSpreadsheet, FileText, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
+import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { exportSuguanPdf } from './suguanPdfExport'
 import { exportSuguanDocx } from './suguanDocxExport'
 import { SuguanSheetPreview } from './SuguanSheetPreview'
@@ -43,7 +44,9 @@ export function PreviewStep({
 
   const canSave = blockers.length === 0
 
-  const [exporting, setExporting] = useState<'excel' | 'pdf' | 'docx' | null>(null)
+  const [exporting, setExporting] = useState<
+    'excel' | 'pdf' | 'docx' | 'preview' | null
+  >(null)
   const { exportPreview, requestExport } = useExportPreview()
   const [saveSuguan, savingSuguan] = useAsyncAction(onSave)
 
@@ -93,6 +96,36 @@ const runExcelExport = async (exportFileName: string) => {
     })
   }
 
+  const handlePreviewPdf = () => {
+    const previewWindow = openPdfPreviewWindow()
+    if (!previewWindow) {
+      toast.error('Allow pop-ups to preview the Suguan PDF.')
+      return
+    }
+    setExporting('preview')
+    void (async () => {
+      try {
+        const blob = await exportSuguanPdf(
+          preview,
+          members,
+          draft.docFormat,
+          undefined,
+          'preview',
+        )
+        if (!(blob instanceof Blob)) {
+          throw new Error('PDF preview did not produce a document.')
+        }
+        showPdfPreview(previewWindow, blob, 'Suguan')
+      } catch (error) {
+        previewWindow.close()
+        console.error(error)
+        toast.error('Could not create the Suguan PDF preview.')
+      } finally {
+        setExporting(null)
+      }
+    })()
+  }
+
   const runDocxExport = async (exportFileName: string) => {
     setExporting('docx')
     try {
@@ -121,6 +154,15 @@ const runExcelExport = async (exportFileName: string) => {
         <Button onClick={saveSuguan} loading={savingSuguan} disabled={!canSave}>
           <Save className="size-4" />
           {isExisting ? 'Save Changes' : 'Save Suguan'}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handlePreviewPdf}
+          loading={exporting === 'preview'}
+          disabled={exporting !== null}
+        >
+          <Eye className="size-4" />
+          Preview PDF
         </Button>
         <Button
           variant="outline"

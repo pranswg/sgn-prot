@@ -1,13 +1,7 @@
 import type { Member, MembershipType } from '@/core/types/member'
-import type { VoicePosition } from '@/core/types/suguan'
-import {
-  CHOIR_POSITIONS,
-  POSITION_LABELS,
-} from '@/core/constants/choirPositions'
-import {
-  MEMBERSHIP_LABELS,
-  memberEffectivePositions,
-} from '@/core/constants/memberMembership'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
+import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
+import { countMembersByRank, memberRankIds, memberRankNames } from '@/lib/memberRanks'
 import { getVoiceName } from '@/core/constants/voicePositions'
 
 export type DirectoryQuickFilter =
@@ -248,6 +242,7 @@ export function filterMembers(
   members: Member[],
   filters: MemberDirectoryFilters,
   voices: VoicePosition[],
+  dutyRoles: DutyRole[],
   references: Map<string, string>,
   sort: MemberSort = 'last-name',
 ): Member[] {
@@ -267,8 +262,8 @@ export function filterMembers(
       if (filters.status === 'inactive' && member.isActive) return false
       if (
         filters.positions.length > 0 &&
-        !filters.positions.some((p) =>
-          memberEffectivePositions(member).includes(p as Member['positions'][number]),
+        !memberRankIds(member, dutyRoles).some((id) =>
+          filters.positions.includes(id),
         )
       )
         return false
@@ -281,7 +276,7 @@ export function filterMembers(
           references.get(member.id) ?? '',
           getVoiceName(member.voicePosition, voices),
           MEMBERSHIP_LABELS[member.membershipType],
-          ...memberEffectivePositions(member).map((p) => POSITION_LABELS[p]),
+          ...memberRankNames(member, dutyRoles),
         ]
           .join(' ')
           .toLowerCase()
@@ -349,6 +344,7 @@ export function computeDirectoryStats(
   members: Member[],
   trainees: { status: string }[],
   voices: VoicePosition[],
+  dutyRoles: DutyRole[],
 ): DirectoryStats {
   const counts = new Map<string, number>()
   const membershipCounts = new Map<MembershipType, number>()
@@ -361,7 +357,7 @@ export function computeDirectoryStats(
     if (member.isActive) active += 1
     if (member.membershipType === 'regular') regular += 1
     else organistCategory += 1
-    if (memberEffectivePositions(member).length > 0) withPrivileges += 1
+    if (memberRankIds(member, dutyRoles).length > 0) withPrivileges += 1
     membershipCounts.set(
       member.membershipType,
       (membershipCounts.get(member.membershipType) ?? 0) + 1,
@@ -381,7 +377,7 @@ export function computeDirectoryStats(
     trainees: trainees.filter((t) => t.status === 'active').length,
     withPrivileges,
     membershipCounts,
-    positionCounts: countMembersByPosition(members),
+    positionCounts: countMembersByRank(members, dutyRoles),
     // Configured voice order (Soprano 1, Soprano 2, Alto, Tenor, Bass), not by
     // size, so the distribution card reads the same way every time.
     voiceCounts: voices.map((v) => ({
@@ -391,14 +387,4 @@ export function computeDirectoryStats(
       count: counts.get(v.id) ?? 0,
     })),
   }
-}
-
-export function countMembersByPosition(members: Member[]): Map<string, number> {
-  const counts = new Map<string, number>(CHOIR_POSITIONS.map((p) => [p.id, 0]))
-  for (const member of members) {
-    for (const position of memberEffectivePositions(member)) {
-      counts.set(position, (counts.get(position) ?? 0) + 1)
-    }
-  }
-  return counts
 }

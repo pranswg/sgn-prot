@@ -35,6 +35,10 @@ export async function buildOrganistaSuguanDocx(
   const dimensions = docPaperDimensionsMm(normalized)
   const margins = docMarginsMm(normalized)
   const preset = resolveFontSizePreset(normalized)
+  const paragraphSpacing = {
+    before: Math.round((normalized.tableSpacingBeforePt ?? 0) * 20),
+    after: Math.round((normalized.tableSpacingAfterPt ?? 0) * 20),
+  }
   const toTwips = (mm: number) => Math.max(1, Math.round((mm * 1440) / 25.4))
   const contentWidth = toTwips(
     dimensions.width - margins.left - margins.right,
@@ -58,7 +62,7 @@ export async function buildOrganistaSuguanDocx(
   const cell = (
     text: string,
     width: number,
-    options: { bold?: boolean; header?: boolean } = {},
+    options: { bold?: boolean; header?: boolean; spacing?: boolean } = {},
   ) =>
     new TableCell({
       width: { size: width, type: WidthType.DXA },
@@ -68,6 +72,7 @@ export async function buildOrganistaSuguanDocx(
       children: [
         new Paragraph({
           alignment: AlignmentType.CENTER,
+          spacing: options.spacing ? paragraphSpacing : undefined,
           children: [
             new TextRun({
               text,
@@ -124,7 +129,7 @@ export async function buildOrganistaSuguanDocx(
         new TableRow({
           children: [
             cell(label, widths[0], { bold: true }),
-            cell(name, widths[1], { bold: true }),
+            cell(name, widths[1], { bold: true, spacing: true }),
             cell('', widths[2]),
             cell('', widths[3]),
             cell('', widths[4]),

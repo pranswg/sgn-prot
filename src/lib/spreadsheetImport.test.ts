@@ -42,6 +42,15 @@ const EXISTING: Member[] = [
   },
 ]
 
+/**
+ * Configured duty roles, deliberately carrying ids that are not the old fixed
+ * `ChoirPosition` ids, so a rank only ever matches by name.
+ */
+const RANK_ROLES = [
+  { id: 'kalihim-role', name: 'Kalihim ng Mang-aawit', abbreviation: 'KM' },
+  { id: 'organista-role', name: 'Organista', abbreviation: 'ORG' },
+]
+
 const TRAINEES: Trainee[] = [
   {
     id: 't1',
@@ -126,12 +135,13 @@ test('a member CSV export round-trips back into the same members', () => {
     },
   ]
 
-  const exported = membersToRows(originals)
+  const exported = membersToRows(originals, RANK_ROLES)
   const { candidates } = rowsToCandidates(
     matrixFromRows(exported as unknown as Record<string, string>[]),
     VOICES,
     [],
     [],
+    RANK_ROLES,
   )
 
   assert.equal(candidates.length, 2)
@@ -146,7 +156,10 @@ test('a member CSV export round-trips back into the same members', () => {
   assert.equal(ana.membershipType, 'organista')
   assert.equal(ana.isActive, true)
   assert.equal(ana.dateAdded, '2024-03-04')
-  assert.deepEqual(ana.positions, ['kalihim-ng-mang-aawit', 'organista'])
+  // The exported ranks travel as configured duty roles, not as positions, so
+  // the import never invents a legacy position.
+  assert.equal(ana.positions, undefined)
+  assert.deepEqual(ana.assignedDutyRoleIds, ['kalihim-role', 'organista-role'])
   assert.equal(ana.notes, 'Plays the piano')
   assert.equal(ana.isTrainee, false)
 
@@ -154,7 +167,7 @@ test('a member CSV export round-trips back into the same members', () => {
   assert.equal(ben.voicePosition, 'bass')
   assert.equal(ben.membershipType, 'regular')
   assert.equal(ben.isActive, false)
-  assert.deepEqual(ben.positions, [])
+  assert.deepEqual(ben.assignedDutyRoleIds, [])
 })
 
 test('sectioned Master List exports re-import roster tables and merge leadership sections', () => {
@@ -552,7 +565,7 @@ test('an ISO timestamp is trimmed to its calendar date', () => {
   assert.equal(candidates[0].dateAdded, '2024-05-06')
 })
 
-test('the em dash used for empty positions means no positions', () => {
+test('the em dash used for empty ranks means no ranks', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
@@ -563,10 +576,29 @@ test('the em dash used for empty positions means no positions', () => {
     [],
   )
 
-  assert.deepEqual(candidates[0].positions, [])
+  assert.deepEqual(candidates[0].assignedDutyRoleIds, [])
 })
 
-test('short position labels reverse back to their ids', () => {
+test('rank labels in the Positions column resolve to configured duty roles', () => {
+  const dutyRoles = [
+    { id: 'oic-role', name: 'OIC', abbreviation: 'OIC' },
+    { id: 'kalihim-role', name: 'Kalihim', abbreviation: 'KM' },
+  ]
+  const { candidates } = rowsToCandidates(
+    [
+      [...MEMBER_EXPORT_HEADERS],
+      ['A', 'One', '', '', 'Female', 'Alto', 'OIC, Kalihim', 'Regular', 'Active', '', ''],
+    ],
+    VOICES,
+    [],
+    [],
+    dutyRoles,
+  )
+
+  assert.deepEqual(candidates[0].assignedDutyRoleIds, ['oic-role', 'kalihim-role'])
+})
+
+test('an unrecognised rank label is dropped rather than kept as a position', () => {
   const { candidates } = rowsToCandidates(
     [
       [...MEMBER_EXPORT_HEADERS],
@@ -577,7 +609,7 @@ test('short position labels reverse back to their ids', () => {
     [],
   )
 
-  assert.deepEqual(candidates[0].positions, ['oic', 'kalihim-ng-mang-aawit'])
+  assert.deepEqual(candidates[0].assignedDutyRoleIds, [])
 })
 
 test('a "Last, First" cell is split when the columns are combined', () => {
@@ -701,20 +733,27 @@ test('isSpreadsheetFile accepts the exported extensions and rejects PDFs', () =>
 })
 
 test('extractRosterFromSpreadsheet reads a CSV File end to end', async () => {
-  const exported = membersToRows([
-    {
-      id: 'z',
-      firstName: 'Rosa',
-      lastName: 'Villar',
-      gender: 'female',
-      voicePosition: 'soprano-2',
-      membershipType: 'regular',
-      isActive: true,
-      dateAdded: '2024-07-07',
-      positions: ['pangulong-mang-aawit'],
-      notes: '',
-    },
-  ])
+  const dutyRoles = [
+    { id: 'custom-pm', name: 'Pangulong Mang-aawit', abbreviation: 'PM' },
+  ]
+  const exported = membersToRows(
+    [
+      {
+        id: 'z',
+        firstName: 'Rosa',
+        lastName: 'Villar',
+        gender: 'female',
+        voicePosition: 'soprano-2',
+        membershipType: 'regular',
+        isActive: true,
+        dateAdded: '2024-07-07',
+        positions: [],
+        assignedDutyRoleIds: ['custom-pm'],
+        notes: '',
+      },
+    ],
+    dutyRoles,
+  )
 
   const row = exported[0] as unknown as Record<string, string>
   const text =
@@ -727,11 +766,17 @@ test('extractRosterFromSpreadsheet reads a CSV File end to end', async () => {
     '\n'
 
   const file = new File([text], 'master-list-all.csv', { type: 'text/csv' })
-  const { candidates } = await extractRosterFromSpreadsheet(file, VOICES, [], [])
+  const { candidates } = await extractRosterFromSpreadsheet(
+    file,
+    VOICES,
+    [],
+    [],
+    dutyRoles,
+  )
 
   assert.equal(candidates.length, 1)
   assert.equal(candidates[0].firstName, 'Rosa')
   assert.equal(candidates[0].voicePosition, 'soprano-2')
-  assert.deepEqual(candidates[0].positions, ['pangulong-mang-aawit'])
+  assert.deepEqual(candidates[0].assignedDutyRoleIds, ['custom-pm'])
   assert.equal(candidates[0].dateAdded, '2024-07-07')
 })

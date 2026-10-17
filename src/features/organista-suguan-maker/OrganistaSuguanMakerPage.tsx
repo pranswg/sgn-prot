@@ -20,8 +20,12 @@ import {
 import { formatDateKeyNumeric, weekdayOf } from '@/lib/phDate'
 import { fullName } from '@/lib/format'
 import { exportFileName } from '@/lib/exportNaming'
+import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { useMemberStore } from '@/store/memberStore'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
+import { useSettingsStore } from '@/store/settingsStore'
+import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
+import { memberHasRank } from '@/lib/memberRanks'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
@@ -79,6 +83,11 @@ export async function buildOrganistaSuguanPdf(
   const churchFontSizePt = fontPreset.headerFontSize * 1.25
   const dateFontSizePt = fontPreset.headerFontSize * 1.05
   const ptToMm = 25.4 / 72
+  const spacingBeforeMm =
+    (normalizedFormat.tableSpacingBeforePt ?? 0) * ptToMm
+  const spacingAfterMm =
+    (normalizedFormat.tableSpacingAfterPt ?? 0) * ptToMm
+  const tableSpacingMm = spacingBeforeMm + spacingAfterMm
   const churchLineHeight = churchFontSizePt * ptToMm * 1.1
   const scriptLineHeight = scriptFontSizePt * ptToMm * 1.1
   const dateLineHeight = dateLine ? dateFontSizePt * ptToMm * 1.1 : 0
@@ -88,9 +97,12 @@ export async function buildOrganistaSuguanPdf(
     scriptLineHeight +
     dateLineHeight +
     headingGap * (dateLine ? 2 : 1)
-  const serviceHeadingHeight = fontPreset.headerFontSize * 0.42 + 2
-  const headerRowHeight = Math.max(8.5, fontPreset.smallFontSize * 0.42 * 2 + 1)
-  const rowHeight = Math.max(8, fontPreset.bodyFontSize * 0.72)
+  const serviceHeadingBaseHeight = fontPreset.headerFontSize * 0.42 + 2
+  const headerRowBaseHeight = Math.max(
+    8.5,
+    fontPreset.smallFontSize * 0.42 * 2 + 1,
+  )
+  const rowBaseHeight = Math.max(8, fontPreset.bodyFontSize * 0.72)
   const serviceGap = 2.5
   const signatureNameHeight = Math.max(8, fontPreset.bodyFontSize * 0.8)
   const signatureRoleHeight = Math.max(5, fontPreset.smallFontSize * 0.5)
@@ -99,7 +111,11 @@ export async function buildOrganistaSuguanPdf(
   const contentHeight =
     headingHeight +
     3 +
-    services.length * (serviceHeadingHeight + headerRowHeight + rowHeight * 2 + serviceGap) +
+    services.length *
+      (serviceHeadingBaseHeight +
+        headerRowBaseHeight +
+        rowBaseHeight * 2 +
+        serviceGap) +
     signatureGapMm +
     signatureHeight
   const availableHeight =
@@ -180,8 +196,9 @@ export async function buildOrganistaSuguanPdf(
   }
   y = drawPageHeading()
 
-  const topRowHeight = headerRowHeight * scale
-  const scaledRowHeight = rowHeight * scale
+  const topRowHeight = headerRowBaseHeight * scale
+  const scaledRowHeight = rowBaseHeight * scale + tableSpacingMm
+  const scaledServiceHeadingHeight = serviceHeadingBaseHeight * scale
   const columnWidths = [0.12, 0.28, 0.2, 0.2, 0.2].map(
     (ratio) => contentWidth * ratio,
   )
@@ -213,7 +230,10 @@ export async function buildOrganistaSuguanPdf(
   }
 
   const serviceHeight =
-    serviceHeadingHeight * scale + topRowHeight + scaledRowHeight * 2 + serviceGap * scale
+    scaledServiceHeadingHeight +
+    topRowHeight +
+    scaledRowHeight * 2 +
+    serviceGap * scale
   const scaledSignatureHeight = signatureHeight * scale
 
   for (const service of services) {
@@ -224,8 +244,12 @@ export async function buildOrganistaSuguanPdf(
 
     pdf.setFont('helvetica', 'bold')
     pdf.setFontSize(fontPreset.headerFontSize * scale)
-    pdf.text((service.heading || 'Service').toUpperCase(), margins.left, y + serviceHeadingHeight * scale * 0.7)
-    y += serviceHeadingHeight * scale
+    pdf.text(
+      (service.heading || 'Service').toUpperCase(),
+      margins.left,
+      y + scaledServiceHeadingHeight * 0.7,
+    )
+    y += scaledServiceHeadingHeight
     drawHeaders(y)
     y += topRowHeight
 
@@ -256,7 +280,9 @@ export async function buildOrganistaSuguanPdf(
           pdf.text(
             row.value,
             cellX + 2,
-            rowTop + scaledRowHeight * 0.67,
+            rowTop +
+              rowBaseHeight * scale * 0.67 +
+              spacingBeforeMm,
             { maxWidth: width - 4 },
           )
         }
@@ -329,9 +355,13 @@ export function OrganistaSuguanMakerPage() {
   })
   const createRecord = useOrganistaSuguanStore((state) => state.createRecord)
   const members = useMemberStore((state) => state.members)
+  const dutyRoles = useSettingsStore((state) => state.dutyRoles)
+  const pmRole = resolvePmDutyRole(dutyRoles)
   const pmMember = members.find(
     (member) =>
-      member.isActive && member.positions.includes('pangulong-mang-aawit'),
+      member.isActive &&
+      pmRole !== undefined &&
+      memberHasRank(member, pmRole.id, dutyRoles),
   )
   const pmName = pmMember
     ? fullName(pmMember.firstName, pmMember.lastName)
@@ -559,14 +589,12 @@ export function OrganistaSuguanMakerPage() {
 
   const previewPdf = async () => {
     if (!requirePagsasanayDate()) return
-    const previewWindow = window.open('', '_blank')
+    const previewWindow = openPdfPreviewWindow()
     if (!previewWindow) {
       toast.error('Allow pop-ups to preview the Organist Suguan PDF.')
       return
     }
 
-    let pdfUrl: string | null = null
-    let viewerUrl: string | null = null
     try {
       const blob = await buildOrganistaSuguanPdf(
         churchName,
@@ -576,43 +604,13 @@ export function OrganistaSuguanMakerPage() {
         pmName,
         destinadoName,
       )
-      pdfUrl = URL.createObjectURL(blob)
-      const previewTitle = `${churchName.trim() ? `${churchName.trim()} - ` : ''}Organist Suguan`
-        .replace(/[&<>"]/g, (character) => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-        })[character] ?? character)
-      const viewerHtml = `<!doctype html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>${previewTitle}</title>
-            <style>
-              html, body, iframe { width: 100%; height: 100%; margin: 0; border: 0; }
-              body { overflow: hidden; }
-            </style>
-          </head>
-          <body>
-            <iframe title="Organist Suguan PDF preview" src="${pdfUrl}"></iframe>
-            <script>
-              window.addEventListener('pagehide', () => {
-                URL.revokeObjectURL(${JSON.stringify(pdfUrl)})
-                URL.revokeObjectURL(location.href)
-              }, { once: true })
-            </script>
-          </body>
-        </html>`
-      viewerUrl = URL.createObjectURL(
-        new Blob([viewerHtml], { type: 'text/html' }),
+      showPdfPreview(
+        previewWindow,
+        blob,
+        `${churchName.trim() ? `${churchName.trim()} - ` : ''}Organist Suguan`,
       )
-      previewWindow.location.replace(viewerUrl)
     } catch (error) {
       previewWindow.close()
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl)
-      if (viewerUrl) URL.revokeObjectURL(viewerUrl)
       console.error(error)
       toast.error('Could not create the Organist Suguan PDF preview.')
     }
@@ -650,7 +648,7 @@ export function OrganistaSuguanMakerPage() {
             loading={previewingOrganistSuguan}
           >
             <Eye className="size-4" />
-            Preview
+            Preview PDF
           </Button>
           <Button onClick={() => void exportOrganistSuguan()} loading={exportingOrganistSuguan}>
             <FileDown className="size-4" />

@@ -4,6 +4,7 @@ import {
   exportExtraOccasionDocx,
   exportExtraOccasionExcel,
   exportExtraOccasionPdf,
+  createExtraOccasionPdfPreview,
 } from './extraOccasionSharedExport'
 import type { ExtraOccasionExportOptions } from './extraOccasionExport'
 import {
@@ -45,4 +46,14 @@ export async function runOccasionExport(
   if (kind === 'pdf') await exportExtraOccasionPdf(options)
   else if (kind === 'xlsx') await exportExtraOccasionExcel(options)
   else await exportExtraOccasionDocx(options)
+}
+
+export async function buildOccasionPdfPreview(
+  state: ExtraOccasionOccasionState,
+  members: Member[],
+  voices: VoicePosition[],
+): Promise<Blob> {
+  return createExtraOccasionPdfPreview(
+    occasionExportOptions(state, members, voices, ''),
+  )
 }

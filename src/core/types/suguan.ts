@@ -91,6 +91,9 @@ export interface SuguanDocFormat {
    * `normalizeDocFormat` to CUSTOM_BODY_FONT_MIN..MAX.
    */
   customBodyFontSize?: number
+  /** Word-style paragraph spacing applied only to table rows and names. */
+  tableSpacingBeforePt?: number
+  tableSpacingAfterPt?: number
 }
 
 export type SuguanCoverageTemplate = 'midweek-2w' | 'weekend-2w' | 'one-week'

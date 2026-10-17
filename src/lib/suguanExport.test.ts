@@ -16,6 +16,7 @@ import {
   computeSuguanLayout,
   createSuguanExcelBlob,
   fitFontSizePt,
+  PT_TO_MM,
   SIG_RULE_PAD,
   suguanSheetAccent,
   type SheetMembers,
@@ -383,6 +384,53 @@ test('Folio is the default paper size and font size remains normal', () => {
   assert.ok(FONT_SIZE_PRESETS.small.bodyFontSize < FONT_SIZE_PRESETS.normal.bodyFontSize)
 })
 
+test('table paragraph spacing changes name rows but not headers, title, or signatures', () => {
+  const suguan = makeSuguan(100)
+  const members = makeMembers(100)
+  const normal = computeSuguanLayout(suguan, members)
+  const spacedFormat = normalizeDocFormat({
+    ...DEFAULT_DOC_FORMAT,
+    tableSpacingBeforePt: 2,
+    tableSpacingAfterPt: 3,
+  })
+  const spaced = computeSuguanLayout(suguan, members, spacedFormat)
+  const addedSpacingMm = 5 * PT_TO_MM
+
+  assert.equal(spaced.headerRowH, normal.headerRowH)
+  assert.equal(spaced.sectionLabelRowH, normal.sectionLabelRowH)
+  assert.ok(Math.abs(spaced.bodyRowH - normal.bodyRowH - addedSpacingMm) < 1e-9)
+  assert.equal(spaced.titleRowH, normal.titleRowH)
+  assert.equal(spaced.sig.totalMm, normal.sig.totalMm)
+  assert.equal(spaced.scale, normal.scale)
+  assert.equal(spaced.bodyFontSizePt, normal.bodyFontSizePt)
+})
+
+test('table paragraph spacing is non-negative, finite, and capped', () => {
+  assert.equal(normalizeDocFormat({ tableSpacingBeforePt: -4 }).tableSpacingBeforePt, 0)
+  assert.equal(normalizeDocFormat({ tableSpacingBeforePt: Infinity }).tableSpacingBeforePt, 0)
+  assert.equal(normalizeDocFormat({ tableSpacingAfterPt: 100 }).tableSpacingAfterPt, 72)
+})
+
+test('Excel applies before-and-after spacing to name rows only', async () => {
+  const format = normalizeDocFormat({
+    ...DEFAULT_DOC_FORMAT,
+    tableSpacingBeforePt: 2,
+    tableSpacingAfterPt: 3,
+  })
+  const blob = await createSuguanExcelBlob(makeSuguan(1), makeMembers(1), format)
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(await blob.arrayBuffer())
+  const sheet = workbook.worksheets[0]
+
+  assert.equal(sheet.getRow(2).height, 16)
+  assert.equal(sheet.getRow(4).height, 16)
+  assert.equal(
+    sheet.getRow(5).height,
+    format.tableSpacingBeforePt! + format.tableSpacingAfterPt! + 14,
+  )
+})
+
 test('Excel export uses the Folio print paper size', async () => {
   const blob = await createSuguanExcelBlob(makeSuguan(0), [])
   const ExcelJS = (await import('exceljs')).default
@@ -492,6 +540,13 @@ test('without an OIC duty role no " - OIC" marker appears', () => {
 })
 
 test('the signature Pangulong comes from the master list, not a duty role', () => {
+  const dutyRoles = [
+    {
+      id: 'Ccuo8FLgJo4lgfK19ildr',
+      name: 'Pangulong Mang-aawit',
+      abbreviation: 'PM',
+    },
+  ]
   const suguan = makeSuguan(2, PRESETS[1])
   suguan.dutyRoles = [
     {
@@ -500,19 +555,45 @@ test('the signature Pangulong comes from the master list, not a duty role', () =
       memberName: 'Jose Santos',
     },
   ]
-  const { pmName } = resolveSignatureNames(suguan, [
-    {
-      firstName: 'Juan',
-      lastName: 'Dela Cruz',
-      isActive: true,
-      positions: ['pangulong-mang-aawit'],
-    },
-  ])
+  // A legacy stored position counts once a configured role carries its name.
+  const { pmName } = resolveSignatureNames(
+    suguan,
+    [
+      {
+        firstName: 'Juan',
+        lastName: 'Dela Cruz',
+        isActive: true,
+        positions: ['pangulong-mang-aawit'],
+      },
+    ],
+    dutyRoles,
+  )
   assert.equal(pmName, 'Juan Dela Cruz')
 
+  // An assigned duty role with a configured (nanoid) id works the same way.
+  const { pmName: assigned } = resolveSignatureNames(
+    suguan,
+    [
+      {
+        firstName: 'Maria',
+        lastName: 'Reyes',
+        isActive: true,
+        assignedDutyRoleIds: ['Ccuo8FLgJo4lgfK19ildr'],
+      },
+    ],
+    dutyRoles,
+  )
+  assert.equal(assigned, 'Maria Reyes')
+
+  // With no member holding the rank, the legacy stored duty role is the fallback.
+  const { pmName: legacyFallback } = resolveSignatureNames(suguan, [], dutyRoles)
+  assert.equal(legacyFallback, 'Jose Santos')
+
+  // And with neither, the signature is blank.
   const { pmName: fallback } = resolveSignatureNames(
     { ...suguan, dutyRoles: [] },
     [],
+    dutyRoles,
   )
   assert.equal(fallback, '')
 })

@@ -12,6 +12,7 @@ CUSTOM_BODY_FONT_MAX,
   normalizeDocFormat,
   PAPER_SIZE_LABELS,
   resolveFontSizePreset,
+  TABLE_SPACING_MAX_PT,
 } from '@/lib/suguanUtils'
 import type {
   DocFontSize,
@@ -341,6 +342,35 @@ export function DocumentSetupStep({
             { id: 'fit-page', label: 'Fit page', description: 'One page total' },
           ]}
         />
+
+        <div className="grid gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Table spacing
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Add space before or after roster names, in points. Table headers, titles, and signatory labels stay unchanged.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <UnitInput
+              label="Before"
+              value={value.tableSpacingBeforePt}
+              onChange={(v) => set({ tableSpacingBeforePt: v })}
+              unit="pt"
+              max={TABLE_SPACING_MAX_PT}
+              step={1}
+            />
+            <UnitInput
+              label="After"
+              value={value.tableSpacingAfterPt}
+              onChange={(v) => set({ tableSpacingAfterPt: v })}
+              unit="pt"
+              max={TABLE_SPACING_MAX_PT}
+              step={1}
+            />
+          </div>
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground">

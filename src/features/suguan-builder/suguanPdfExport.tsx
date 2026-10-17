@@ -78,6 +78,11 @@ export async function exportSuguanPdf(
   const sigGeo = layout.sig
   const accent = suguanSheetAccent(suguan.group)
   const isExtraOccasion = Boolean(suguan.extraOccasion)
+  const paragraphOffsetMm =
+    (((layout.fmt.tableSpacingBeforePt ?? 0) -
+      (layout.fmt.tableSpacingAfterPt ?? 0)) *
+      PT_TO_MM) /
+    2
   const extraHeading = isExtraOccasion
     ? extraOccasionSheetHeading(suguan)
     : null
@@ -234,7 +239,11 @@ export async function exportSuguanPdf(
       const cx = eventXs[i] + layout.eventColWidthMm / 2
       if (isExtraOccasion) {
         applyFont('bold', EXTRA_OCCASION_HEADER_FONT_SIZE_PT)
-        centerText(eventTypeLabel(e.type, e.label), cx, headerTopY + headerSz * PT_TO_MM)
+        centerText(
+          eventTypeLabel(e.type, e.label),
+          cx,
+          headerTopY + headerSz * PT_TO_MM,
+        )
         centerText(
           formatEventDate(e),
           cx,
@@ -341,15 +350,31 @@ export async function exportSuguanPdf(
             'normal',
             isExtraOccasion ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT : nameSize,
           )
-          centerText(String(row.no), x0 + layout.noColWidthMm / 2, y + layout.bodyRowH / 2)
+          centerText(
+            String(row.no),
+            x0 + layout.noColWidthMm / 2,
+            y + layout.bodyRowH / 2,
+          )
           if (isOic) {
             const baseName = row.name.slice(0, -6)
-            leftText(baseName, xName + 0.79, y + layout.bodyRowH / 2)
+            leftText(
+              baseName,
+              xName + 0.79,
+              y + layout.bodyRowH / 2 + paragraphOffsetMm,
+            )
             const baseW = textWidth(baseName)
             applyFont('bold', nameSize)
-            leftText(row.name.slice(-6), xName + 0.79 + baseW, y + layout.bodyRowH / 2)
+            leftText(
+              row.name.slice(-6),
+              xName + 0.79 + baseW,
+              y + layout.bodyRowH / 2 + paragraphOffsetMm,
+            )
           } else {
-            leftText(row.name, xName + 0.79, y + layout.bodyRowH / 2)
+            leftText(
+              row.name,
+              xName + 0.79,
+              y + layout.bodyRowH / 2 + paragraphOffsetMm,
+            )
           }
           y += layout.bodyRowH
           return

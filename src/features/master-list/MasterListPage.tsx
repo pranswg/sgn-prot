@@ -44,8 +44,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
 import { formatPHTDateTime } from '@/lib/phDate'
-import type { ChoirPosition, Member } from '@/core/types/member'
-import { CHOIR_POSITIONS, POSITION_LABELS } from '@/core/constants/choirPositions'
+import type { Member } from '@/core/types/member'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import {
   exportCSVRows,
@@ -60,7 +59,6 @@ import {
   buildMemberReferences,
   computeDirectoryStats,
   countActiveDirectoryFilters,
-  countMembersByPosition,
   DEFAULT_MEMBER_PAGE_SIZE,
   filterMembers,
   filtersForStartView,
@@ -231,13 +229,12 @@ export function MasterListPage() {
     [members],
   )
   const stats = useMemo(
-    () => computeDirectoryStats(directoryMembers, trainees, voices),
-    [directoryMembers, trainees, voices],
+    () => computeDirectoryStats(directoryMembers, trainees, voices, dutyRoles),
+    [directoryMembers, trainees, voices, dutyRoles],
   )
-  const positionCounts = useMemo(
-    () => countMembersByPosition(directoryMembers),
-    [directoryMembers],
-  )
+  // Configured duty roles are the rankings list; `positionCounts` reports how
+  // many members hold each one.
+  const positionCounts = stats.positionCounts
   const voiceCounts = useMemo(
     () => new Map(stats.voiceCounts.map((v) => [v.id, v.count] as const)),
     [stats],
@@ -245,15 +242,28 @@ export function MasterListPage() {
 
   const filteredMembers = useMemo(
     () =>
-      filterMembers(directoryMembers, filters, voices, references, effectiveSort),
-    [directoryMembers, filters, voices, references, effectiveSort],
+      filterMembers(
+        directoryMembers,
+        filters,
+        voices,
+        dutyRoles,
+        references,
+        effectiveSort,
+      ),
+    [directoryMembers, filters, voices, dutyRoles, references, effectiveSort],
   )
 
   // Match count for the filter sheet's Apply button, evaluated against the
   // in-progress edits rather than the filters that are already applied.
   const previewCount = (candidate: MemberDirectoryFilters) =>
-    filterMembers(directoryMembers, candidate, voices, references, effectiveSort)
-      .length
+    filterMembers(
+      directoryMembers,
+      candidate,
+      voices,
+      dutyRoles,
+      references,
+      effectiveSort,
+    ).length
 
   const filtersActive = hasActiveDirectoryFilters(filters)
   const activeFilterCount = countActiveDirectoryFilters(filters)
@@ -695,23 +705,21 @@ export function MasterListPage() {
                 <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   Choir Positions
                 </DropdownMenuLabel>
-                {CHOIR_POSITIONS.map((position) => (
+                {dutyRoles.map((role) => (
                   <DropdownMenuCheckboxItem
-                    key={position.id}
-                    checked={filters.positions.includes(position.id)}
+                    key={role.id}
+                    checked={filters.positions.includes(role.id)}
                     onSelect={(event) => event.preventDefault()}
                     onCheckedChange={() =>
                       setFilter(
                         'positions',
-                        toggleInList(filters.positions, position.id),
+                        toggleInList(filters.positions, role.id),
                       )
                     }
                   >
-                    <span className="flex-1">
-                      {POSITION_LABELS[position.id]}
-                    </span>
+                    <span className="flex-1">{role.name}</span>
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {positionCounts.get(position.id) ?? 0}
+                      {positionCounts.get(role.id) ?? 0}
                     </span>
                   </DropdownMenuCheckboxItem>
                 ))}
@@ -836,7 +844,7 @@ export function MasterListPage() {
             {filters.positions.map((id) => (
               <FilterChip
                 key={`position-${id}`}
-                label={POSITION_LABELS[id as ChoirPosition] ?? id}
+                label={dutyRoles.find((role) => role.id === id)?.name ?? id}
                 onClear={() =>
                   setFilter('positions', toggleInList(filters.positions, id))
                 }
@@ -988,6 +996,7 @@ export function MasterListPage() {
         filters={filters}
         onApply={setFilters}
         voices={voices}
+        dutyRoles={dutyRoles}
         stats={stats}
         previewCount={previewCount}
       />

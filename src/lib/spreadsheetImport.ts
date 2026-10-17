@@ -17,18 +17,12 @@
 import Papa from 'papaparse'
 import { nanoid } from 'nanoid'
 import type {
-  ChoirPosition,
   Member,
   MembershipType,
   Trainee,
 } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import type { DutyRole } from '@/core/types/suguan'
-import {
-  CHOIR_POSITIONS,
-  POSITION_LABELS,
-  POSITION_SHORT_LABELS,
-} from '@/core/constants/choirPositions'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import { normalizeNameKey, type RosterCandidate } from './rosterImport'
 import { isDateKey } from './phDate'
@@ -206,34 +200,6 @@ function resolveVoiceId(
     return voices.find((v) => v.gender === gender)?.id ?? voices[0]?.id ?? ''
   }
   return voices[0]?.id ?? ''
-}
-
-/**
- * Reverses `positionSummary`, which joins labels with ", ". Labels are matched
- * against both the long and short forms, and "—" means no positions.
- */
-function resolvePositions(value: string): ChoirPosition[] {
-  const trimmed = value.trim()
-  if (!trimmed || trimmed === '—' || trimmed === '-' || trimmed === '–') return []
-
-  const parts = trimmed
-    .split(/[,;|]/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-
-  const found: ChoirPosition[] = []
-  for (const part of parts) {
-    const key = part.toLowerCase().replace(/\s+/g, '')
-    const match = CHOIR_POSITIONS.find((p) => {
-      const long = POSITION_LABELS[p.id].toLowerCase().replace(/\s+/g, '')
-      const short = POSITION_SHORT_LABELS[p.id]
-        .toLowerCase()
-        .replace(/\s+/g, '')
-      return key === long || key === short || key === p.id.replace(/-/g, '')
-    })
-    if (match && !found.includes(match.id)) found.push(match.id)
-  }
-  return found
 }
 
 /**
@@ -432,11 +398,23 @@ export function rowsToCandidates(
     const isTrainee =
       currentSection.toLowerCase().includes('nagsasanay') || !isMemberSheet
     const identity = `${isTrainee ? 'trainee' : 'member'}:${key}`
-    const assignedDutyRoleIds = resolveDutyRoleIds(
-      pick(row, headers, DUTY_ROLE_KEYS),
-      currentSection,
-      dutyRoles,
-    )
+    // Ranks are configured duty roles, so both the `Duty Roles` column and the
+    // older `Positions / Privileges` column resolve to duty-role ids. The
+    // section title can imply a rank too (an "Organists" table).
+    const assignedDutyRoleIds = [
+      ...new Set([
+        ...resolveDutyRoleIds(
+          pick(row, headers, DUTY_ROLE_KEYS),
+          currentSection,
+          dutyRoles,
+        ),
+        ...resolveDutyRoleIds(
+          isMemberSheet ? pick(row, headers, POSITIONS_KEYS) : '',
+          currentSection,
+          dutyRoles,
+        ),
+      ]),
+    ]
 
     const candidate: RosterCandidate = {
       id: nanoid(),
@@ -463,9 +441,6 @@ export function rowsToCandidates(
       membershipType: !isTrainee && isMemberSheet
         ? resolveMembershipType(pick(row, headers, MEMBERSHIP_KEYS))
         : undefined,
-      positions: !isTrainee && isMemberSheet
-        ? resolvePositions(pick(row, headers, POSITIONS_KEYS))
-        : undefined,
       assignedDutyRoleIds,
       dateAdded: resolveDateAdded(pick(row, headers, DATE_ADDED_KEYS)),
     }
@@ -474,9 +449,6 @@ export function rowsToCandidates(
       ? sectionedCandidates.get(identity)
       : undefined
     if (previous) {
-      previous.positions = [
-        ...new Set([...(previous.positions ?? []), ...(candidate.positions ?? [])]),
-      ]
       previous.assignedDutyRoleIds = [
         ...new Set([
           ...(previous.assignedDutyRoleIds ?? []),

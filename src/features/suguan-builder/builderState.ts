@@ -11,7 +11,7 @@ import type {
   VoicePosition,
 } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
-import { CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS } from '@/core/constants/dutyRoles'
+import { OIC_DUTY_ROLE_ID } from '@/core/constants/dutyRoles'
 import { firstDateKey, isDateKey } from '@/lib/phDate'
 import { worshipWeekSchedules } from '@/lib/suguanDates'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -214,12 +214,12 @@ export function createDraftFromSuguan(
       ...s,
       assignments: (s.assignments ?? []).map((a) => ({ ...a })),
     })),
-    // Organist duties belong to the Organist Suguan, so any stored on a saved
-    // record are dropped here — both the edit path and createCopyDraft flow
-    // through this function, keeping the count badge, conflicts, and re-saves
-    // consistent without rewriting history.
+    // The only duty role a Choir Suguan stores is its OIC: organist duties
+    // belong to the Organist Suguan, and Pangulong/Kalihim are read from the
+    // Master List. Keeping only the OIC slot also clears the legacy organist
+    // roles older saved records may carry.
     dutyRoles: (suguan.dutyRoles ?? [])
-      .filter((d) => !CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS.has(d.dutyRoleId))
+      .filter((d) => d.dutyRoleId === OIC_DUTY_ROLE_ID)
       .map((d) => ({ ...d })),
     destinadoName: suguan.destinadoName ?? '',
     copiedFromId: suguan.copiedFromId,

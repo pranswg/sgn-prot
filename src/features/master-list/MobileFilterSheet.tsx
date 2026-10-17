@@ -9,12 +9,8 @@ import {
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import {
-  CHOIR_POSITIONS,
-  POSITION_LABELS,
-} from '@/core/constants/choirPositions'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
-import type { VoicePosition } from '@/core/types/suguan'
 import {
   countActiveDirectoryFilters,
   toggleInList,
@@ -34,6 +30,8 @@ interface MobileFilterSheetProps {
   filters: MemberDirectoryFilters
   onApply: (filters: MemberDirectoryFilters) => void
   voices: VoicePosition[]
+  /** Configured duty roles, which are the directory's choir positions. */
+  dutyRoles: DutyRole[]
   stats: DirectoryStats
   /** Live count for the in-progress edits, not the already-applied filters. */
   previewCount: (filters: MemberDirectoryFilters) => number
@@ -178,6 +176,7 @@ export function MobileFilterSheet({
   filters,
   onApply,
   voices,
+  dutyRoles,
   stats,
   previewCount,
 }: MobileFilterSheetProps) {
@@ -269,16 +268,16 @@ export function MobileFilterSheet({
                   }
                 />
               ))}
-              {CHOIR_POSITIONS.map((position) => (
+              {dutyRoles.map((role) => (
                 <CheckRow
-                  key={position.id}
-                  label={POSITION_LABELS[position.id]}
-                  count={stats.positionCounts.get(position.id) ?? 0}
-                  active={draft.positions.includes(position.id)}
+                  key={role.id}
+                  label={role.name}
+                  count={stats.positionCounts.get(role.id) ?? 0}
+                  active={draft.positions.includes(role.id)}
                   onToggle={() =>
                     setDraft((d) => ({
                       ...d,
-                      positions: toggleInList(d.positions, position.id),
+                      positions: toggleInList(d.positions, role.id),
                     }))
                   }
                 />

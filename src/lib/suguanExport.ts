@@ -487,11 +487,17 @@ export function computeSuguanLayout(
         6
       ) * PT_TO_MM
     : fs.titleRowHeight * PT_TO_MM
+  const spacingMm =
+    ((fmt.tableSpacingBeforePt ?? 0) + (fmt.tableSpacingAfterPt ?? 0)) *
+    PT_TO_MM
   const headerRowH = (suguan.extraOccasion ? 15 : fs.headerRowHeight) * PT_TO_MM
   const globalHeaderBlockH = headerRowH * 2
   const sectionLabelRowH = headerRowH
-  const baseBodyRowMm = Math.max(fs.rowHeight * PT_TO_MM, fs.bodyFontSize * PT_TO_MM * 1.5)
-  let bodyRowH = baseBodyRowMm
+  const baseBodyRowMm = Math.max(
+    fs.rowHeight * PT_TO_MM,
+    fs.bodyFontSize * PT_TO_MM * 1.5,
+  )
+  let bodyRowH = baseBodyRowMm + spacingMm
 
   // Signature geometry is derived from the preset and the usable width only, so
   // it stays identical between the preview and the PDF and is never affected by
@@ -527,17 +533,18 @@ export function computeSuguanLayout(
   let bodyFontSizePt = nameLayout.nameFontSize
 
   if (fitToPage && rowCount > 0) {
-    const totalContentH = sections.reduce(
-      (acc, s) => acc + sectionLabelRowH + s.rows.length * bodyRowH,
-      0,
-    )
+    const totalContentH =
+      sections.length * sectionLabelRowH + rowCount * baseBodyRowMm
     const needed = totalContentH + sig.totalMm
     if (needed > usableTableH) {
       const fixedSectionH = sections.length * sectionLabelRowH
       const availableBodyH = Math.max(0, usableTableH - sig.totalMm - fixedSectionH)
-      const totalBodyH = rowCount * bodyRowH
-      scale = Math.min(1, Math.max(0.4, (availableBodyH / totalBodyH) * 0.98))
-      bodyRowH = Math.max(6 * 1.25 * PT_TO_MM, bodyRowH * scale)
+      const totalBodyH = rowCount * baseBodyRowMm
+      scale = Math.min(
+        1,
+        Math.max(0.4, (availableBodyH / totalBodyH) * 0.98),
+      )
+      bodyRowH = Math.max(6 * 1.25 * PT_TO_MM, baseBodyRowMm * scale) + spacingMm
       bodyFontSizePt = Math.max(6, nameLayout.nameFontSize * scale)
     }
   }
@@ -752,6 +759,8 @@ export async function createSuguanExcelBlob(
     sheet.getCell(headerRow2, col).border = fullBorder()
   }
 
+  const tableSpacingPt =
+    (fmt.tableSpacingBeforePt ?? 0) + (fmt.tableSpacingAfterPt ?? 0)
   sheet.getRow(headerRow1).height = isExtraOccasion ? 15 : fs.headerRowHeight
   sheet.getRow(headerRow2).height = isExtraOccasion ? 15 : fs.headerRowHeight
   sheet.getCell(headerRow1, 1).value = isExtraOccasion ? 'Blg.' : 'No.'
@@ -840,7 +849,7 @@ export async function createSuguanExcelBlob(
           bottom: thinBorder(),
         }
       }
-      sheet.getRow(rn).height = fs.rowHeight
+      sheet.getRow(rn).height = fs.rowHeight + tableSpacingPt
       rn++
     }
   }

@@ -1,12 +1,8 @@
 import {
-  CHOIR_POSITIONS,
-  POSITION_LABELS,
-} from '@/core/constants/choirPositions'
-import {
   MEMBERSHIP_LABELS,
-  memberEffectivePositions,
   memberIsOrganist,
 } from '@/core/constants/memberMembership'
+import { countMembersByRank, memberRankIds, memberRankNames } from '@/lib/memberRanks'
 import type { Member, Trainee } from '@/core/types/member'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import { getVoiceName } from '@/core/constants/voicePositions'
@@ -23,31 +19,6 @@ export type MasterListPdfSection =
 export type MasterListSummaryRow =
   | { kind: 'section'; category: string }
   | { kind: 'item'; category: string; count: number }
-
-const RANKING_ORDER = [
-  'pangulong-mang-aawit',
-  'kalihim',
-  'organista',
-  'oic',
-]
-
-const LEGACY_POSITION_FOR_ROLE: Partial<
-  Record<string, Member['positions'][number]>
-> = {
-  'pangulong-mang-aawit': 'pangulong-mang-aawit',
-  kalihim: 'kalihim-ng-mang-aawit',
-  oic: 'oic',
-}
-
-function memberHasDutyRole(member: Member, roleId: string): boolean {
-  return (
-    member.assignedDutyRoleIds?.includes(roleId) === true ||
-    (LEGACY_POSITION_FOR_ROLE[roleId] !== undefined &&
-      memberEffectivePositions(member).includes(
-        LEGACY_POSITION_FOR_ROLE[roleId]!,
-      ))
-  )
-}
 
 export function groupMasterListPdfSections(
   members: Member[],
@@ -77,46 +48,18 @@ export function groupMasterListPdfSections(
     },
   ]
 
-  const roleFor = (id: string) =>
-    dutyRoles.find((candidate) => candidate.id === id)
-  const rankedRoles: {
-    role: DutyRole
-    title: string
-    isOrganist: boolean
-  }[] = []
-  for (const id of ['pangulong-mang-aawit', 'kalihim']) {
-    const role = roleFor(id)
-    if (role) rankedRoles.push({ role, title: role.name, isOrganist: false })
-  }
-  const organistRole = roleFor('organista') ?? roleFor('organista-reserve')
-  if (organistRole) {
-    rankedRoles.push({
-      role: organistRole,
-      title: 'Organists',
-      isOrganist: true,
-    })
-  }
-  const oicRole = roleFor('oic')
-  if (oicRole) rankedRoles.push({ role: oicRole, title: oicRole.name, isOrganist: false })
-  const standardRoleIds = new Set([...RANKING_ORDER, 'organista-reserve'])
+  // One ranking section per configured duty role, in the order Settings holds
+  // them, so the sheet names each rank exactly as the administrator typed it. A
+  // member appears under every rank they hold, and a rank with no members is
+  // skipped.
   for (const role of dutyRoles) {
-    if (!standardRoleIds.has(role.id)) {
-      rankedRoles.push({ role, title: role.name, isOrganist: false })
-    }
-  }
-
-  for (const { role, title, isOrganist } of rankedRoles) {
     const assigned = members.filter((member) =>
-      isOrganist
-        ? memberIsOrganist(member) ||
-          member.assignedDutyRoleIds?.includes('organista') === true ||
-          member.assignedDutyRoleIds?.includes('organista-reserve') === true
-        : memberHasDutyRole(member, role.id),
+      memberRankIds(member, dutyRoles).includes(role.id),
     )
     if (assigned.length > 0) {
       sections.push({
         kind: 'members',
-        title: `${choirName} - ${title}`,
+        title: `${choirName} - ${role.name}`,
         order: 'name',
         members: assigned,
       })
@@ -204,12 +147,9 @@ export function summarizeMasterList(
   members: Member[],
   trainees: Trainee[],
   voices: VoicePosition[],
+  dutyRoles: DutyRole[] = [],
 ): MasterListSummaryRow[] {
-  const otherPositionIds = new Set(
-    CHOIR_POSITIONS.filter(
-      ({ id }) => id !== 'organista' && id !== 'assistant-tagapagturo',
-    ).map(({ id }) => id),
-  )
+  const rankCounts = countMembersByRank(members, dutyRoles)
   return [
     { kind: 'section', category: 'CHOIR MEMBERS' },
     { kind: 'item', category: 'Total Choir Members', count: members.length },
@@ -248,15 +188,15 @@ export function summarizeMasterList(
       category: 'Organists',
       count: members.filter(memberIsOrganist).length,
     },
-    {
-      kind: 'item',
-      category: 'OIC / Other Positions',
-      count: members.filter((member) =>
-        memberEffectivePositions(member).some((position) =>
-          otherPositionIds.has(position),
-        ),
-      ).length,
-    },
+    // One count per configured duty role, so the summary reflects the ranks the
+    // administrator actually uses instead of a built-in list.
+    ...dutyRoles.map(
+      (role): MasterListSummaryRow => ({
+        kind: 'item',
+        category: role.name,
+        count: rankCounts.get(role.id) ?? 0,
+      }),
+    ),
     {
       kind: 'item',
       category: 'Active Members',
@@ -314,14 +254,8 @@ export function masterListPdfPosition(
   member: Member,
   dutyRoles: DutyRole[] = [],
 ): string {
-  const positions = memberEffectivePositions(member).map(
-    (position) => POSITION_LABELS[position],
-  )
-  const assignedRoleNames = (member.assignedDutyRoleIds ?? [])
-    .map((id) => dutyRoles.find((role) => role.id === id)?.name)
-    .filter((name): name is string => Boolean(name))
-  const labels = [...new Set([...positions, ...assignedRoleNames])]
-  if (labels.length > 0) return labels.join(', ')
+  const ranks = memberRankNames(member, dutyRoles)
+  if (ranks.length > 0) return ranks.join(', ')
   return MEMBERSHIP_LABELS[member.membershipType]
 }
 

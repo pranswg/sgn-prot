@@ -19,7 +19,6 @@ import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
 import type { MemberInput, TraineeInput } from '@/core/types/member'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
-import { CHOIR_POSITIONS } from '@/core/constants/choirPositions'
 import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
 import { extractRosterFromPdf, type RosterCandidate } from '@/lib/rosterImport'
 import {
@@ -447,12 +446,13 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
                               {MEMBERSHIP_LABELS[candidate.membershipType]}
                             </Badge>
                           )}
-                          {candidate.positions && candidate.positions.length > 0 && (
+                          {(candidate.assignedDutyRoleIds ?? []).length > 0 && (
                             <Badge variant="secondary">
-                              {candidate.positions
+                              {(candidate.assignedDutyRoleIds ?? [])
                                 .map(
-                                  (p) =>
-                                    CHOIR_POSITIONS.find((c) => c.id === p)?.label ?? p,
+                                  (id) =>
+                                    allDutyRoles().find((r) => r.id === id)?.name ??
+                                    id,
                                 )
                                 .join(', ')}
                             </Badge>

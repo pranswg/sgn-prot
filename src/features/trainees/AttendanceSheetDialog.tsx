@@ -3,6 +3,8 @@ import { CalendarDays, ChevronDown, FileDown } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Member, Trainee } from '@/core/types/member'
 import type { DutyRole } from '@/core/types/suguan'
+import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
+import { memberHasRank } from '@/lib/memberRanks'
 import { WEEKDAY_OPTIONS } from '@/core/constants/worshipSchedules'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -77,14 +79,6 @@ interface AttendanceSheetDialogProps {
   localeName: string
 }
 
-function normalizeRoleName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-}
-
 export function AttendanceSheetDialog({
   open,
   onOpenChange,
@@ -108,20 +102,13 @@ export function AttendanceSheetDialog({
     () => generatePracticeDates(startDate, endDate, weekdays),
     [startDate, endDate, weekdays],
   )
-  const pangulongRoleIds = new Set(
-    dutyRoles
-      .filter((role) => normalizeRoleName(role.name) === 'pangulongmangaawit')
-      .map((role) => role.id),
-  )
+  const pangulongRole = resolvePmDutyRole(dutyRoles)
   const pangulongMembers = members
     .filter(
       (member) =>
         member.isActive &&
-        (member.positions.includes('pangulong-mang-aawit') ||
-          member.assignedDutyRoleIds?.includes('pangulong-mang-aawit') ===
-            true ||
-          member.assignedDutyRoleIds?.some((id) => pangulongRoleIds.has(id)) ===
-            true),
+        pangulongRole !== undefined &&
+        memberHasRank(member, pangulongRole.id, dutyRoles),
     )
     .sort((left, right) =>
       `${left.lastName} ${left.firstName}`.localeCompare(

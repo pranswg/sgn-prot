@@ -196,6 +196,15 @@ is clamped to `CUSTOM_BODY_FONT_MIN..MAX` and rounded to a half point in
 `normalizeDocFormat`, so a cleared or garbage input falls back to `normal`
 rather than reaching the layout maths as `NaN`.
 
+`DocumentSetupStep` is shared by the Choir, Organist, and Extra Occasion
+makers. Its `tableSpacingBeforePt` / `tableSpacingAfterPt` settings apply only
+to roster names, never table headers, section labels, titles, headings, or
+signatory paragraphs. Normalize older saved formats to zero spacing. Spacing
+must not influence font-size or fit-page scaling; it may increase row height or
+pagination only. The shared Choir/Extra Occasion table geometry, PDF, preview,
+Excel row heights, and Word name paragraphs must stay aligned; the Organist PDF
+and Word table renderers consume the same format fields.
+
 ### 2. Fonts are self-hosted as `SuguanSheet`, not `Inter`
 
 `src/assets/fonts/Inter-{Regular,Bold}.ttf` are registered in `src/index.css`
@@ -328,12 +337,27 @@ import path to it later without asking.
 `MEMBERSHIP_LABELS` / `MEMBERSHIP_SHORT_LABELS`): Mang-aawit, Organista,
 Tagapagturo ng Awit, and Assistant Tagapagturo ng Awit. **The three
 organist-family memberships are one category**: `isOrganistMembership()` marks
-them, `memberEffectivePositions()` derives the `organista` position from the
-category (the store's `positions` array still holds only the legacy
-privileges), and `memberIsOrganist()` gates the Organist Suguan member picker.
-The old `provisional` membership was removed in store version 4 and migrates to
-`regular`; anything that still reads `membershipType === 'provisional'` is
-working on dead data.
+them, `memberRankIds()` (`src/lib/memberRanks.ts`) counts them as the configured
+`Organista` rank, and `memberIsOrganist()` gates the Organist Suguan member
+picker. The old `provisional` membership was removed in store version 4 and
+migrates to `regular`; anything that still reads
+`membershipType === 'provisional'` is working on dead data.
+
+**The configured Duty Roles are the single source of truth for choir ranks.**
+`src/lib/memberRanks.ts` resolves a member's ranks from `assignedDutyRoleIds`
+against the roles Settings holds; there is no built-in rank catalogue in code
+(no `choirPositions.ts`, no `POSITION_LABELS`). The directory filter and its
+counts, the Master List PDF sections/summary/Position column, the Pangulong
+signature lookup, the OIC field, and the Attendance sheet all read
+`memberRankIds` / `memberRankNames` / `countMembersByRank`. Ranks are matched by
+**name** (case- and punctuation-insensitive, via `findDutyRoleByName`), because
+roles created in Settings carry generated ids, so never compare against a fixed
+role id. Two bridges keep older data visible: a stored legacy `ChoirPosition`
+counts when a configured role carries the same name (`LEGACY_POSITION_RANK_NAMES`),
+and an organist-family membership counts as the configured `Organista` rank. The
+`ChoirPosition` type, the `Member.positions` field, and the stored OIC key
+`'oic'` (`OIC_DUTY_ROLE_ID`, which is not a configured-role id) all stay for
+reading saved data.
 
 The member forms deliberately have no UI for Status (active), privileges,
 Date Added, or Notes. `isActive` is only toggled from the profile, `dateAdded`
@@ -358,16 +382,16 @@ config, and **OIC**. Pangulong Mang-aawit and Kalihim are read from the Master
 List, and Mang-aawit is the plain-singer default, so none of them gets a picker.
 The **OIC** field offers only active members the Master List marks with the OIC
 ranking. The ranking's duty role is resolved by `resolveOicDutyRole` in
-`src/core/constants/dutyRoles.ts` — the canonical `oic` id first, else a role the
-user named "OIC", because duty roles created in Settings carry a generated id.
-Candidates are active members whose `assignedDutyRoleIds` includes that role's
-id, or who hold a legacy stored `oic` position (the same rule the Master List
-PDF's OIC section uses); those legacy members alone also keep the field visible
-when no OIC duty role is configured. The panel always stores the chosen member
-under the canonical `dutyRoleId: 'oic'`, which is what `suguanExport` and
-`extraOccasionData` key on to suffix the printed row with ` - OIC`. **Destinado
-is required**: both `saveBlockers` (Choir builder) and `validateOccasion` (Extra
-Occasion) block save and export until it is filled.
+`src/core/constants/dutyRoles.ts` — a role the user named "OIC", because duty
+roles created in Settings carry a generated id. Candidates are active members
+whose ranks (`memberRankIds`) include that role's id, or who hold a legacy stored
+`oic` position (the same rule the Master List PDF's OIC section uses); those
+legacy members alone also keep the field visible when no OIC duty role is
+configured. The panel always stores the chosen member under the canonical
+`dutyRoleId: 'oic'`, which is what `suguanExport` and `extraOccasionData` key on
+to suffix the printed row with ` - OIC`. **Destinado is required**: both
+`saveBlockers` (Choir builder) and `validateOccasion` (Extra Occasion) block save
+and export until it is filled.
 
 The Choir Suguan builder **never assigns the `organista` or
 `organista-reserve` duty roles** — those duties belong to the Organist Suguan
@@ -380,12 +404,11 @@ place. It is **two single-member fields** — Organista and Reserbang Organista 
 for the occasion's single sheet section; there is no schedule picker (an Extra
 Occasion always renders exactly one section) and each field replaces that role's
 row, so the stored per-schedule row list holds at most one row per role.
-`CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS` in
-`src/core/constants/dutyRoles.ts` still makes `createDraftFromSuguan` strip
-stored organist duty roles on load/edit, so already-saved records keep their
-data until re-saved. The roles themselves stay in Settings for the Master List
-PDF's Organists section, which resolves through `memberIsOrganist`, not the
-duty-role assignments.
+`createDraftFromSuguan` keeps **only the stored OIC duty role** (`OIC_DUTY_ROLE_ID`)
+and strips every other stored duty role on load/edit, so already-saved records
+keep their data until re-saved. The configured roles themselves stay in Settings
+for the Master List PDF's sections, which resolve through `memberRankIds`, not
+the stored duty-role assignments.
 
 `AssignmentWorkspace` has two layouts, chosen by its `layout` prop and not by a
 fork: `builder` (the default) is the Choir Suguan wizard's step, with the

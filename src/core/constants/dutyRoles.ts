@@ -1,39 +1,49 @@
-export const REGULAR_WORSHIP_DUTY_ROLES = [
-  'oic',
-  'organista',
-  'organista-reserve',
-]
+/** Case- and punctuation-insensitive key for comparing role names. */
+export function normalizeRoleName(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
 
 /**
- * Duty roles the Choir Suguan builder never assigns: the printed sheet has no
- * organista slot, and organist duties belong to the Organist Suguan feature.
- * Hidden from the Special Duties panel and stripped from builder drafts.
+ * The configured duty role whose name matches, ignoring case, spacing and
+ * punctuation. Duty roles created in Settings carry a generated id, so a name
+ * is the stable way to find the one that plays a known part.
  */
-export const CHOIR_SUGUAN_EXCLUDED_DUTY_ROLE_IDS = new Set([
-  'organista',
-  'organista-reserve',
-])
+export function findDutyRoleByName<T extends { name: string }>(
+  roles: readonly T[],
+  name: string,
+): T | undefined {
+  const key = normalizeRoleName(name)
+  if (!key) return undefined
+  return roles.find((role) => normalizeRoleName(role.name) === key)
+}
 
 /**
- * The OIC ranking. A Suguan stores its chosen OIC under this exact id
- * (`dutyRoleId: 'oic'`), and the printed sheets suffix that member's row with
- * ` - OIC` when it matches.
+ * The key a Suguan stores its OIC assignment under (`dutyRoleId`). It
+ * identifies the OIC slot on a saved record and the ` - OIC` suffix the sheet
+ * prints; it is not a configured role id. The configured OIC role is whichever
+ * the administrator named "OIC".
  */
 export const OIC_DUTY_ROLE_ID = 'oic'
 
-/**
- * The configured duty role that represents the OIC ranking.
- *
- * The canonical `'oic'` id is preferred, because that is what the stored
- * `dutyRoleId` and the sheet renderers key on. Duty roles created in Settings
- * carry a generated id, though, so a role the user simply named "OIC" is
- * accepted as well.
- */
+/** Name a configured role must carry to be treated as the OIC ranking. */
+export const OIC_DUTY_ROLE_NAME = 'OIC'
+
+/** The configured duty role that represents the OIC ranking, matched by name. */
 export function resolveOicDutyRole<T extends { id: string; name: string }>(
   roles: readonly T[],
 ): T | undefined {
-  return (
-    roles.find((role) => role.id === OIC_DUTY_ROLE_ID) ??
-    roles.find((role) => role.name.trim().toLowerCase() === OIC_DUTY_ROLE_ID)
-  )
+  return findDutyRoleByName(roles, OIC_DUTY_ROLE_NAME)
+}
+
+/**
+ * Name a configured role must carry to be treated as the Pangulong Mang-aawit
+ * ranking, which the printed signatures draw on.
+ */
+export const PM_DUTY_ROLE_NAME = 'Pangulong Mang-aawit'
+
+/** The configured duty role that represents the Pangulong Mang-aawit ranking. */
+export function resolvePmDutyRole<T extends { id: string; name: string }>(
+  roles: readonly T[],
+): T | undefined {
+  return findDutyRoleByName(roles, PM_DUTY_ROLE_NAME)
 }

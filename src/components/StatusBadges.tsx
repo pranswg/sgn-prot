@@ -1,8 +1,7 @@
 import { RotateCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { ChoirPosition, Member } from '@/core/types/member'
-import { POSITION_SHORT_LABELS } from '@/core/constants/choirPositions'
+import type { Member } from '@/core/types/member'
 import {
   memberLifecycleStatus,
   MEMBER_LIFECYCLE_STATE_LABELS,
@@ -157,25 +156,3 @@ export function VoiceBadge({ name }: { name: string }) {
   )
 }
 
-const POSITION_BADGE_STYLES: Record<ChoirPosition, string> = {
-  oic: 'border-brand-teal/30 bg-brand-teal-soft text-brand-teal',
-  'kalihim-ng-mang-aawit':
-    'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
-  'pangulong-mang-aawit':
-    'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  organista: 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300',
-  'assistant-tagapagturo':
-    'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
-}
-
-export function PositionBadge({ position }: { position: ChoirPosition }) {
-  return (
-    <Badge
-      variant="outline"
-      title={POSITION_SHORT_LABELS[position]}
-      className={cn(badgeBase, POSITION_BADGE_STYLES[position])}
-    >
-      {POSITION_SHORT_LABELS[position]}
-    </Badge>
-  )
-}

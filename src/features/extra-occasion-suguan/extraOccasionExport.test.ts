@@ -173,7 +173,11 @@ test('the shared Word builder renders the adapted occasion sheet', async () => {
     [member],
     config,
   )
-  const blob = await createSuguanDocxBlob(occasionSheet, [member])
+  const blob = await createSuguanDocxBlob(occasionSheet, [member], {
+    ...A4_LANDSCAPE,
+    tableSpacingBeforePt: 2,
+    tableSpacingAfterPt: 3,
+  })
 
   assert.equal(
     blob.type,

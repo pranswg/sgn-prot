@@ -1,4 +1,4 @@
-import type { ChoirPosition, Member, MembershipType } from '@/core/types/member'
+import type { Member, MembershipType } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import { getVoiceName } from '@/core/constants/voicePositions'
 
@@ -51,20 +51,6 @@ export function memberIsOrganist(
       (p) => p === 'organista' || p === 'assistant-tagapagturo',
     )
   )
-}
-
-/**
- * The positions a member effectively holds. The organist category is derived
- * into the canonical `organista` position so consumers that still read stored
- * positions (directory filters, counts, exports, duty-role eligibility) see an
- * Organista-category member everywhere the old privileges list did.
- */
-export function memberEffectivePositions(
-  member: Pick<Member, 'membershipType' | 'positions'>,
-): ChoirPosition[] {
-  const base = member.positions ?? []
-  if (!isOrganistMembership(member.membershipType)) return base
-  return base.includes('organista') ? base : [...base, 'organista']
 }
 
 /**

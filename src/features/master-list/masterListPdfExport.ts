@@ -230,7 +230,7 @@ export async function exportMasterListPdf(
     doc.text('No assigned rankings', PAGE_MARGIN, nextY)
   }
 
-  const summaryDetails = summarizeMasterList(members, trainees, voices)
+  const summaryDetails = summarizeMasterList(members, trainees, voices, dutyRoles)
   const summaryRows = summaryDetails.map(
     (row) => [row.category, row.kind === 'item' ? String(row.count) : ''],
   )

@@ -6,7 +6,7 @@ import type {
   WorshipScheduleCategories,
 } from '@/core/constants/worshipSchedules'
 import { worshipDayName } from '@/core/constants/worshipSchedules'
-import { POSITION_LABELS } from '@/core/constants/choirPositions'
+import { LEGACY_POSITION_RANK_NAMES } from '@/lib/memberRanks'
 import {
   isOrganistMembership,
   MEMBERSHIP_LABELS,
@@ -87,7 +87,7 @@ export function organistPrivilegeLabel(
   const stored = (member.positions ?? []).find(
     (p) => p === 'organista' || p === 'assistant-tagapagturo',
   )
-  return stored ? (POSITION_LABELS[stored] ?? stored) : ''
+  return stored ? LEGACY_POSITION_RANK_NAMES[stored] : ''
 }
 
 /**

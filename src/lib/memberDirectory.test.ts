@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { Member } from '@/core/types/member'
-import type { VoicePosition } from '@/core/types/suguan'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import {
   buildMemberReferences,
   computeDirectoryStats,
@@ -39,6 +39,17 @@ const VOICES: VoicePosition[] = [
   { id: 'alto', name: 'Alto', shortName: 'A', gender: 'female' },
   { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
   { id: 'bass', name: 'Bass', shortName: 'B', gender: 'male' },
+]
+
+/**
+ * Configured duty roles, which are the directory's choir positions. The ids are
+ * deliberately not the old fixed `ChoirPosition` ids, so a member's stored
+ * legacy position only matches by name.
+ */
+const DUTY_ROLES: DutyRole[] = [
+  { id: 'pm', name: 'Pangulong Mang-aawit', abbreviation: 'PM' },
+  { id: 'oic', name: 'OIC', abbreviation: 'OIC' },
+  { id: 'organista', name: 'Organista', abbreviation: 'ORG' },
 ]
 
 const MEMBERS: Member[] = [
@@ -82,9 +93,13 @@ function filters(over: Partial<MemberDirectoryFilters> = {}): MemberDirectoryFil
 }
 
 function run(f: MemberDirectoryFilters) {
-  return filterMembers(MEMBERS, f, VOICES, buildMemberReferences(MEMBERS)).map(
-    (m) => m.id,
-  )
+  return filterMembers(
+    MEMBERS,
+    f,
+    VOICES,
+    DUTY_ROLES,
+    buildMemberReferences(MEMBERS),
+  ).map((m) => m.id)
 }
 
 test('an empty filter set returns everyone', () => {
@@ -129,8 +144,8 @@ test('voice multi-select matches any selected voice', () => {
 })
 
 test('a position filter matches members holding any selected position', () => {
-  assert.deepEqual(run(filters({ positions: ['pangulong-mang-aawit'] })), ['1'])
-  assert.deepEqual(run(filters({ positions: ['oic', 'pangulong-mang-aawit'] })), ['1', '3'])
+  assert.deepEqual(run(filters({ positions: ['pm'] })), ['1'])
+  assert.deepEqual(run(filters({ positions: ['oic', 'pm'] })), ['1', '3'])
 })
 
 test('an organist-category member matches the organista position filter', () => {
@@ -139,7 +154,7 @@ test('an organist-category member matches the organista position filter', () => 
 
 test('filters compose as AND across every dimension', () => {
   assert.deepEqual(
-    run(filters({ quick: 'active', gender: 'female', positions: ['pangulong-mang-aawit'] })),
+    run(filters({ quick: 'active', gender: 'female', positions: ['pm'] })),
     ['1'],
   )
 })
@@ -174,6 +189,7 @@ test('ties on the primary key fall through to the secondary key', () => {
     tied,
     filters(),
     VOICES,
+    DUTY_ROLES,
     buildMemberReferences(tied),
   ).map((m) => m.id)
   // Same surname, so given name decides: Ana before Zara.
@@ -185,6 +201,7 @@ test('first-name sort orders by given name then surname', () => {
     MEMBERS,
     filters(),
     VOICES,
+    DUTY_ROLES,
     buildMemberReferences(MEMBERS),
     'first-name',
   ).map((m) => m.firstName)
@@ -197,6 +214,7 @@ test('voice-position sort follows the configured voice order, not alphabetical',
     MEMBERS,
     filters(),
     VOICES,
+    DUTY_ROLES,
     buildMemberReferences(MEMBERS),
     'voice-position',
   ).map((m) => m.id)
@@ -212,6 +230,7 @@ test('a voice missing from settings sorts after every configured voice', () => {
     roster,
     filters(),
     VOICES,
+    DUTY_ROLES,
     buildMemberReferences(roster),
     'voice-position',
   ).map((m) => m.id)
@@ -228,6 +247,7 @@ test('recently-added orders newest first and breaks date ties by surname', () =>
     roster,
     filters(),
     VOICES,
+    DUTY_ROLES,
     buildMemberReferences(roster),
     'recently-added',
   ).map((m) => m.id)
@@ -247,6 +267,7 @@ test('the recent quick filter matches everyone and orders newest first', () => {
     roster,
     filters({ quick: 'recent' }),
     VOICES,
+    DUTY_ROLES,
     buildMemberReferences(roster),
   ).map((m) => m.id)
   assert.deepEqual(order, ['early', 'late', 'old'])
@@ -313,7 +334,7 @@ test('groupMembersByGender splits without reordering', () => {
 })
 
 test('computeDirectoryStats counts active, membership types, and privileges', () => {
-  const stats = computeDirectoryStats(MEMBERS, [{ status: 'active' }, { status: 'inactive' }], VOICES)
+  const stats = computeDirectoryStats(MEMBERS, [{ status: 'active' }, { status: 'inactive' }], VOICES, DUTY_ROLES)
   assert.equal(stats.total, 3)
   assert.equal(stats.active, 2)
   assert.equal(stats.inactive, 1)
@@ -331,7 +352,7 @@ test('computeDirectoryStats counts active, membership types, and privileges', ()
 })
 
 test('voiceCounts follow configured voice order, not size', () => {
-  const stats = computeDirectoryStats(MEMBERS, [], VOICES)
+  const stats = computeDirectoryStats(MEMBERS, [], VOICES, DUTY_ROLES)
   assert.deepEqual(
     stats.voiceCounts.map((v) => v.id),
     ['soprano-1', 'soprano-2', 'alto', 'tenor', 'bass'],
@@ -342,12 +363,12 @@ test('voiceCounts follow configured voice order, not size', () => {
   )
 })
 
-test('positionCounts includes every configured position, even at zero', () => {
-  const stats = computeDirectoryStats(MEMBERS, [], VOICES)
-  assert.equal(stats.positionCounts.get('pangulong-mang-aawit'), 1)
+test('positionCounts includes every configured rank, even at zero', () => {
+  const stats = computeDirectoryStats(MEMBERS, [], VOICES, DUTY_ROLES)
+  assert.equal(stats.positionCounts.get('pm'), 1)
   assert.equal(stats.positionCounts.get('oic'), 1)
-  // The organist category derives into the organista position, with no
-  // position stored on the member.
+  // The organist category counts as the configured Organista rank, with no
+  // rank assigned on the member.
   assert.equal(stats.positionCounts.get('organista'), 1)
 })
 

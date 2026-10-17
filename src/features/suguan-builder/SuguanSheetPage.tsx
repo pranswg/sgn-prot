@@ -114,6 +114,11 @@ export function SuguanSheetPage({
   const headerPx = fs.headerFontSize * layout.scale * PT_TO_PX
   const extraHeaderPx = EXTRA_OCCASION_HEADER_FONT_SIZE_PT * PT_TO_PX
   const bodyPx = layout.bodyFontSizePt * PT_TO_PX
+  const paragraphOffsetMm =
+    (((layout.fmt.tableSpacingBeforePt ?? 0) -
+      (layout.fmt.tableSpacingAfterPt ?? 0)) *
+      PT_TO_MM) /
+    2
   // Locked to fixed sizes so fit-page scaling never shrinks the signatures.
   const sigNameMm = sigGeo.nameFontSizePt * PT_TO_MM
   const sigRolePx = sigGeo.roleFontSizePt * PT_TO_PX
@@ -238,14 +243,21 @@ export function SuguanSheetPage({
               paddingLeft: 3,
             }}
           >
-            {row.name.endsWith(' - OIC') ? (
-              <span>
-                {row.name.slice(0, -6)}
-                <span style={{ fontWeight: 700 }}>{row.name.slice(-6)}</span>
-              </span>
-            ) : (
-              row.name
-            )}
+            <span
+              style={{
+                position: 'relative',
+                top: px(paragraphOffsetMm),
+              }}
+            >
+              {row.name.endsWith(' - OIC') ? (
+                <>
+                  {row.name.slice(0, -6)}
+                  <span style={{ fontWeight: 700 }}>{row.name.slice(-6)}</span>
+                </>
+              ) : (
+                row.name
+              )}
+            </span>
           </td>
           {events.map((_, j) => (
             <td

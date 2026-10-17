@@ -73,6 +73,10 @@ export async function createSuguanDocxBlob(
   const columnWidths = columnWidthsMm.map(toTwips)
   const totalWidthTwips = toTwips(totalWidth)
   const isExtraOccasion = Boolean(suguan.extraOccasion)
+  const paragraphSpacing = {
+    before: Math.round((layout.fmt.tableSpacingBeforePt ?? 0) * 20),
+    after: Math.round((layout.fmt.tableSpacingAfterPt ?? 0) * 20),
+  }
   const occasionHeading = isExtraOccasion
     ? extraOccasionSheetHeading(suguan)
     : null
@@ -223,6 +227,7 @@ export async function createSuguanDocxBlob(
               children: [
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
+                  spacing: paragraphSpacing,
                   children: [
                     new TextRun({
                       text: row.name,

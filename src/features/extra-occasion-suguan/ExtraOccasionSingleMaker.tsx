@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileDown, FileSpreadsheet, FileText } from 'lucide-react'
+import { Eye, FileDown, FileSpreadsheet, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
@@ -10,6 +10,7 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { exportFileName } from '@/lib/exportNaming'
+import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import {
   emptyOccasionState,
@@ -21,6 +22,7 @@ import {
 } from './extraOccasionDraft'
 import {
   runOccasionExport,
+  buildOccasionPdfPreview,
   type ExtraOccasionExportKind,
 } from './extraOccasionExportActions'
 
@@ -60,7 +62,9 @@ export function ExtraOccasionSingleMaker() {
           useSettingsStore.getState().localeName,
         ),
   )
-  const [exporting, setExporting] = useState<ExtraOccasionExportKind | null>(null)
+  const [exporting, setExporting] = useState<
+    ExtraOccasionExportKind | 'preview' | null
+  >(null)
   const [saving, setSaving] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
 
@@ -94,6 +98,32 @@ export function ExtraOccasionSingleMaker() {
     } finally {
       setExporting(null)
     }
+  }
+
+  const previewPdf = () => {
+    const problem = validateOccasion(state)
+    if (problem) {
+      toast.error(problem)
+      return
+    }
+    const previewWindow = openPdfPreviewWindow()
+    if (!previewWindow) {
+      toast.error('Allow pop-ups to preview the Extra Occasion Suguan PDF.')
+      return
+    }
+    setExporting('preview')
+    void (async () => {
+      try {
+        const blob = await buildOccasionPdfPreview(state, members, voices)
+        showPdfPreview(previewWindow, blob, 'Extra Occasion Suguan')
+      } catch (error) {
+        previewWindow.close()
+        console.error(error)
+        toast.error('Could not create the Extra Occasion Suguan PDF preview.')
+      } finally {
+        setExporting(null)
+      }
+    })()
   }
 
   const saveRecord = () => {
@@ -151,6 +181,15 @@ export function ExtraOccasionSingleMaker() {
 
       {can('export-documents') && (
         <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-wrap">
+          <Button
+            variant="outline"
+            onClick={previewPdf}
+            loading={exporting === 'preview'}
+            disabled={exporting !== null}
+          >
+            <Eye className="size-4" />
+            Preview PDF
+          </Button>
           <Button
             variant="outline"
             onClick={() => requestFileExport('pdf', 'PDF')}

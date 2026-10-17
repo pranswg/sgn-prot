@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   CalendarPlus,
   Copy,
+  Eye,
   FileDown,
   FileSpreadsheet,
   FileText,
@@ -34,6 +35,7 @@ import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
 import { useNavStore } from '@/store/navStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { exportFileName } from '@/lib/exportNaming'
+import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import type { Suguan } from '@/core/types/suguan'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
@@ -56,6 +58,7 @@ import {
   validateOccasion,
   type ExtraOccasionOccasionState,
 } from './extraOccasionDraft'
+import { buildOccasionPdfPreview } from './extraOccasionExportActions'
 import {
   comparisonRefs,
   detectMemberConflicts,
@@ -157,7 +160,9 @@ export function MultipleExtraOccasionPlanner() {
   )
   const [pending, setPending] = useState<PendingConflict[]>([])
   const [saving, setSaving] = useState(false)
-  const [exporting, setExporting] = useState<ExtraOccasionExportKind | null>(null)
+  const [exporting, setExporting] = useState<
+    ExtraOccasionExportKind | 'preview' | null
+  >(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
@@ -445,6 +450,41 @@ export function MultipleExtraOccasionPlanner() {
     }
   }
 
+  const previewSelectedPdf = () => {
+    if (!selected) return
+    const problem = validateOccasion(selected.state)
+    if (problem) {
+      toast.error(problem)
+      return
+    }
+    const previewWindow = openPdfPreviewWindow()
+    if (!previewWindow) {
+      toast.error('Allow pop-ups to preview the Extra Occasion Suguan PDF.')
+      return
+    }
+    setExporting('preview')
+    void (async () => {
+      try {
+        const blob = await buildOccasionPdfPreview(
+          selected.state,
+          members,
+          voices,
+        )
+        showPdfPreview(
+          previewWindow,
+          blob,
+          `${plannerOccasionLabel(selected, Math.max(selectedIndex, 0))} - Extra Occasion Suguan`,
+        )
+      } catch (error) {
+        previewWindow.close()
+        console.error(error)
+        toast.error('Could not create the Extra Occasion Suguan PDF preview.')
+      } finally {
+        setExporting(null)
+      }
+    })()
+  }
+
   const pendingItem = pending[0] ?? null
   const pendingMember = pendingItem
     ? members.find((member) => member.id === pendingItem.memberId) ?? null
@@ -652,6 +692,16 @@ export function MultipleExtraOccasionPlanner() {
           <section className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             {can('export-documents') && (
               <>
+                <Button
+                  variant="outline"
+                  className="col-span-3 sm:col-span-1"
+                  onClick={previewSelectedPdf}
+                  loading={exporting === 'preview'}
+                  disabled={exporting !== null}
+                >
+                  <Eye className="size-4" />
+                  Preview PDF
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => requestOccasionExport('pdf', 'PDF')}

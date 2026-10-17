@@ -4,8 +4,8 @@ import {
   getVoiceName,
   UNASSIGNED_VOICE_ID,
 } from '@/core/constants/voicePositions'
-import { positionSummary } from '@/core/constants/choirPositions'
-import { MEMBERSHIP_LABELS, memberEffectivePositions } from '@/core/constants/memberMembership'
+import { memberRankNames } from '@/lib/memberRanks'
+import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
 import { useSettingsStore } from '@/store/settingsStore'
 import type { VoicePosition, DutyRole } from '@/core/types/suguan'
 import {
@@ -134,20 +134,26 @@ export interface MemberExportRow {
   Notes: string
 }
 
-export function membersToRows(members: Member[]): MemberExportRow[] {
-  return members.map((m) => ({
-    'First Name': m.firstName,
-    'Last Name': m.lastName,
-    'Middle Name': m.middleName ?? '',
-    Suffix: m.suffix ?? '',
-    Gender: m.gender,
-    'Voice Position': voiceName(m.voicePosition),
-    'Positions / Privileges': positionSummary(memberEffectivePositions(m)),
-    'Membership Type': MEMBERSHIP_LABELS[m.membershipType],
-    Status: m.isActive ? 'Active' : 'Inactive',
-    'Date Added': m.dateAdded,
-    Notes: m.notes ?? '',
-  }))
+export function membersToRows(
+  members: Member[],
+  dutyRoles: DutyRole[] = [],
+): MemberExportRow[] {
+  return members.map((m) => {
+    const ranks = memberRankNames(m, dutyRoles)
+    return {
+      'First Name': m.firstName,
+      'Last Name': m.lastName,
+      'Middle Name': m.middleName ?? '',
+      Suffix: m.suffix ?? '',
+      Gender: m.gender,
+      'Voice Position': voiceName(m.voicePosition),
+      'Positions / Privileges': ranks.length > 0 ? ranks.join(', ') : '—',
+      'Membership Type': MEMBERSHIP_LABELS[m.membershipType],
+      Status: m.isActive ? 'Active' : 'Inactive',
+      'Date Added': m.dateAdded,
+      Notes: m.notes ?? '',
+    }
+  })
 }
 
 export function traineesToRows(trainees: Trainee[]) {
@@ -349,7 +355,7 @@ export async function createMasterListWordBlob(
   )
   const { contentSections, hierarchySections } =
     splitMasterListPdfSections(sections)
-  const summaryDetails = summarizeMasterList(members, trainees, voices)
+  const summaryDetails = summarizeMasterList(members, trainees, voices, dutyRoles)
   const children = []
 
   const makeParagraph = (

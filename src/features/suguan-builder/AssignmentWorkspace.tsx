@@ -57,6 +57,7 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
 import { buildMemberReferences, memberInitials } from '@/lib/memberDirectory'
+import { membersBookedAtSameInstant } from './doubleBooking'
 import { cn } from '@/lib/utils'
 import type { Member } from '@/core/types/member'
 import type { SuguanAssignment, SuguanScheduleSection } from '@/core/types/suguan'
@@ -103,6 +104,9 @@ type DragPayload =
   | { kind: 'assigned'; memberId: string; voicePosition: string }
 
 const DRAG_TYPE = 'application/x-suguan-assignment'
+
+/** Stable empty set, so the occasion layout does not rebuild `bookedIds`. */
+const EMPTY_IDS: Set<string> = new Set()
 
 /** Alphabetical by last name, then first name. */
 function compareMembers(a: Member, b: Member): number {
@@ -278,26 +282,33 @@ export function AssignmentWorkspace({
     [members],
   )
 
-  const doubleBooked = useMemo(() => {
-    const ids = new Set<string>()
-    const millis = new Date(`${draft.date}T${draft.time || '00:00'}`).getTime()
-    for (const s of allSuguan) {
-      // Skip the Suguan being edited so its own roster is not treated as a clash.
-      if (editingId && s.id === editingId) continue
-      if (new Date(`${s.date}T${s.time || '00:00'}`).getTime() !== millis) continue
-      for (const a of s.assignments) ids.add(a.memberId)
-    }
-    return ids
-  }, [allSuguan, draft.date, draft.time, editingId])
+  const doubleBooked = useMemo(
+    () =>
+      // An occasion's conflicts come from the Extra Occasion conflict engine
+      // and arrive as `conflictIds`, so the occasion layout never runs the
+      // worship-service scan.
+      isOccasion
+        ? EMPTY_IDS
+        : membersBookedAtSameInstant(allSuguan, {
+            date: draft.date,
+            time: draft.time,
+            editingId,
+          }),
+    [allSuguan, draft.date, draft.time, editingId, isOccasion],
+  )
 
-  // Same-timestamp clashes plus any externally-supplied conflicts (the Multiple
-  // Extra Occasion planner passes the members already booked on a shared date).
+  // Same-timestamp clashes plus any externally-supplied conflicts (the Extra
+  // Occasion makers pass the members booked on another live occasion).
   const bookedIds = useMemo(() => {
     if (!conflictIds || conflictIds.size === 0) return doubleBooked
     const merged = new Set(doubleBooked)
     for (const id of conflictIds) merged.add(id)
     return merged
   }, [doubleBooked, conflictIds])
+
+  const conflictLabel = isOccasion
+    ? 'Also assigned to another Extra Occasion Suguan'
+    : 'Already assigned to another Suguan on this date'
 
   const available = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -756,7 +767,9 @@ export function AssignmentWorkspace({
         destinadoName={draft.destinadoName}
         onDestinadoChange={(destinadoName) => patch({ destinadoName })}
         members={members}
-        organista={organista}
+        organista={
+          organista ? { ...organista, conflictIds: bookedIds } : undefined
+        }
       />
     </DisclosureSection>
   )
@@ -817,7 +830,7 @@ export function AssignmentWorkspace({
                   {bookedIds.has(a.memberId) && (
                     <AlertTriangle
                       className="size-3.5 shrink-0 text-amber-500"
-                      aria-label="Already assigned to another Suguan on this date"
+                      aria-label={conflictLabel}
                     />
                   )}
                   <VoiceBadge name={getVoiceName(a.voicePosition, voices)} />
@@ -911,6 +924,7 @@ export function AssignmentWorkspace({
                 reference={memberRefs.get(a.memberId)}
                 voices={voices}
                 conflicting={bookedIds.has(a.memberId)}
+                conflictLabel={conflictLabel}
                 reorderable={isManual}
                 first={indexOfAssignment(a) === 0}
                 last={indexOfAssignment(a) === lastIndexInVoice(a.voicePosition)}
@@ -1252,7 +1266,7 @@ export function AssignmentWorkspace({
                       {bookedIds.has(m.id) && (
                         <AlertTriangle
                           className="size-3.5 text-amber-500"
-                          aria-label="Already assigned to another Suguan on this date"
+                          aria-label={conflictLabel}
                         />
                       )}
                       <VoiceBadge name={getVoiceName(m.voicePosition, voices)} />
@@ -1262,7 +1276,7 @@ export function AssignmentWorkspace({
                     {bookedIds.has(m.id) && (
                       <AlertTriangle
                         className="size-3.5 text-amber-500"
-                        aria-label="Already assigned to another Suguan on this date"
+                        aria-label={conflictLabel}
                       />
                     )}
                     <VoiceBadge name={getVoiceName(m.voicePosition, voices)} />
@@ -1356,7 +1370,9 @@ export function AssignmentWorkspace({
             onDestinadoChange={(destinadoName) => patch({ destinadoName })}
             members={members}
             scrollClassName="h-full flex-1 min-h-0"
-            organista={organista}
+            organista={
+              organista ? { ...organista, conflictIds: bookedIds } : undefined
+            }
           />
         </div>
       )}
@@ -1507,7 +1523,7 @@ export function AssignmentWorkspace({
                   {bookedIds.has(m.id) && (
                     <AlertTriangle
                       className="size-4 shrink-0 text-amber-500"
-                      aria-label="Already assigned to another Suguan on this date"
+                      aria-label={conflictLabel}
                     />
                   )}
                   <Button
@@ -1567,6 +1583,7 @@ function AssignmentRow({
   reference,
   voices,
   conflicting,
+  conflictLabel,
   reorderable,
   first,
   last,
@@ -1582,6 +1599,8 @@ function AssignmentRow({
   reference?: string
   voices: { id: string; name: string; shortName: string; gender: 'male' | 'female' }[]
   conflicting: boolean
+  /** Why the member is flagged, for the warning's accessible name. */
+  conflictLabel: string
   reorderable: boolean
   first: boolean
   last: boolean
@@ -1642,7 +1661,7 @@ function AssignmentRow({
           {conflicting && (
             <AlertTriangle
               className="size-3.5 shrink-0 text-amber-500"
-              aria-label="Already assigned to another Suguan on this date"
+              aria-label={conflictLabel}
             />
           )}
           <VoiceBadge name={getVoiceName(assignment.voicePosition, voices)} />
@@ -1652,7 +1671,7 @@ function AssignmentRow({
         {conflicting && (
           <AlertTriangle
             className="size-3.5 shrink-0 text-amber-500"
-            aria-label="Already assigned to another Suguan on this date"
+            aria-label={conflictLabel}
           />
         )}
         <VoiceBadge name={getVoiceName(assignment.voicePosition, voices)} />

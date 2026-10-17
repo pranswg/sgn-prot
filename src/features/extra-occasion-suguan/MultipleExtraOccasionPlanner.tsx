@@ -36,7 +36,6 @@ import { useNavStore } from '@/store/navStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { exportFileName } from '@/lib/exportNaming'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
-import type { Suguan } from '@/core/types/suguan'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
 import {
@@ -55,6 +54,7 @@ import {
   occasionStateFromSuguan,
   occasionToConfig,
   removeMemberFromOccasion,
+  removeMemberFromSuguan,
   validateOccasion,
   type ExtraOccasionOccasionState,
 } from './extraOccasionDraft'
@@ -64,53 +64,25 @@ import {
   detectMemberConflicts,
   occasionRefFromState,
   type MemberConflict,
+  type OccasionRef,
 } from './extraOccasionConflicts'
+import { useOccasionConflicts } from './useOccasionConflicts'
 import {
   runOccasionExport,
   type ExtraOccasionExportKind,
 } from './extraOccasionExportActions'
 
-interface PendingConflict {
-  memberId: string
-  localId: string
-  conflicts: MemberConflict[]
-}
-
 /** Stable empty set so the assignment workspace is not re-rendered needlessly. */
 const EMPTY_CONFLICTS: Set<string> = new Set()
 
-/** Strips a member from every roster on a saved record. */
-function removalPatch(record: Suguan, memberId: string): Partial<Suguan> {
-  const config = record.extraOccasion
-  return {
-    assignments: record.assignments.filter((a) => a.memberId !== memberId),
-    schedules: record.schedules.map((section) => ({
-      ...section,
-      assignments: section.assignments.filter((a) => a.memberId !== memberId),
-    })),
-    extraOccasion: config
-      ? {
-          ...config,
-          organistaAssignments: Object.fromEntries(
-            Object.entries(config.organistaAssignments).map(([key, rows]) => [
-              key,
-              rows.filter((row) => row.memberId !== memberId),
-            ]),
-          ),
-        }
-      : undefined,
-  }
-}
-
-function isDecided(
-  state: ExtraOccasionOccasionState,
-  memberId: string,
-  otherSuguanId: string,
-): boolean {
-  return state.straightDecisions.some(
-    (decision) =>
-      decision.memberId === memberId && decision.otherSuguanId === otherSuguanId,
-  )
+/** Stable "nothing selected" ref, so the conflict memo does not churn. */
+const NO_TARGET: OccasionRef = {
+  key: '',
+  savedId: null,
+  name: '',
+  dates: [],
+  time: '',
+  memberIds: [],
 }
 
 /**
@@ -158,7 +130,6 @@ export function MultipleExtraOccasionPlanner() {
   const [selectedLocalId, setSelectedLocalId] = useState<string | null>(
     () => session.occasions[0]?.localId ?? null,
   )
-  const [pending, setPending] = useState<PendingConflict[]>([])
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState<
     ExtraOccasionExportKind | 'preview' | null
@@ -181,7 +152,9 @@ export function MultipleExtraOccasionPlanner() {
   )
 
   // Every occasion's conflicting members, so the overview can warn on all of
-  // them at once, not only the one being edited.
+  // them at once, not only the one being edited. These are the members already
+  // on that occasion; the marks inside the workspace also cover members booked
+  // elsewhere that the user has not added yet.
   const allConflicts = useMemo(() => {
     const result = new Map<string, Set<string>>()
     for (let index = 0; index < session.occasions.length; index += 1) {
@@ -190,7 +163,7 @@ export function MultipleExtraOccasionPlanner() {
         occasion,
         plannerOccasionLabel(occasion, index),
       )
-      const others = comparisonRefs(occasion, session.occasions, savedRecords)
+      const others = comparisonRefs(ref, session.occasions, savedRecords)
       result.set(
         occasion.localId,
         new Set(detectMemberConflicts(ref, others).keys()),
@@ -199,47 +172,36 @@ export function MultipleExtraOccasionPlanner() {
     return result
   }, [session.occasions, savedRecords])
 
-  const conflictIds = selected
-    ? (allConflicts.get(selected.localId) ?? EMPTY_CONFLICTS)
-    : EMPTY_CONFLICTS
+  const selectedRef = useMemo(
+    () =>
+      selected
+        ? occasionRefFromState(
+            selected,
+            plannerOccasionLabel(selected, Math.max(selectedIndex, 0)),
+          )
+        : NO_TARGET,
+    [selected, selectedIndex],
+  )
+  const selectedOthers = useMemo(
+    () =>
+      selected
+        ? comparisonRefs(selectedRef, session.occasions, savedRecords)
+        : [],
+    [selected, selectedRef, session.occasions, savedRecords],
+  )
 
-  const updateSelected = (state: ExtraOccasionOccasionState) => {
-    if (!selected) return
-    setSession((current) => updateOccasion(current, selected.localId, state))
-  }
-
-  const handleMembersAdded = (addedIds: string[]) => {
-    if (!selected) return
-    const label = plannerOccasionLabel(selected, Math.max(selectedIndex, 0))
-    const ref = occasionRefFromState(selected, label)
-    const others = comparisonRefs(selected, session.occasions, savedRecords)
-    // The members are not on the target yet, so widen the ref before comparing.
-    const widened = { ...ref, memberIds: [...new Set([...ref.memberIds, ...addedIds])] }
-    const map = detectMemberConflicts(widened, others)
-    const queued: PendingConflict[] = []
-    for (const memberId of addedIds) {
-      const conflicts = (map.get(memberId) ?? []).filter(
-        (conflict) =>
-          !isDecided(
-            selected.state,
-            memberId,
-            conflict.other.savedId ?? conflict.other.key,
-          ),
-      )
-      if (conflicts.length > 0) {
-        queued.push({ memberId, localId: selected.localId, conflicts })
-      }
-    }
-    if (queued.length > 0) setPending((current) => [...current, ...queued])
-  }
-
-  const resolveNext = () => setPending((current) => current.slice(1))
-
-  const handleMove = () => {
-    const item = pending[0]
-    if (!item) return
+  /**
+   * The Move choice: strip the member from every other occasion they serve, so
+   * they are only on this one. A live session occasion is edited in the session;
+   * a saved record is edited in the store.
+   */
+  const moveConflict = (
+    _targetKey: string,
+    memberId: string,
+    memberConflicts: MemberConflict[],
+  ): boolean => {
     let next = session
-    for (const conflict of item.conflicts) {
+    for (const conflict of memberConflicts) {
       const other = conflict.other
       const sessionOther = next.occasions.find(
         (occasion) => (occasion.savedId ?? occasion.localId) === other.key,
@@ -248,7 +210,7 @@ export function MultipleExtraOccasionPlanner() {
         next = updateOccasion(
           next,
           sessionOther.localId,
-          removeMemberFromOccasion(sessionOther.state, item.memberId),
+          removeMemberFromOccasion(sessionOther.state, memberId),
         )
         continue
       }
@@ -257,67 +219,56 @@ export function MultipleExtraOccasionPlanner() {
           toast.error(
             'You need permission to edit Suguan to move this member off a saved record.',
           )
-          return
+          return false
         }
         const record = suguan.find((item) => item.id === other.savedId)
         if (record) {
-          updateSuguan(record.id, removalPatch(record, item.memberId))
+          updateSuguan(record.id, removeMemberFromSuguan(record, memberId))
         }
       }
     }
     setSession(next)
     toast.success('Member moved to this occasion.')
-    resolveNext()
+    return true
   }
 
-  const handleStraight = () => {
-    const item = pending[0]
-    if (!item) return
-    const target = findOccasion(session, item.localId)
-    if (target) {
-      const decisions = [...target.state.straightDecisions]
-      for (const conflict of item.conflicts) {
-        const otherSuguanId = conflict.other.savedId ?? conflict.other.key
-        if (
-          !decisions.some(
-            (decision) =>
-              decision.memberId === item.memberId &&
-              decision.otherSuguanId === otherSuguanId,
-          )
-        ) {
-          decisions.push({
-            memberId: item.memberId,
-            otherSuguanId,
-            otherLabel: conflict.other.name,
-            at: new Date().toISOString(),
-          })
-        }
-      }
-      setSession((current) =>
-        updateOccasion(current, target.localId, {
-          ...target.state,
-          straightDecisions: decisions,
-        }),
-      )
-    }
-    resolveNext()
+  const conflicts = useOccasionConflicts({
+    targetKey: selected?.localId ?? '',
+    targetRef: selectedRef,
+    others: selectedOthers,
+    decisions: selected?.state.straightDecisions ?? [],
+    onDecisions: (targetKey, decisions) =>
+      setSession((current) => {
+        const target = findOccasion(current, targetKey)
+        return target
+          ? updateOccasion(current, target.localId, {
+              ...target.state,
+              straightDecisions: decisions,
+            })
+          : current
+      }),
+    onRemoveFromTarget: (targetKey, memberId) =>
+      setSession((current) => {
+        const target = findOccasion(current, targetKey)
+        return target
+          ? updateOccasion(
+              current,
+              target.localId,
+              removeMemberFromOccasion(target.state, memberId),
+            )
+          : current
+      }),
+    onMove: moveConflict,
+  })
+
+  const conflictIds = selected ? conflicts.conflictIds : EMPTY_CONFLICTS
+
+  const updateSelected = (state: ExtraOccasionOccasionState) => {
+    if (!selected) return
+    setSession((current) => updateOccasion(current, selected.localId, state))
   }
 
-  const handleCancelConflict = () => {
-    const item = pending[0]
-    if (!item) return
-    const target = findOccasion(session, item.localId)
-    if (target) {
-      setSession((current) =>
-        updateOccasion(
-          current,
-          target.localId,
-          removeMemberFromOccasion(target.state, item.memberId),
-        ),
-      )
-    }
-    resolveNext()
-  }
+  const handleMembersAdded = conflicts.queueMembers
 
   const addEmptyOccasion = () => {
     const occasion = createPlannerOccasion(
@@ -485,12 +436,12 @@ export function MultipleExtraOccasionPlanner() {
     })()
   }
 
-  const pendingItem = pending[0] ?? null
+  const pendingItem = conflicts.pendingItem
   const pendingMember = pendingItem
     ? members.find((member) => member.id === pendingItem.memberId) ?? null
     : null
   const pendingOccasion = pendingItem
-    ? findOccasion(session, pendingItem.localId)
+    ? findOccasion(session, pendingItem.targetKey)
     : undefined
   const pendingIndex = pendingOccasion
     ? session.occasions.findIndex((o) => o.localId === pendingOccasion.localId)
@@ -752,9 +703,9 @@ export function MultipleExtraOccasionPlanner() {
         member={pendingMember}
         conflicts={pendingItem?.conflicts ?? []}
         targetLabel={pendingLabel}
-        onMove={handleMove}
-        onStraight={handleStraight}
-        onCancel={handleCancelConflict}
+        onMove={conflicts.move}
+        onStraight={conflicts.straight}
+        onCancel={conflicts.cancel}
       />
 
       <AlertDialog open={confirmRemove} onOpenChange={setConfirmRemove}>

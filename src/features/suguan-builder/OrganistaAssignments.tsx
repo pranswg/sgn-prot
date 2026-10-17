@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -33,6 +34,11 @@ export interface OrganistaAssignmentsConfig {
   members: Member[]
   /** False renders the panel read-only for an account without the permission. */
   canAssign: boolean
+  /**
+   * Members already booked in another Extra Occasion, marked behind their name
+   * in the picker. Supplied by the assignment workspace, which owns the marks.
+   */
+  conflictIds?: Set<string>
   onChange: (next: Record<string, ExtraOccasionOrganistaAssignment[]>) => void
 }
 
@@ -58,6 +64,7 @@ export function OrganistaAssignments({
   assignments,
   members,
   canAssign,
+  conflictIds,
   onChange,
 }: OrganistaAssignmentsConfig) {
   const schedule = schedules[0]
@@ -139,6 +146,12 @@ export function OrganistaAssignments({
                   .map((member) => (
                     <SelectItem key={member.id} value={member.id}>
                       {member.lastName}, {member.firstName}
+                      {conflictIds?.has(member.id) && (
+                        <AlertTriangle
+                          className="ml-1 inline size-3.5 align-[-0.125em] text-amber-500"
+                          aria-label="Also assigned to another Extra Occasion Suguan"
+                        />
+                      )}
                     </SelectItem>
                   ))}
               </SelectContent>

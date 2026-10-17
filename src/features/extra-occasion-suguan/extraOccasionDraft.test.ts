@@ -5,9 +5,11 @@ import {
   occasionDate,
   occasionSuguanInput,
   removeMemberFromOccasion,
+  removeMemberFromSuguan,
   validateOccasion,
   type ExtraOccasionOccasionState,
 } from './extraOccasionDraft'
+import type { Suguan } from '@/core/types/suguan'
 
 function occasion(): ExtraOccasionOccasionState {
   return emptyOccasionState([], [], 'Locale')
@@ -66,6 +68,48 @@ test('removeMemberFromOccasion strips the member from every roster', () => {
   )
   assert.deepEqual(next.draft.assignments.map((a) => a.memberId), ['m2'])
   assert.deepEqual(next.organistaAssignments.s1, [])
+})
+
+test('removeMemberFromSuguan strips a saved record the same way', () => {
+  const record = {
+    assignments: [
+      { memberId: 'm1', memberName: 'A', voicePosition: 'soprano', assignedAt: '' },
+      { memberId: 'm2', memberName: 'B', voicePosition: 'alto', assignedAt: '' },
+    ],
+    schedules: [
+      {
+        id: 's1',
+        scheduleLabel: 'Pagsamba',
+        scheduleDay: '',
+        scheduleTime: '',
+        assignments: [
+          { memberId: 'm1', memberName: 'A', voicePosition: 'soprano', assignedAt: '' },
+          { memberId: 'm2', memberName: 'B', voicePosition: 'alto', assignedAt: '' },
+        ],
+      },
+    ],
+    extraOccasion: {
+      organistaAssignments: {
+        s1: [
+          { memberId: 'm1', role: 'organista' },
+          { memberId: 'm2', role: 'reserve' },
+        ],
+      },
+    },
+  } as unknown as Suguan
+  const patch = removeMemberFromSuguan(record, 'm1')
+  assert.deepEqual(
+    patch.assignments?.map((a) => a.memberId),
+    ['m2'],
+  )
+  assert.deepEqual(
+    patch.schedules?.[0].assignments.map((a) => a.memberId),
+    ['m2'],
+  )
+  assert.deepEqual(
+    patch.extraOccasion?.organistaAssignments.s1.map((row) => row.memberId),
+    ['m2'],
+  )
 })
 
 test('validateOccasion requires a service type and valid enabled dates', () => {

@@ -257,6 +257,35 @@ Date and layout logic is covered by `src/lib/suguanDates.test.ts` and
 - `date-fns` is installed but unused. Leave it alone; do not remove it and do
   not start using it.
 
+### Conflict scopes: a Choir Suguan and an Extra Occasion never mix
+
+Two independent rules, deliberately kept apart:
+
+- **A Choir Suguan books a member at an instant.** `src/features/suguan-builder/doubleBooking.ts`'s
+  `membersBookedAtSameInstant` matches another record only on an identical
+  `date` + `time`, and it skips every record carrying `extraOccasion`, so an
+  Extra Occasion never marks a member in the Choir builder and vice versa. The
+  Choir builder keeps this rule unchanged: no 90-minute window and no expiry.
+- **An Extra Occasion conflicts by date column.**
+  `extraOccasionConflicts.ts` compares the authoritative Pagsasanay/Pagtupad
+  dates: a shared date with times within `TIME_CONFLICT_THRESHOLD_MIN` is
+  `time-overlap`, a shared date further apart is `same-day`, and either side
+  undated is `unknown-date`. `comparisonRefs` drops any other occasion that is
+  already done — `isOccasionDone` uses the **later** column date and the
+  occasion's time in PHT, so a member is free again once that other occasion has
+  been fulfilled. A record deleted from Suguan History needs no flag: it is
+  simply absent from the store.
+
+`conflictingMemberIds` is what puts the amber mark on a member the user has *not*
+added yet (`detectMemberConflicts` only sees members already on both rosters),
+and `useOccasionConflicts` is the shared controller behind the queue and the
+"already has a suguan" window — both the single maker and the Multiple planner
+use it, so the two cannot drift. The marks reach the workspace as `conflictIds`,
+which the occasion layout merges over an empty same-timestamp set; the Organista
+picker in Special Duties takes the same marks. Moving a member off another
+occasion edits a live session occasion in the planner, and a saved record through
+`removeMemberFromSuguan` (the store-shape twin of `removeMemberFromOccasion`).
+
 ## Where state lives
 
 Zustand stores in `src/store/`, each persisted to `localStorage` with a

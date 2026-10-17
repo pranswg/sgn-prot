@@ -389,6 +389,19 @@ export function formatPHTTime(instant: Date = new Date()): string {
 }
 
 /**
+ * Minutes since midnight in PHT (`0`–`1439`).
+ *
+ * Used to decide whether a time-of-day has passed. PHT has no daylight saving,
+ * so the fixed offset is exact; reading it through the same `+08:00` shift as
+ * `filenameTimestampPHT` avoids the `24:00` hour that `hour12: false` can emit
+ * for midnight on some ICU builds.
+ */
+export function phtMinutesOfDay(instant: Date = new Date()): number {
+  const pht = new Date(instant.getTime() + PHT_UTC_OFFSET_HOURS * 3_600_000)
+  return pht.getUTCHours() * 60 + pht.getUTCMinutes()
+}
+
+/**
  * Filename timestamp for every exported document, e.g. `20261008_07-00PM`.
  *
  * `YYYYMMDD` (PHT calendar date) joined by an underscore to a 12-hour

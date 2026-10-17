@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Eye, FileDown, FileSpreadsheet, FileText } from 'lucide-react'
+import { nanoid } from 'nanoid'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
@@ -12,14 +13,24 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { exportFileName } from '@/lib/exportNaming'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
+import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
 import {
   emptyOccasionState,
+  occasionLabel,
   occasionStateFromSuguan,
   occasionSuguanInput,
   occasionToConfig,
+  removeMemberFromOccasion,
+  removeMemberFromSuguan,
   validateOccasion,
   type ExtraOccasionOccasionState,
 } from './extraOccasionDraft'
+import {
+  comparisonRefs,
+  occasionRefFromInput,
+  type MemberConflict,
+} from './extraOccasionConflicts'
+import { useOccasionConflicts } from './useOccasionConflicts'
 import {
   runOccasionExport,
   buildOccasionPdfPreview,
@@ -42,6 +53,7 @@ export function ExtraOccasionSingleMaker() {
   )
   const createSuguan = useSuguanStore((state) => state.createSuguan)
   const updateSuguan = useSuguanStore((state) => state.updateSuguan)
+  const suguan = useSuguanStore((state) => state.suguan)
   const members = useMemberStore((state) => state.members)
   const allVoices = useSettingsStore((state) => state.allVoices)
   const allServiceTypes = useSettingsStore((state) => state.allServiceTypes)
@@ -49,6 +61,8 @@ export function ExtraOccasionSingleMaker() {
   const voices = allVoices()
   const serviceTypes = allServiceTypes()
 
+  /** Stable identity for a brand-new occasion, before it has a saved id. */
+  const [localKey] = useState(() => nanoid())
   const [state, setState] = useState<ExtraOccasionOccasionState>(() =>
     existingRecord
       ? occasionStateFromSuguan(
@@ -67,6 +81,63 @@ export function ExtraOccasionSingleMaker() {
   >(null)
   const [saving, setSaving] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
+
+  const targetRef = useMemo(
+    () =>
+      occasionRefFromInput(state, {
+        key: existingRecord?.id ?? localKey,
+        savedId: existingRecord?.id ?? null,
+        label: occasionLabel(state) || 'Extra Occasion',
+      }),
+    [state, existingRecord, localKey],
+  )
+  // The single maker holds one occasion, so there is never a sibling session
+  // occasion to compare against — only the saved Extra Occasions in History.
+  const others = useMemo(() => comparisonRefs(targetRef, [], suguan), [targetRef, suguan])
+
+  /**
+   * The Move choice: strip the member from the saved occasion they already
+   * serve, so they only remain on this one.
+   */
+  const moveConflict = (
+    _targetKey: string,
+    memberId: string,
+    memberConflicts: MemberConflict[],
+  ): boolean => {
+    if (!can('edit-suguan')) {
+      toast.error(
+        'You need permission to edit Suguan to move this member off a saved record.',
+      )
+      return false
+    }
+    for (const conflict of memberConflicts) {
+      const savedId = conflict.other.savedId
+      if (!savedId) continue
+      const record = suguan.find((item) => item.id === savedId)
+      if (record) {
+        updateSuguan(record.id, removeMemberFromSuguan(record, memberId))
+      }
+    }
+    toast.success('Member moved to this occasion.')
+    return true
+  }
+
+  const conflicts = useOccasionConflicts({
+    targetKey: targetRef.key,
+    targetRef,
+    others,
+    decisions: state.straightDecisions,
+    onDecisions: (_targetKey, decisions) =>
+      setState((current) => ({ ...current, straightDecisions: decisions })),
+    onRemoveFromTarget: (_targetKey, memberId) =>
+      setState((current) => removeMemberFromOccasion(current, memberId)),
+    onMove: moveConflict,
+  })
+
+  const pendingMember = conflicts.pendingItem
+    ? members.find((member) => member.id === conflicts.pendingItem?.memberId) ??
+      null
+    : null
 
   const requestFileExport = (
     kind: ExtraOccasionExportKind,
@@ -176,8 +247,20 @@ export function ExtraOccasionSingleMaker() {
           members={members}
           serviceTypes={serviceTypes}
           canAssignMembers={canAssignMembers}
+          conflictIds={conflicts.conflictIds}
+          onMembersAdded={conflicts.queueMembers}
         />
       </section>
+
+      <ExtraOccasionConflictDialog
+        open={conflicts.pendingItem !== null}
+        member={pendingMember}
+        conflicts={conflicts.pendingItem?.conflicts ?? []}
+        targetLabel={occasionLabel(state) || 'this occasion'}
+        onMove={conflicts.move}
+        onStraight={conflicts.straight}
+        onCancel={conflicts.cancel}
+      />
 
       {can('export-documents') && (
         <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-wrap">

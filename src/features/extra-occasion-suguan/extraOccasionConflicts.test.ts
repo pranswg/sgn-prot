@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  appendStraightDecisions,
+  comparisonRefs,
+  conflictingMemberIds,
   detectMemberConflicts,
+  isOccasionDone,
   isTimeConflict,
+  occasionRefFromInput,
+  occasionRefFromState,
+  pendingConflictsForAdded,
   timeToMinutes,
   TIME_CONFLICT_THRESHOLD_MIN,
-  comparisonRefs,
-  occasionRefFromState,
+  type MemberConflict,
   type OccasionRef,
 } from './extraOccasionConflicts'
 import { createPlannerOccasion, type PlannerOccasion } from './extraOccasionSession'
@@ -24,6 +30,23 @@ function ref(overrides: Partial<OccasionRef> = {}): OccasionRef {
     memberIds: [],
     ...overrides,
   }
+}
+
+/** A saved Extra Occasion record with one enabled Pagsasanay column. */
+function savedOccasion(id: string, date: string, time = '19:00'): Suguan {
+  return {
+    id,
+    date,
+    time,
+    assignments: [],
+    schedules: [],
+    extraOccasion: {
+      name: id,
+      pagsasanay: { enabled: true, label: 'Pagsasanay', date },
+      pagtupad: { enabled: false, label: 'Pagtupad', date: '' },
+      organistaAssignments: {},
+    },
+  } as unknown as Suguan
 }
 
 test('timeToMinutes parses HH:mm and rejects junk', () => {
@@ -142,21 +165,159 @@ test('comparisonRefs excludes the target and its own saved record', () => {
     ...createPlannerOccasion(targetState, 'saved-target'),
   }
   const sibling = createPlannerOccasion(stateWithMember('m2', '19:00', '2026-01-04'))
-  const savedOther = {
-    id: 'saved-other',
-    assignments: [],
-    schedules: [],
-    time: '19:00',
-    extraOccasion: {
-      name: 'Other',
-      pagsasanay: { enabled: true, date: '2026-01-04' },
-      pagtupad: { enabled: false, date: '' },
-      organistaAssignments: {},
-    },
-  } as unknown as Suguan
-  const refs = comparisonRefs(target, [target, sibling], [savedOther])
+  const savedOther = savedOccasion('saved-other', '2026-01-04')
+  const refs = comparisonRefs(
+    occasionRefFromState(target, 'Target'),
+    [target, sibling],
+    [savedOther],
+    // Pin the clock: a fixed 2026 date is in the past for the real clock, and
+    // a finished occasion is deliberately dropped.
+    new Date('2026-01-01T09:00:00+08:00'),
+  )
   const keys = refs.map((r) => r.key)
   assert.ok(keys.includes(sibling.localId))
   assert.ok(keys.includes('saved-other'))
   assert.ok(!keys.includes('saved-target'))
+})
+
+test('comparisonRefs drops an occasion that has already been fulfilled', () => {
+  const target = occasionRefFromState(
+    createPlannerOccasion(stateWithMember('m1', '19:00', '2026-10-30')),
+    'Target',
+  )
+  const past = savedOccasion('past', '2026-10-29')
+  const future = savedOccasion('future', '2026-10-30')
+  const refs = comparisonRefs(target, [], [past, future], new Date('2026-10-30T09:00:00+08:00'))
+  assert.deepEqual(
+    refs.map((r) => r.key),
+    ['future'],
+  )
+})
+
+test('isOccasionDone uses the last column date and the time of day', () => {
+  const evening = new Date('2026-10-30T15:30:00+08:00')
+  assert.equal(
+    isOccasionDone(ref({ dates: ['2026-10-30'], time: '15:00' }), evening),
+    true,
+  )
+  assert.equal(
+    isOccasionDone(
+      ref({ dates: ['2026-10-30'], time: '15:00' }),
+      new Date('2026-10-30T14:59:00+08:00'),
+    ),
+    false,
+  )
+  assert.equal(
+    isOccasionDone(ref({ dates: ['2026-10-29'], time: '15:00' }), evening),
+    true,
+  )
+  assert.equal(
+    isOccasionDone(ref({ dates: ['2026-10-31'], time: '15:00' }), evening),
+    false,
+  )
+  // No time: the occasion lasts the whole day.
+  assert.equal(
+    isOccasionDone(
+      ref({ dates: ['2026-10-30'], time: '' }),
+      new Date('2026-10-30T23:00:00+08:00'),
+    ),
+    false,
+  )
+  // No usable date: it cannot be ruled out, so it is never "done".
+  assert.equal(isOccasionDone(ref({ dates: [], time: '15:00' }), evening), false)
+})
+
+test('isOccasionDone waits for the LATER of the two column dates', () => {
+  const once = new Date('2026-10-30T16:30:00+08:00')
+  assert.equal(
+    isOccasionDone(ref({ dates: ['2026-10-30', '2026-10-31'], time: '15:00' }), once),
+    false,
+  )
+  assert.equal(
+    isOccasionDone(ref({ dates: ['2026-10-29', '2026-10-30'], time: '15:00' }), once),
+    true,
+  )
+})
+
+test('conflictingMemberIds covers members not added to the target yet', () => {
+  const target = ref({ key: 't', memberIds: [], dates: ['2026-10-30'] })
+  const other = ref({ key: 'o', memberIds: ['m1'], dates: ['2026-10-30'] })
+  assert.deepEqual([...conflictingMemberIds(target, [other])], ['m1'])
+})
+
+test('conflictingMemberIds ignores a different date and the target itself', () => {
+  const target = ref({ key: 't', dates: ['2026-10-30'], memberIds: ['m1'] })
+  const otherDay = ref({ key: 'o', dates: ['2026-11-05'], memberIds: ['m2'] })
+  const self = { ...target }
+  assert.equal(conflictingMemberIds(target, [otherDay, self]).size, 0)
+})
+
+test('conflictingMemberIds warns on two undated occasions', () => {
+  const target = ref({ key: 't', dates: [], memberIds: [] })
+  const other = ref({ key: 'o', dates: [], memberIds: ['m1'] })
+  assert.deepEqual([...conflictingMemberIds(target, [other])], ['m1'])
+})
+
+test('pendingConflictsForAdded queues each added member and skips decided pairs', () => {
+  const target = ref({ key: 't', memberIds: [], dates: ['2026-10-30'], time: '19:00' })
+  const other = ref({
+    key: 'o',
+    savedId: 'other-id',
+    memberIds: ['m1', 'm2'],
+    dates: ['2026-10-30'],
+    time: '19:30',
+  })
+  const queued = pendingConflictsForAdded({
+    targetKey: 'local',
+    addedIds: ['m1', 'm2'],
+    targetRef: target,
+    others: [other],
+    decisions: [],
+  })
+  assert.deepEqual(
+    queued.map((item) => item.memberId),
+    ['m1', 'm2'],
+  )
+  assert.equal(queued[0].targetKey, 'local')
+  assert.equal(queued[0].conflicts[0].kind, 'time-overlap')
+
+  const decided = pendingConflictsForAdded({
+    targetKey: 'local',
+    addedIds: ['m1', 'm2'],
+    targetRef: target,
+    others: [other],
+    decisions: [
+      { memberId: 'm1', otherSuguanId: 'other-id', otherLabel: 'O', at: '' },
+    ],
+  })
+  assert.deepEqual(
+    decided.map((item) => item.memberId),
+    ['m2'],
+  )
+})
+
+test('appendStraightDecisions stores one decision per other occasion', () => {
+  const other = ref({ key: 'o', savedId: 'other-id', name: 'Other' })
+  const conflicts: MemberConflict[] = [
+    { memberId: 'm1', other, kind: 'same-day', dates: ['2026-10-30'] },
+  ]
+  const at = '2026-10-30T09:00:00+08:00'
+  const first = appendStraightDecisions([], 'm1', conflicts, at)
+  assert.deepEqual(first, [
+    { memberId: 'm1', otherSuguanId: 'other-id', otherLabel: 'Other', at },
+  ])
+  assert.equal(appendStraightDecisions(first, 'm1', conflicts, 'later').length, 1)
+})
+
+test('occasionRefFromInput builds a ref from a live single occasion', () => {
+  const built = occasionRefFromInput(stateWithMember('m1', '19:00', '2026-10-30'), {
+    key: 'key',
+    savedId: 'saved',
+    label: 'Kasal',
+  })
+  assert.equal(built.key, 'key')
+  assert.equal(built.savedId, 'saved')
+  assert.equal(built.name, 'Kasal')
+  assert.deepEqual(built.dates, ['2026-10-30'])
+  assert.deepEqual(built.memberIds, ['m1'])
 })

@@ -251,6 +251,37 @@ export function removeMemberFromOccasion(
   }
 }
 
+/**
+ * Removal patch for a SAVED Extra Occasion record, the store-shape twin of
+ * `removeMemberFromOccasion`. Used when a member is moved off an occasion that
+ * is already in Suguan History, so the row is stripped from its choir roster
+ * and its organista rows alike.
+ */
+export function removeMemberFromSuguan(
+  record: Suguan,
+  memberId: string,
+): Partial<Suguan> {
+  const config = record.extraOccasion
+  return {
+    assignments: record.assignments.filter((a) => a.memberId !== memberId),
+    schedules: record.schedules.map((section) => ({
+      ...section,
+      assignments: section.assignments.filter((a) => a.memberId !== memberId),
+    })),
+    extraOccasion: config
+      ? {
+          ...config,
+          organistaAssignments: Object.fromEntries(
+            Object.entries(config.organistaAssignments).map(([key, rows]) => [
+              key,
+              rows.filter((row) => row.memberId !== memberId),
+            ]),
+          ),
+        }
+      : undefined,
+  }
+}
+
 /** Retitles the single sheet section and refreshes the service type. */
 export function applyServiceType(
   state: ExtraOccasionOccasionState,

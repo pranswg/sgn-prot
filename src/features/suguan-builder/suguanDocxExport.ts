@@ -105,7 +105,7 @@ export async function createSuguanDocxBlob(
       makeCell('PANGALAN', columnWidths[1], { bold: true, fill: 'F2F2F2' }),
       ...layout.events.map((event, index) =>
         makeCell(
-          `${eventTypeLabel(event.type)}\n${formatEventDate(event)}`,
+          `${eventTypeLabel(event.type, event.label)}\n${formatEventDate(event)}`,
           columnWidths[index + 2],
           {
             bold: true,
@@ -162,47 +162,59 @@ export async function createSuguanDocxBlob(
   })
 
   const signatures = resolveSignatureNames(suguan, members)
-  const signatureTable = new Table({
-    width: { size: totalWidthTwips, type: WidthType.DXA },
-    columnWidths: [Math.floor(totalWidthTwips / 2), Math.ceil(totalWidthTwips / 2)],
-    layout: TableLayoutType.FIXED,
-    borders: {
-      top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-    },
-    rows: [
-      new TableRow({
-        children: [
-          { name: signatures.pmName, title: 'Pangulong Mang-aawit' },
-          { name: signatures.destinadoName, title: 'Destinado' },
-        ].map(
-          ({ name, title }) =>
-            new TableCell({
-              width: {
-                size: Math.floor(totalWidthTwips / 2),
-                type: WidthType.DXA,
-              },
+  const signatureTable =
+    suguan.extraOccasion?.showFooterSignatories === false
+      ? null
+      : new Table({
+          width: { size: totalWidthTwips, type: WidthType.DXA },
+          columnWidths: [
+            Math.floor(totalWidthTwips / 2),
+            Math.ceil(totalWidthTwips / 2),
+          ],
+          layout: TableLayoutType.FIXED,
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+          },
+          rows: [
+            new TableRow({
               children: [
-                new Paragraph({ text: '' }),
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } },
-                  children: [new TextRun({ text: name, bold: true, size: 22 })],
-                }),
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: title, size: 18 })],
-                }),
-              ],
+                { name: signatures.pmName, title: 'Pangulong Mang-aawit' },
+                { name: signatures.destinadoName, title: 'Destinado' },
+              ].map(
+                ({ name, title }) =>
+                  new TableCell({
+                    width: {
+                      size: Math.floor(totalWidthTwips / 2),
+                      type: WidthType.DXA,
+                    },
+                    children: [
+                      new Paragraph({ text: '' }),
+                      new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        border: {
+                          bottom: {
+                            style: BorderStyle.SINGLE,
+                            size: 6,
+                            color: '000000',
+                          },
+                        },
+                        children: [new TextRun({ text: name, bold: true, size: 22 })],
+                      }),
+                      new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: title, size: 18 })],
+                      }),
+                    ],
+                  }),
+              ),
             }),
-        ),
-      }),
-    ],
-  })
+          ],
+        })
 
   const doc = new Document({
     sections: [
@@ -244,8 +256,9 @@ export async function createSuguanDocxBlob(
             borders,
             rows,
           }),
-          new Paragraph({ text: '', spacing: { after: 100 } }),
-          signatureTable,
+          ...(signatureTable
+            ? [new Paragraph({ text: '', spacing: { after: 100 } }), signatureTable]
+            : []),
         ],
       },
     ],

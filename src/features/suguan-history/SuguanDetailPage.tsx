@@ -47,8 +47,11 @@ import {
   exportExtraOccasionDocx,
   exportExtraOccasionExcel,
   exportExtraOccasionPdf,
+} from '@/features/extra-occasion-suguan/extraOccasionSharedExport'
+import {
   extraOccasionExportOptionsForRecord,
 } from '@/features/extra-occasion-suguan/extraOccasionExport'
+import { extraOccasionRecordLabel } from '@/features/extra-occasion-suguan/extraOccasionData'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { MobileSuguanDetailHeader } from './MobileSuguanDetailHeader'
 
@@ -96,10 +99,11 @@ export function SuguanDetailPage() {
   }
 
   const isExtraOccasion = Boolean(s.extraOccasion)
-  const serviceName = isExtraOccasion
-    ? 'Extra Occasion Suguan'
-    : serviceTypeLabel(s)
-  const title = isExtraOccasion ? 'EXTRA OCCASION SUGUAN' : suguanTitle(s)
+  const extraOccasionLabel = isExtraOccasion ? extraOccasionRecordLabel(s) : ''
+  const serviceName = isExtraOccasion ? extraOccasionLabel : serviceTypeLabel(s)
+  const title = isExtraOccasion
+    ? extraOccasionLabel.toUpperCase()
+    : suguanTitle(s)
   const assignedCount = isExtraOccasion
     ? s.schedules.reduce(
         (count, schedule) => count + schedule.assignments.length,

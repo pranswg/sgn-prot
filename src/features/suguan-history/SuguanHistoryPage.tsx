@@ -82,8 +82,11 @@ import {
   exportExtraOccasionDocx,
   exportExtraOccasionExcel,
   exportExtraOccasionPdf,
+} from '@/features/extra-occasion-suguan/extraOccasionSharedExport'
+import {
   extraOccasionExportOptionsForRecord,
 } from '@/features/extra-occasion-suguan/extraOccasionExport'
+import { extraOccasionRecordLabel } from '@/features/extra-occasion-suguan/extraOccasionData'
 
 const ORGANISTA_FILTER = 'organista-suguan'
 const EXTRA_OCCASION_FILTER = 'extra-occasion-suguan'
@@ -232,7 +235,9 @@ export function SuguanHistoryPage() {
       const searchText =
         item.kind === 'suguan'
           ? `${item.record.date} ${
-              item.record.extraOccasion ? 'Extra Occasion Suguan' : ''
+              item.record.extraOccasion
+                ? `${extraOccasionRecordLabel(item.record)} Extra Occasion Suguan`
+                : ''
             } ${
               allTypes.find(
                 (service) => service.id === item.record.serviceTypeId,
@@ -430,7 +435,7 @@ export function SuguanHistoryPage() {
   const historyService = (item: HistoryItem) =>
     item.kind === 'suguan'
       ? item.record.extraOccasion
-        ? 'Extra Occasion Suguan'
+        ? extraOccasionRecordLabel(item.record)
         : serviceName(item.record.serviceTypeId)
       : 'Organist Suguan'
 

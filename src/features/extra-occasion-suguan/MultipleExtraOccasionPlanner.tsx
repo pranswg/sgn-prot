@@ -536,7 +536,7 @@ export function MultipleExtraOccasionPlanner() {
                   batchName: event.target.value,
                 }))
               }
-              placeholder="e.g. Holy Week 2026"
+              placeholder="e.g. Pamamahayag"
             />
             {hasUnsavedChanges && (
               <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">

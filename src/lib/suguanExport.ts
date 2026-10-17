@@ -137,23 +137,32 @@ export function buildSections(
     (Array.isArray(suguan.dutyRoles) ? suguan.dutyRoles : []).find(
       (d) => d.dutyRoleId === 'oic',
     )?.memberId ?? ''
+  let extraOccasionNumber = 0
   const mapRows = (assignments: Suguan['assignments']) =>
     {
       const rows = sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
         (a, i) => {
-        const name = assignmentDisplayName(a.memberName, a.memberId, members)
+        const name =
+          a.displayName ?? assignmentDisplayName(a.memberName, a.memberId, members)
         return {
-          no: i + 1,
+          no: suguan.extraOccasion ? ++extraOccasionNumber : i + 1,
           name: a.memberId === oicMemberId ? `${name} - OIC` : name,
         }
         },
       )
       return [
         ...rows,
-        ...Array.from({ length: WRITE_IN_ROWS_PER_SCHEDULE }, (_, i) => ({
+        ...Array.from(
+          {
+            length: suguan.extraOccasion
+              ? 0
+              : WRITE_IN_ROWS_PER_SCHEDULE,
+          },
+          (_, i) => ({
           no: rows.length + i + 1,
           name: '',
-        })),
+          }),
+        ),
       ]
     }
   if (schedules.length > 0) {
@@ -368,6 +377,7 @@ interface FlowOptions {
   bodyRowH: number
   sig: SignatureGeometry
   sections: SuguanSheetSection[]
+  showSignatures: boolean
 }
 
 function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
@@ -408,7 +418,9 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
     } while (needsLabel)
   })
 
-  blocks.push({ kind: 'sig-gap' }, { kind: 'sig-name' }, { kind: 'sig-title' })
+  if (opts.showSignatures) {
+    blocks.push({ kind: 'sig-gap' }, { kind: 'sig-name' }, { kind: 'sig-title' })
+  }
 
   if (blocks.length > 0) pages.push(blocks)
   return pages
@@ -427,6 +439,7 @@ export function computeSuguanLayout(
   const totalCols = 2 + events.length
 
   const sections = buildSections(suguan, members)
+  const showSignatures = suguan.extraOccasion?.showFooterSignatories !== false
   const allNames = sections.flatMap((s) => s.rows.map((r) => r.name))
   const rowCount = allNames.length
   const assignedCount = allNames.filter((name) => name.length > 0).length
@@ -450,12 +463,21 @@ export function computeSuguanLayout(
   // Signature geometry is derived from the preset and the usable width only, so
   // it stays identical between the preview and the PDF and is never affected by
   // fit-page scaling.
-  const sig = computeSignatureGeometry({
+  const calculatedSig = computeSignatureGeometry({
     fs,
     tableWidthMm: usableWidthMm,
     baseBodyRowMm,
-    hasRows: rowCount > 0,
+    hasRows: rowCount > 0 && showSignatures,
   })
+  const sig = showSignatures
+    ? calculatedSig
+    : {
+        ...calculatedSig,
+        gapMm: 0,
+        nameRowMm: 0,
+        roleRowMm: 0,
+        totalMm: 0,
+      }
 
   const headerTopY = margins.top + titleRowH
   const topBlockH = titleRowH + globalHeaderBlockH
@@ -488,6 +510,7 @@ export function computeSuguanLayout(
     bodyRowH,
     sig,
     sections,
+    showSignatures,
   })
 
   const pageCount = pages.length
@@ -596,7 +619,7 @@ export async function exportSuguanExcel(
 
   events.forEach((event, i) => {
     const labelCell = sheet.getCell(headerRow1, 3 + i)
-    labelCell.value = eventTypeLabel(event.type)
+    labelCell.value = eventTypeLabel(event.type, event.label)
     labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}` } }
     labelCell.font = { bold: true, size: fs.headerFontSize }
     labelCell.alignment = { horizontal: 'center', vertical: 'middle' }
@@ -688,30 +711,34 @@ export async function exportSuguanExcel(
   const sigNameRowPt = sig.nameRowMm / PT_TO_MM
   const sigRoleRowPt = sig.roleRowMm / PT_TO_MM
 
-  // Breathing room so the signature block is not flush against the table above.
-  sheet.getRow(rn).height = sigGapPt
-  const sigRow = rn + 1
-  const pmCell = sheet.getCell(sigRow, 2)
-  pmCell.value = pmName || ''
-  pmCell.font = { bold: true, size: sig.nameFontSizePt }
-  pmCell.alignment = { horizontal: 'center', vertical: 'middle' }
-  const destCell = sheet.getCell(sigRow, lastCol)
-  destCell.value = destinadoName || ''
-  destCell.font = { bold: true, size: sig.nameFontSizePt }
-  destCell.alignment = { horizontal: 'center', vertical: 'middle' }
-  sheet.getRow(sigRow).height = sigNameRowPt
+  let lastContentRow = rn - 1
+  if (suguan.extraOccasion?.showFooterSignatories !== false) {
+    // Breathing room so the signature block is not flush against the table above.
+    sheet.getRow(rn).height = sigGapPt
+    const sigRow = rn + 1
+    const pmCell = sheet.getCell(sigRow, 2)
+    pmCell.value = pmName || ''
+    pmCell.font = { bold: true, size: sig.nameFontSizePt }
+    pmCell.alignment = { horizontal: 'center', vertical: 'middle' }
+    const destCell = sheet.getCell(sigRow, lastCol)
+    destCell.value = destinadoName || ''
+    destCell.font = { bold: true, size: sig.nameFontSizePt }
+    destCell.alignment = { horizontal: 'center', vertical: 'middle' }
+    sheet.getRow(sigRow).height = sigNameRowPt
 
-  const pmRole = sheet.getCell(sigRow + 1, 2)
-  pmRole.value = 'PANGULONG MANG-AAWIT'
-  pmRole.font = { size: sig.roleFontSizePt }
-  pmRole.alignment = { horizontal: 'center', vertical: 'top' }
-  const destRole = sheet.getCell(sigRow + 1, lastCol)
-  destRole.value = 'DESTINADO'
-  destRole.font = { size: sig.roleFontSizePt }
-  destRole.alignment = { horizontal: 'center', vertical: 'top' }
-  sheet.getRow(sigRow + 1).height = sigRoleRowPt
+    const pmRole = sheet.getCell(sigRow + 1, 2)
+    pmRole.value = 'PANGULONG MANG-AAWIT'
+    pmRole.font = { size: sig.roleFontSizePt }
+    pmRole.alignment = { horizontal: 'center', vertical: 'top' }
+    const destRole = sheet.getCell(sigRow + 1, lastCol)
+    destRole.value = 'DESTINADO'
+    destRole.font = { size: sig.roleFontSizePt }
+    destRole.alignment = { horizontal: 'center', vertical: 'top' }
+    sheet.getRow(sigRow + 1).height = sigRoleRowPt
+    lastContentRow = sigRow + 1
+  }
 
-  sheet.pageSetup.printArea = `A1:${colLetter(lastCol)}${sigRow + 1}`
+  sheet.pageSetup.printArea = `A1:${colLetter(lastCol)}${lastContentRow}`
 
   const buffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([buffer], {

@@ -166,7 +166,7 @@ export async function exportSuguanPdf(
     layout.events.forEach((e, i) => {
       const cx = eventXs[i] + layout.eventColWidthMm / 2
       centerText(
-        eventTypeLabel(e.type),
+        eventTypeLabel(e.type, e.label),
         cx,
         headerTopY + layout.headerRowH / 2,
       )

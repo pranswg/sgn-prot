@@ -21,6 +21,7 @@ export interface SuguanAssignment {
   memberName: string
   voicePosition: string
   assignedAt: string
+  displayName?: string
 }
 
 export interface SuguanDutyRole {
@@ -38,6 +39,7 @@ export interface SuguanEvent {
   type: SuguanEventType
   date: string
   endDate?: string
+  label?: string
 }
 
 /**
@@ -129,9 +131,9 @@ export interface ExtraOccasionOrganistaAssignment {
 }
 
 export interface ExtraOccasionSuguanConfig {
-  /** An optional plan name for a Multiple Extra Occasion session ("Wedding",
-   *  "Funeral"). The single maker leaves it unset; the sheet titles fall back to
-   *  the service type either way. */
+  /** The name typed into "Occasion name" ("Wedding", "Funeral"). Suguan History
+   *  reads a saved record back as this label; blank means the generic "Extra
+   *  Occasion Suguan" instead. */
   name?: string
   localeName: string
   pagsasanay: ExtraOccasionDateColumn

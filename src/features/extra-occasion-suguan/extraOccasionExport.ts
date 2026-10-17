@@ -6,6 +6,7 @@ import type {
   VoicePosition,
 } from '@/core/types/suguan'
 import { exportFileName } from '@/lib/exportNaming'
+import { computeNameLayout } from '@/lib/suguanExport'
 import {
   docMarginsMm,
   docPaperDimensionsMm,
@@ -38,6 +39,26 @@ const PAPER_CODES: Record<'a4' | 'letter' | 'legal', number> = {
 }
 
 const DATE_FILL = 'D9EAD3'
+const SHEET_FONT = 'Inter'
+const sheetRegularUrl = new URL(
+  '../../assets/fonts/Inter-Regular.ttf',
+  import.meta.url,
+).href
+const sheetBoldUrl = new URL(
+  '../../assets/fonts/Inter-Bold.ttf',
+  import.meta.url,
+).href
+
+async function fetchFontAsBase64(url: string): Promise<string> {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Could not load sheet font (${response.status}).`)
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  }
+  return btoa(binary)
+}
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
@@ -74,6 +95,28 @@ function docDimensions(options: ExtraOccasionExportOptions) {
     margins: docMarginsMm(format),
     preset: resolveFontSizePreset(format),
   }
+}
+
+function occasionBodyFontSize(
+  options: ExtraOccasionExportOptions,
+  preset: ReturnType<typeof resolveFontSizePreset>,
+): number {
+  const names = buildExtraOccasionSections(
+    options.suguan,
+    options.voices,
+    options.members,
+    options.organistaAssignments,
+  ).flatMap((section) => [
+    ...section.voiceSections.flatMap((voice) => voice.rows.map((row) => row.name)),
+    ...section.organistaRows.map((row) => row.name),
+  ])
+  return computeNameLayout(preset, names).nameFontSize
+}
+
+function signatureRoleFontSize(
+  preset: ReturnType<typeof resolveFontSizePreset>,
+): number {
+  return Math.max(preset.smallFontSize, preset.sigFontSize - 1)
 }
 
 export function extraOccasionExportOptionsForRecord(
@@ -119,6 +162,7 @@ export async function createExtraOccasionExcelBlob(
     options.organistaAssignments,
   )
   const { format, margins, preset } = docDimensions(options)
+  const bodyFontSize = occasionBodyFontSize(options, preset)
   const pageSize = format.paperSize === 'custom' ? 'letter' : format.paperSize
   sheet.pageSetup.orientation = format.orientation
   sheet.pageSetup.paperSize = PAPER_CODES[pageSize]
@@ -141,11 +185,11 @@ export async function createExtraOccasionExcelBlob(
   }
   const heading = sheet.addRow([`Lokal ng ${options.localeName.trim()}`])
   sheet.mergeCells(heading.number, 1, heading.number, columnCount)
-  heading.font = { name: 'Book Antiqua', size: preset.headerFontSize }
+  heading.font = { name: SHEET_FONT, size: preset.headerFontSize }
   heading.alignment = { horizontal: 'center' }
   const title = sheet.addRow(['EXTRA OCCASION SUGUAN'])
   sheet.mergeCells(title.number, 1, title.number, columnCount)
-  title.font = { name: 'Book Antiqua', size: preset.titleFontSize, bold: true }
+  title.font = { name: SHEET_FONT, size: preset.titleFontSize, bold: true }
   title.alignment = { horizontal: 'center' }
 
   const header = sheet.addRow([
@@ -154,7 +198,7 @@ export async function createExtraOccasionExcelBlob(
     ...columns.map(({ label, date }) => `${label}\n${dateText(date)}`),
   ])
   header.height = 34
-  header.font = { name: 'Book Antiqua', size: preset.headerFontSize, bold: true }
+  header.font = { name: SHEET_FONT, size: preset.headerFontSize, bold: true }
   header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
   header.eachCell((cell, index) => {
     cell.border = thin
@@ -183,7 +227,7 @@ export async function createExtraOccasionExcelBlob(
   for (const schedule of sections) {
     const scheduleRow = sheet.addRow([schedule.label])
     sheet.mergeCells(scheduleRow.number, 1, scheduleRow.number, columnCount)
-    scheduleRow.font = { name: 'Book Antiqua', size: 11, bold: true }
+    scheduleRow.font = { name: SHEET_FONT, size: preset.headerFontSize, bold: true }
     scheduleRow.alignment = { horizontal: 'center' }
     scheduleRow.eachCell((cell) => {
       cell.fill = {
@@ -206,7 +250,7 @@ export async function createExtraOccasionExcelBlob(
     for (const group of groups) {
       const groupRow = sheet.addRow(['', group.label])
       sheet.mergeCells(groupRow.number, 2, groupRow.number, columnCount)
-      groupRow.font = { name: 'Book Antiqua', size: 11, bold: true }
+      groupRow.font = { name: SHEET_FONT, size: preset.headerFontSize, bold: true }
       groupRow.eachCell((cell) => {
         cell.border = thin
       })
@@ -216,7 +260,7 @@ export async function createExtraOccasionExcelBlob(
           row.name,
           ...columns.map(() => ''),
         ])
-        memberRow.font = { name: 'Book Antiqua', size: preset.bodyFontSize }
+        memberRow.font = { name: SHEET_FONT, size: bodyFontSize }
         memberRow.eachCell((cell) => {
           cell.border = thin
         })
@@ -230,11 +274,33 @@ export async function createExtraOccasionExcelBlob(
     const footerValues = Array.from({ length: columnCount }, () => '')
     const otherFooterValues = Array.from({ length: columnCount }, () => '')
     const middleColumn = Math.floor(columnCount / 2)
-    footerValues[0] = `${names.pmName}\n________________________\nPangulong Mang-aawit`
-    otherFooterValues[middleColumn] =
-      `${names.destinadoName}\n________________________\nDestinado`
     const footer = sheet.addRow(footerValues)
     const otherFooter = sheet.addRow(otherFooterValues)
+    const roleFontSize = signatureRoleFontSize(preset)
+    footer.getCell(1).value = {
+      richText: [
+        {
+          text: `${names.pmName}\n________________________\n`,
+          font: { name: SHEET_FONT, size: preset.sigFontSize, bold: true },
+        },
+        {
+          text: 'Pangulong Mang-aawit',
+          font: { name: SHEET_FONT, size: roleFontSize },
+        },
+      ],
+    }
+    otherFooter.getCell(middleColumn + 1).value = {
+      richText: [
+        {
+          text: `${names.destinadoName}\n________________________\n`,
+          font: { name: SHEET_FONT, size: preset.sigFontSize, bold: true },
+        },
+        {
+          text: 'Destinado',
+          font: { name: SHEET_FONT, size: roleFontSize },
+        },
+      ],
+    }
     if (middleColumn > 1) {
       sheet.mergeCells(footer.number, 1, footer.number, middleColumn)
     }
@@ -248,6 +314,8 @@ export async function createExtraOccasionExcelBlob(
     }
     footer.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
     otherFooter.alignment = footer.alignment
+    footer.font = { name: SHEET_FONT, size: preset.sigFontSize }
+    otherFooter.font = { name: SHEET_FONT, size: preset.sigFontSize }
     footer.height = 42
     otherFooter.height = 42
   }
@@ -296,6 +364,8 @@ export async function createExtraOccasionDocxBlob(
     options.organistaAssignments,
   )
   const { format, dimensions, margins, preset } = docDimensions(options)
+  const bodyFontSize = occasionBodyFontSize(options, preset)
+  const roleFontSize = signatureRoleFontSize(preset)
   const toTwips = (mm: number) => Math.max(1, Math.round((mm * 1440) / 25.4))
   const totalWidth = toTwips(dimensions.width - margins.left - margins.right)
   const widthsMm = [
@@ -323,7 +393,12 @@ export async function createExtraOccasionDocxBlob(
   const cell = (
     text: string,
     width: number,
-    options: { bold?: boolean; fill?: string; align?: typeof AlignmentType[keyof typeof AlignmentType] } = {},
+    options: {
+      bold?: boolean
+      fill?: string
+      align?: typeof AlignmentType[keyof typeof AlignmentType]
+      size?: number
+    } = {},
   ) =>
     new TableCell({
       width: { size: width, type: WidthType.DXA },
@@ -340,7 +415,8 @@ export async function createExtraOccasionDocxBlob(
               new TextRun({
                 text: line,
                 bold: options.bold,
-                size: Math.round(preset.bodyFontSize * 2),
+                size: Math.round((options.size ?? bodyFontSize) * 2),
+                font: { name: SHEET_FONT },
               }),
             ],
           }),
@@ -350,12 +426,13 @@ export async function createExtraOccasionDocxBlob(
     new TableRow({
       tableHeader: true,
       children: [
-        cell('Blg.', widths[0], { bold: true, fill: 'F2F2F2' }),
-        cell('PANGALAN', widths[1], { bold: true, fill: 'F2F2F2' }),
+        cell('Blg.', widths[0], { bold: true, fill: 'F2F2F2', size: preset.headerFontSize }),
+        cell('PANGALAN', widths[1], { bold: true, fill: 'F2F2F2', size: preset.headerFontSize }),
         ...columns.map(({ label, date, fill }, index) =>
           cell(`${label}\n${dateText(date)}`, widths[index + 2], {
             bold: true,
             fill,
+            size: preset.headerFontSize,
           }),
         ),
       ],
@@ -370,6 +447,7 @@ export async function createExtraOccasionDocxBlob(
           cell(schedule.label, widths[1], {
             bold: true,
             fill: 'C6EFCE',
+            size: preset.headerFontSize,
           }),
           ...columns.map((_, index) =>
             cell('', widths[index + 2], { fill: 'C6EFCE' }),
@@ -391,7 +469,11 @@ export async function createExtraOccasionDocxBlob(
         new TableRow({
           children: [
             cell('', widths[0]),
-            cell(group.label, widths[1], { bold: true, align: AlignmentType.LEFT }),
+            cell(group.label, widths[1], {
+              bold: true,
+              align: AlignmentType.LEFT,
+              size: preset.headerFontSize,
+            }),
             ...columns.map((_, index) => cell('', widths[index + 2])),
           ],
         }),
@@ -417,6 +499,7 @@ export async function createExtraOccasionDocxBlob(
         new TextRun({
           text: `Lokal ng ${options.localeName.trim()}`,
           size: Math.round(preset.headerFontSize * 2),
+          font: { name: SHEET_FONT },
         }),
       ],
     }),
@@ -428,6 +511,7 @@ export async function createExtraOccasionDocxBlob(
           text: 'EXTRA OCCASION SUGUAN',
           bold: true,
           size: Math.round(preset.titleFontSize * 2),
+          font: { name: SHEET_FONT },
         }),
       ],
     }),
@@ -484,7 +568,8 @@ export async function createExtraOccasionDocxBlob(
                         new TextRun({
                           text: name,
                           bold: true,
-                          size: Math.round(preset.bodyFontSize * 2),
+                          size: Math.round(preset.sigFontSize * 2),
+                          font: { name: SHEET_FONT },
                         }),
                       ],
                     }),
@@ -493,7 +578,8 @@ export async function createExtraOccasionDocxBlob(
                       children: [
                         new TextRun({
                           text: role,
-                          size: Math.round(preset.smallFontSize * 2),
+                          size: Math.round(roleFontSize * 2),
+                          font: { name: SHEET_FONT },
                         }),
                       ],
                     }),
@@ -547,6 +633,10 @@ export async function createExtraOccasionPdfBlob(
   options: ExtraOccasionExportOptions,
 ): Promise<Blob> {
   const { jsPDF } = await import('jspdf')
+  const [regularFont, boldFont] = await Promise.all([
+    fetchFontAsBase64(sheetRegularUrl),
+    fetchFontAsBase64(sheetBoldUrl),
+  ])
   const columns = visibleColumns(options)
   const sections = buildExtraOccasionSections(
     options.suguan,
@@ -555,11 +645,17 @@ export async function createExtraOccasionPdfBlob(
     options.organistaAssignments,
   )
   const { format, dimensions, margins, preset } = docDimensions(options)
+  const bodyFontSize = occasionBodyFontSize(options, preset)
+  const roleFontSize = signatureRoleFontSize(preset)
   const pdf = new jsPDF({
     orientation: format.orientation,
     unit: 'mm',
     format: [dimensions.width, dimensions.height],
   })
+  pdf.addFileToVFS('Inter-Regular.ttf', regularFont)
+  pdf.addFont('Inter-Regular.ttf', 'SuguanSheet', 'normal')
+  pdf.addFileToVFS('Inter-Bold.ttf', boldFont)
+  pdf.addFont('Inter-Bold.ttf', 'SuguanSheet', 'bold')
   const pageWidth = dimensions.width
   const pageHeight = dimensions.height
   const contentWidth = pageWidth - margins.left - margins.right
@@ -580,13 +676,13 @@ export async function createExtraOccasionPdfBlob(
     drawTableHeader()
   }
   const drawHeading = () => {
-    pdf.setFont('times', 'normal')
+    pdf.setFont('SuguanSheet', 'normal')
     pdf.setFontSize(preset.headerFontSize)
     pdf.text(`Lokal ng ${options.localeName.trim()}`, pageWidth / 2, y + 4, {
       align: 'center',
     })
     y += 7
-    pdf.setFont('times', 'bold')
+    pdf.setFont('SuguanSheet', 'bold')
     pdf.setFontSize(preset.titleFontSize)
     pdf.text('EXTRA OCCASION SUGUAN', pageWidth / 2, y + 4, {
       align: 'center',
@@ -596,8 +692,8 @@ export async function createExtraOccasionPdfBlob(
   const drawTableHeader = () => {
     const labels = ['Blg.', 'PANGALAN', ...columns.map((column) => column.label)]
     let x = margins.left
-    pdf.setFont('times', 'bold')
-    pdf.setFontSize(preset.smallFontSize)
+    pdf.setFont('SuguanSheet', 'bold')
+    pdf.setFontSize(preset.headerFontSize)
     labels.forEach((label, index) => {
       const width = columnWidths[index]
       if (index > 1) {
@@ -615,12 +711,12 @@ export async function createExtraOccasionPdfBlob(
         maxWidth: width - 1,
       })
       if (index > 1) {
-        pdf.setFont('times', 'normal')
+        pdf.setFont('SuguanSheet', 'normal')
         pdf.text(dateText(columns[index - 2].date), x + width / 2, y + rowHeight + 3, {
           align: 'center',
           maxWidth: width - 1,
         })
-        pdf.setFont('times', 'bold')
+        pdf.setFont('SuguanSheet', 'bold')
       }
       x += width
     })
@@ -631,8 +727,8 @@ export async function createExtraOccasionPdfBlob(
     pdf.setFillColor(198, 239, 206)
     pdf.rect(margins.left, y, contentWidth, rowHeight, 'F')
     pdf.rect(margins.left, y, contentWidth, rowHeight)
-    pdf.setFont('times', bold ? 'bold' : 'normal')
-    pdf.setFontSize(preset.bodyFontSize)
+    pdf.setFont('SuguanSheet', bold ? 'bold' : 'normal')
+    pdf.setFontSize(preset.headerFontSize)
     pdf.text(text, pageWidth / 2, y + rowHeight * 0.68, {
       align: 'center',
       maxWidth: contentWidth - 2,
@@ -643,8 +739,8 @@ export async function createExtraOccasionPdfBlob(
     if (y + rowHeight > pageHeight - bottomReserve) newPage()
     const values = [numberText, name, ...columns.map(() => '')]
     let x = margins.left
-    pdf.setFont('times', 'normal')
-    pdf.setFontSize(preset.bodyFontSize)
+    pdf.setFont('SuguanSheet', 'normal')
+    pdf.setFontSize(bodyFontSize)
     values.forEach((value, index) => {
       const width = columnWidths[index]
       pdf.rect(x, y, width, rowHeight)
@@ -688,13 +784,13 @@ export async function createExtraOccasionPdfBlob(
       [centerLeft, names.pmName, 'Pangulong Mang-aawit'],
       [centerRight, names.destinadoName, 'Destinado'],
     ] as const) {
-      pdf.setFont('times', 'bold')
-      pdf.setFontSize(preset.bodyFontSize)
+      pdf.setFont('SuguanSheet', 'bold')
+      pdf.setFontSize(preset.sigFontSize)
       pdf.text(name, center, signatureTop, { align: 'center', maxWidth: contentWidth / 2 - 5 })
       pdf.setLineWidth(0.25)
       pdf.line(center - 30, signatureTop + 2, center + 30, signatureTop + 2)
-      pdf.setFont('times', 'normal')
-      pdf.setFontSize(preset.smallFontSize)
+      pdf.setFont('SuguanSheet', 'normal')
+      pdf.setFontSize(roleFontSize)
       pdf.text(role, center, signatureTop + 6, { align: 'center' })
     }
   }

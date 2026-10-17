@@ -321,7 +321,7 @@ export function SuguanSheetPage({
                       border: `0.5px solid ${BORDER}`,
                     }}
                   >
-                    {eventTypeLabel(e.type)}
+                    {eventTypeLabel(e.type, e.label)}
                   </th>
                 )
               })}

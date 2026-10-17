@@ -574,6 +574,9 @@ export function groupLabel(group: SuguanGroup): string {
 }
 
 export function suguanSheetTitle(suguan: Suguan): string {
+  if (suguan.extraOccasion) {
+    return 'EXTRA OCCASION SUGUAN'
+  }
   return `${suguanTitle(suguan)} ${groupLabel(suguan.group)}`
 }
 
@@ -642,6 +645,9 @@ export function suguanFileName(
 
 export type SuguanEventLabel = 'PAGSASANAY' | 'PAGTUPAD'
 
-export function eventTypeLabel(type: SuguanEventType): SuguanEventLabel {
-  return type === 'pagsasanay' ? 'PAGSASANAY' : 'PAGTUPAD'
+export function eventTypeLabel(
+  type: SuguanEventType,
+  label?: string,
+): string {
+  return label?.trim() || (type === 'pagsasanay' ? 'PAGSASANAY' : 'PAGTUPAD')
 }

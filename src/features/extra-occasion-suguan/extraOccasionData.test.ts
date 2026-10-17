@@ -3,9 +3,12 @@ import test from 'node:test'
 
 import type { Member } from '@/core/types/member'
 import type { Suguan } from '@/core/types/suguan'
-import { normalizeSuguan } from '@/lib/suguanUtils'
+import { computeSuguanLayout } from '@/lib/suguanExport'
+import { DEFAULT_DOC_FORMAT, normalizeSuguan } from '@/lib/suguanUtils'
 import {
+  buildExtraOccasionSheetSuguan,
   buildExtraOccasionSections,
+  extraOccasionRecordLabel,
   memberIsEligibleExtraOrganista,
 } from './extraOccasionData.ts'
 
@@ -156,4 +159,108 @@ test('Extra Occasion section label uses service type and time', () => {
   ], members, {})
 
   assert.equal(result[0].label, 'Graduation Mass · 10:00 AM')
+})
+
+test('Extra Occasion adapts custom events and voice sections to the shared sheet layout', () => {
+  const members = [
+    makeMember('member-a', 'Sarah', 'Bautista'),
+    makeMember('member-b', 'Kimberly', 'Andao'),
+  ]
+  const source: Suguan = {
+    ...suguan,
+    schedules: [
+      {
+        ...suguan.schedules[0],
+        assignments: [
+          {
+            memberId: 'member-b',
+            memberName: 'Kimberly Andao',
+            voicePosition: 'soprano-1',
+            assignedAt: '',
+          },
+          {
+            memberId: 'member-a',
+            memberName: 'Sarah Bautista',
+            voicePosition: 'alto',
+            assignedAt: '',
+          },
+        ],
+      },
+    ],
+  }
+  const config = {
+    localeName: 'Sta. Monica',
+    pagsasanay: { enabled: true, label: 'Practice', date: '2026-10-11' },
+    pagtupad: { enabled: false, label: 'Special service', date: '' },
+    showFooterSignatories: false,
+    organistaAssignments: {},
+  }
+  const adapted = buildExtraOccasionSheetSuguan(
+    source,
+    [
+      { id: 'soprano-1', name: 'Soprano', shortName: 'S', gender: 'female' },
+      { id: 'alto', name: 'Alto', shortName: 'A', gender: 'female' },
+    ],
+    members,
+    config,
+  )
+  const layout = computeSuguanLayout(adapted, members, DEFAULT_DOC_FORMAT)
+
+  assert.deepEqual(
+    adapted.schedules.map((schedule) => schedule.scheduleLabel),
+    ['Friday 3:00 PM — Soprano', 'Friday 3:00 PM — Alto'],
+  )
+  assert.deepEqual(
+    layout.events.map((event) => [event.label, event.date]),
+    [['Practice', '2026-10-11']],
+  )
+  assert.deepEqual(
+    layout.sections.map((section) => section.rows.map((row) => row.name)),
+    [['Andao, Kimberly'], ['Bautista, Sarah']],
+  )
+  assert.equal(
+    layout.pages.flat().some((block) => block.kind === 'sig-name'),
+    false,
+  )
+})
+
+test('extraOccasionRecordLabel reads back the Occasion name the user typed', () => {
+  const config = {
+    localeName: 'Sta. Monica',
+    pagsasanay: { enabled: true, label: 'Practice', date: '2026-10-11' },
+    pagtupad: { enabled: false, label: 'Pagtupad', date: '' },
+    showFooterSignatories: false,
+    organistaAssignments: {},
+  }
+
+  assert.equal(
+    extraOccasionRecordLabel({
+      ...suguan,
+      extraOccasion: { ...config, name: '  Wedding  ' },
+    }),
+    'Wedding',
+  )
+})
+
+test('extraOccasionRecordLabel falls back to the generic name when blank', () => {
+  const config = {
+    localeName: 'Sta. Monica',
+    pagsasanay: { enabled: true, label: 'Practice', date: '2026-10-11' },
+    pagtupad: { enabled: false, label: 'Pagtupad', date: '' },
+    showFooterSignatories: false,
+    organistaAssignments: {},
+  }
+  // A blank name, and a record that never had one, both read as the label the
+  // History page used before the name was stored at all.
+  assert.equal(
+    extraOccasionRecordLabel({ ...suguan, extraOccasion: config }),
+    'Extra Occasion Suguan',
+  )
+  assert.equal(
+    extraOccasionRecordLabel({
+      ...suguan,
+      extraOccasion: { ...config, name: '   ' },
+    }),
+    'Extra Occasion Suguan',
+  )
 })

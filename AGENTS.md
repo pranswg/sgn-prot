@@ -416,6 +416,14 @@ required", "Pagsasanay date and Pagtupad date required"). The point is that a
 phone opens on the roster instead of six cards of setup, and never has to scroll
 past the fields to reach the members or the export buttons.
 
+**A saved Extra Occasion is labelled by its Occasion name.** Suguan History's
+"Service" column, its search text, and the detail header all read
+`extraOccasionRecordLabel` (`extraOccasionData.ts`), which returns the name typed
+into "Occasion name" and falls back to `Extra Occasion Suguan` when that field is
+blank — the record is stored under the generic name, so without this a record the
+user called "Wedding" would read back as the generic one. The Service filter's
+"Extra Occasion Suguan" option and the export filenames stay generic on purpose.
+
 **A fold is one card, not a row plus a box.** `DisclosureSection`
 (`src/components/DisclosureSection.tsx`) draws the border around the trigger row
 *and* the body it reveals, so opening a row reads as the row unfolding rather
@@ -634,9 +642,10 @@ boundaries, so a change in one feature rarely reaches another.
   `CoverageStep` → `DocumentSetupStep` → `SchedulesStep` →
   `AssignmentWorkspace` → `PreviewStep`.
 - **extra-occasion-suguan** — independent special-occasion sheet generator.
-  It reuses the Choir Suguan schedule and assignment UI, but keeps its own
-  custom Pagsasanay/Pagtupad dates, column labels, signatory toggles, optional
-  Organista assignments, and PDF/Excel/Word renderers. Records save through
+  It reuses the Choir Suguan schedule and assignment UI and adapts its custom
+  Pagsasanay/Pagtupad dates, column labels, signatory toggles, and optional
+  Organista assignments into the shared Choir Suguan preview and PDF/Excel/Word
+  renderers. Records save through
   `suguanStore` into Suguan History with their custom settings, where they can
   be previewed, re-exported, edited in this maker, and deleted.
 - **suguan-history** — saved Suguan list and detail view.

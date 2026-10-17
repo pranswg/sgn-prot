@@ -4,8 +4,8 @@ import {
   exportExtraOccasionDocx,
   exportExtraOccasionExcel,
   exportExtraOccasionPdf,
-  type ExtraOccasionExportOptions,
-} from './extraOccasionExport'
+} from './extraOccasionSharedExport'
+import type { ExtraOccasionExportOptions } from './extraOccasionExport'
 import {
   buildOccasionPreview,
   type ExtraOccasionOccasionState,

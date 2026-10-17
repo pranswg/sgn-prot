@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 import type { Member } from '@/core/types/member'
 import type { Suguan, VoicePosition } from '@/core/types/suguan'
@@ -82,11 +84,25 @@ const options: ExtraOccasionExportOptions = {
 }
 
 test('Extra Occasion PDF, Excel, and Word builders produce export blobs', async () => {
-  const [pdf, excel, docx] = await Promise.all([
-    createExtraOccasionPdfBlob(options),
-    createExtraOccasionExcelBlob(options),
-    createExtraOccasionDocxBlob(options),
-  ])
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = input instanceof Request ? input.url : input.toString()
+    if (url.startsWith('file:')) {
+      return new Response(await readFile(fileURLToPath(url)))
+    }
+    return originalFetch(input, init)
+  }
+  let blobs: [Blob, Blob, Blob]
+  try {
+    blobs = await Promise.all([
+      createExtraOccasionPdfBlob(options),
+      createExtraOccasionExcelBlob(options),
+      createExtraOccasionDocxBlob(options),
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+  const [pdf, excel, docx] = blobs
 
   assert.equal(pdf.type, 'application/pdf')
   assert.equal(
@@ -100,4 +116,21 @@ test('Extra Occasion PDF, Excel, and Word builders produce export blobs', async 
   assert.ok(pdf.size > 0)
   assert.ok(excel.size > 0)
   assert.ok(docx.size > 0)
+})
+
+test('Extra Occasion Excel uses the Choir Suguan font and document font sizes', async () => {
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = new ExcelJS.Workbook()
+  const excel = await createExtraOccasionExcelBlob(options)
+  await workbook.xlsx.load(await excel.arrayBuffer())
+  const sheet = workbook.worksheets[0]
+
+  assert.equal(sheet.getCell('A1').font?.name, 'Inter')
+  assert.equal(sheet.getCell('A1').font?.size, 9)
+  assert.equal(sheet.getCell('A2').font?.name, 'Inter')
+  assert.equal(sheet.getCell('A2').font?.size, 12)
+  assert.equal(sheet.getCell('A3').font?.name, 'Inter')
+  assert.equal(sheet.getCell('A3').font?.size, 9)
+  assert.equal(sheet.getCell('B6').font?.name, 'Inter')
+  assert.equal(sheet.getCell('B6').font?.size, 9)
 })

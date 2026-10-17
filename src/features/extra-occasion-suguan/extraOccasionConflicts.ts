@@ -1,5 +1,6 @@
 import type { ExtraOccasionSuguanConfig, Suguan } from '@/core/types/suguan'
 import { isDateKey } from '@/lib/phDate'
+import { extraOccasionName } from './extraOccasionData'
 import {
   occasionLabel,
 } from './extraOccasionDraft'
@@ -107,7 +108,7 @@ function occasionLabelFromRecord(
   record: Suguan,
   config: ExtraOccasionSuguanConfig,
 ): string {
-  const named = config.name?.trim()
+  const named = extraOccasionName(config)
   if (named) return named
   const section = record.schedules[0]?.scheduleLabel?.trim()
   return section || 'Extra Occasion'

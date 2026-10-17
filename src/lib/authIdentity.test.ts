@@ -51,6 +51,20 @@ test('resolveSignInAddress falls back to the synthetic address', async () => {
   )
 })
 
+test('resolveSignInAddress takes an address with no dotted domain as typed', async () => {
+  // An admin-created account's identity is whatever the Create User form's
+  // Email field held, and that need not have a dot in its domain. Treating it
+  // as a username would look it up, find nothing, and sign in as
+  // `juan@localhost@choir.local`.
+  let asked = false
+  const email = await resolveSignInAddress('  Juan@Localhost ', async () => {
+    asked = true
+    return 'juan@example.com'
+  })
+  assert.equal(email, 'juan@localhost')
+  assert.equal(asked, false)
+})
+
 test('toAccountStatus falls back to active on unknown values', () => {
   assert.equal(toAccountStatus('suspended'), 'suspended')
   assert.equal(toAccountStatus('pending-activation'), 'pending-activation')

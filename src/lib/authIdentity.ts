@@ -24,7 +24,8 @@ export function emailToUsername(email: string | null | undefined): string {
 }
 
 export function isEmail(input: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.trim())
+  const trimmed = input.trim()
+  return trimmed.includes('@')
 }
 
 export function resolveSignInEmail(input: string): string {

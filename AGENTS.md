@@ -164,6 +164,14 @@ Excel output in the same file consumes the same geometry. If you need a new
 layout value, add it there and consume it in both renderers, then add a
 regression test to `src/lib/suguanExport.test.ts`.
 
+An Extra Occasion has **no renderer of its own**.
+`buildExtraOccasionSheetSuguan` (`extraOccasionData.ts`) adapts the occasion
+into a Choir Suguan sheet, and the preview, PDF, Excel and Word exports all
+push that sheet through the same renderers and the same geometry, from
+`extraOccasionSharedExport.ts`. `extraOccasionExport.ts` holds only the export
+options bag and the record adapter: do not add occasion-only layout constants,
+and do not give any renderer a second occasion path.
+
 This rule exists because a real bug shipped: the PDF renderer was missing a
 `sig-gap` branch that the preview had, so signatures rode up over the table
 while the preview looked correct. Signature gap is `SIG_GAP_ROWS = 2.5` and

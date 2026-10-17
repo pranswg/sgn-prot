@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 
 import type { Member } from '@/core/types/member'
-import type { Suguan, VoicePosition } from '@/core/types/suguan'
-import { DEFAULT_DOC_FORMAT } from '@/lib/suguanUtils'
+import type {
+  ExtraOccasionSuguanConfig,
+  Suguan,
+  SuguanDocFormat,
+  VoicePosition,
+} from '@/core/types/suguan'
+import { computeSuguanLayout, type SuguanSheetLayout } from '@/lib/suguanExport'
+import { createSuguanDocxBlob } from '@/features/suguan-builder/suguanDocxExport'
 import {
-  createExtraOccasionDocxBlob,
-  createExtraOccasionExcelBlob,
-  createExtraOccasionPdfBlob,
-  type ExtraOccasionExportOptions,
-} from './extraOccasionExport.ts'
+  DEFAULT_DOC_FORMAT,
+  normalizeDocFormat,
+} from '@/lib/suguanUtils'
+import { buildExtraOccasionSheetSuguan } from './extraOccasionData.ts'
+import { extraOccasionExportOptionsForRecord } from './extraOccasionExport.ts'
 
 const member: Member = {
   id: 'member-1',
@@ -63,74 +67,107 @@ const suguan: Suguan = {
   updatedAt: '',
 }
 
-const options: ExtraOccasionExportOptions = {
-  suguan,
-  members: [member],
-  voices: [voice],
-  organistaAssignments: {},
-  pagsasanay: {
-    enabled: true,
-    label: 'Pagsasanay',
-    date: '2026-10-11',
-  },
-  pagtupad: {
-    enabled: true,
-    label: 'Pagtupad',
-    date: '2026-10-12',
-  },
-  showFooterSignatories: true,
+const config: ExtraOccasionSuguanConfig = {
+  name: 'Kasal',
   localeName: 'Sta. Monica',
-  docFormat: DEFAULT_DOC_FORMAT,
+  pagsasanay: { enabled: true, label: 'Pagsasanay', date: '2026-10-11' },
+  pagtupad: { enabled: true, label: 'Pagtupad', date: '2026-10-12' },
+  showFooterSignatories: true,
+  organistaAssignments: {},
 }
 
-test('Extra Occasion PDF, Excel, and Word builders produce export blobs', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (input, init) => {
-    const url = input instanceof Request ? input.url : input.toString()
-    if (url.startsWith('file:')) {
-      return new Response(await readFile(fileURLToPath(url)))
-    }
-    return originalFetch(input, init)
-  }
-  let blobs: [Blob, Blob, Blob]
-  try {
-    blobs = await Promise.all([
-      createExtraOccasionPdfBlob(options),
-      createExtraOccasionExcelBlob(options),
-      createExtraOccasionDocxBlob(options),
-    ])
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-  const [pdf, excel, docx] = blobs
+/** A saved Extra Occasion, as Suguan History reads one back. */
+const record: Suguan = { ...suguan, extraOccasion: config }
 
-  assert.equal(pdf.type, 'application/pdf')
-  assert.equal(
-    excel.type,
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  )
-  assert.equal(
-    docx.type,
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  )
-  assert.ok(pdf.size > 0)
-  assert.ok(excel.size > 0)
-  assert.ok(docx.size > 0)
+const A4_LANDSCAPE: SuguanDocFormat = {
+  paperSize: 'a4',
+  orientation: 'landscape',
+  margins: 'narrow',
+  scaling: 'fit-width',
+  fontSize: 'large',
+}
+
+test('extraOccasionExportOptionsForRecord reads the occasion off the record', () => {
+  const options = extraOccasionExportOptionsForRecord(record, [member], [voice])
+
+  assert.equal(options.suguan, record)
+  assert.equal(options.localeName, 'Sta. Monica')
+  assert.deepEqual(options.pagsasanay, config.pagsasanay)
+  assert.deepEqual(options.pagtupad, config.pagtupad)
+  assert.deepEqual(options.organistaAssignments, {})
+  assert.equal(options.showFooterSignatories, true)
+  // A record with no saved document setup takes the same default a Choir Suguan
+  // sheet does.
+  assert.deepEqual(options.docFormat, normalizeDocFormat(undefined))
 })
 
-test('Extra Occasion Excel uses the Choir Suguan font and document font sizes', async () => {
-  const ExcelJS = (await import('exceljs')).default
-  const workbook = new ExcelJS.Workbook()
-  const excel = await createExtraOccasionExcelBlob(options)
-  await workbook.xlsx.load(await excel.arrayBuffer())
-  const sheet = workbook.worksheets[0]
+test('extraOccasionExportOptionsForRecord keeps the record document setup', () => {
+  const options = extraOccasionExportOptionsForRecord(
+    { ...record, docFormat: A4_LANDSCAPE },
+    [member],
+    [voice],
+  )
 
-  assert.equal(sheet.getCell('A1').font?.name, 'Inter')
-  assert.equal(sheet.getCell('A1').font?.size, 9)
-  assert.equal(sheet.getCell('A2').font?.name, 'Inter')
-  assert.equal(sheet.getCell('A2').font?.size, 12)
-  assert.equal(sheet.getCell('A3').font?.name, 'Inter')
-  assert.equal(sheet.getCell('A3').font?.size, 9)
-  assert.equal(sheet.getCell('B6').font?.name, 'Inter')
-  assert.equal(sheet.getCell('B6').font?.size, 9)
+  assert.deepEqual(options.docFormat, normalizeDocFormat(A4_LANDSCAPE))
+})
+
+test('extraOccasionExportOptionsForRecord refuses a plain Choir Suguan', () => {
+  assert.throws(
+    () => extraOccasionExportOptionsForRecord(suguan, [member], [voice]),
+    /does not have Extra Occasion settings/,
+  )
+})
+
+/**
+ * Every value the shared preview, PDF, Excel and Word renderers read for fonts,
+ * rows, columns and the signature block. None of it depends on the sheet's
+ * content, so an occasion sheet must produce the Choir Suguan numbers exactly.
+ */
+function sheetStyling(layout: SuguanSheetLayout) {
+  return {
+    format: layout.fmt,
+    paper: [layout.paperWidthMm, layout.paperHeightMm],
+    margins: layout.margins,
+    fonts: layout.fs,
+    rowHeights: [
+      layout.titleRowH,
+      layout.headerRowH,
+      layout.globalHeaderBlockH,
+      layout.sectionLabelRowH,
+    ],
+    table: [layout.headerTopY, layout.topBlockH, layout.usableTableH],
+    signature: layout.sig,
+  }
+}
+
+test('an Extra Occasion sheet is styled exactly like a Choir Suguan sheet', () => {
+  const occasionSheet = buildExtraOccasionSheetSuguan(
+    suguan,
+    [voice],
+    [member],
+    config,
+  )
+
+  for (const docFormat of [DEFAULT_DOC_FORMAT, A4_LANDSCAPE]) {
+    assert.deepEqual(
+      sheetStyling(computeSuguanLayout(occasionSheet, [member], docFormat)),
+      sheetStyling(computeSuguanLayout({ ...suguan }, [member], docFormat)),
+    )
+  }
+})
+
+test('the shared Word builder renders the adapted occasion sheet', async () => {
+  const occasionSheet = buildExtraOccasionSheetSuguan(
+    suguan,
+    [voice],
+    [member],
+    config,
+  )
+  const blob = await createSuguanDocxBlob(occasionSheet, [member])
+
+  assert.equal(
+    blob.type,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+  assert.ok(blob.size > 0)
 })

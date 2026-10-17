@@ -8,10 +8,13 @@ import type {
   SuguanDocFormat,
   VoicePosition,
 } from '@/core/types/suguan'
-import { computeSuguanLayout, type SuguanSheetLayout } from '@/lib/suguanExport'
+import {
+  computeSuguanLayout,
+  createSuguanExcelBlob,
+} from '@/lib/suguanExport'
 import { createSuguanDocxBlob } from '@/features/suguan-builder/suguanDocxExport'
 import {
-  DEFAULT_DOC_FORMAT,
+  extraOccasionSheetHeading,
   normalizeDocFormat,
 } from '@/lib/suguanUtils'
 import { buildExtraOccasionSheetSuguan } from './extraOccasionData.ts'
@@ -118,42 +121,49 @@ test('extraOccasionExportOptionsForRecord refuses a plain Choir Suguan', () => {
   )
 })
 
-/**
- * Every value the shared preview, PDF, Excel and Word renderers read for fonts,
- * rows, columns and the signature block. None of it depends on the sheet's
- * content, so an occasion sheet must produce the Choir Suguan numbers exactly.
- */
-function sheetStyling(layout: SuguanSheetLayout) {
-  return {
-    format: layout.fmt,
-    paper: [layout.paperWidthMm, layout.paperHeightMm],
-    margins: layout.margins,
-    fonts: layout.fs,
-    rowHeights: [
-      layout.titleRowH,
-      layout.headerRowH,
-      layout.globalHeaderBlockH,
-      layout.sectionLabelRowH,
-    ],
-    table: [layout.headerTopY, layout.topBlockH, layout.usableTableH],
-    signature: layout.sig,
-  }
-}
-
-test('an Extra Occasion sheet is styled exactly like a Choir Suguan sheet', () => {
+test('an Extra Occasion uses the reference heading and voice-section table styling', () => {
   const occasionSheet = buildExtraOccasionSheetSuguan(
     suguan,
     [voice],
     [member],
     config,
   )
+  const occasionLayout = computeSuguanLayout(
+    occasionSheet,
+    [member],
+    A4_LANDSCAPE,
+  )
+  const choirLayout = computeSuguanLayout(
+    suguan,
+    [member],
+    A4_LANDSCAPE,
+  )
 
-  for (const docFormat of [DEFAULT_DOC_FORMAT, A4_LANDSCAPE]) {
-    assert.deepEqual(
-      sheetStyling(computeSuguanLayout(occasionSheet, [member], docFormat)),
-      sheetStyling(computeSuguanLayout({ ...suguan }, [member], docFormat)),
-    )
-  }
+  assert.deepEqual(extraOccasionSheetHeading(occasionSheet), {
+    locale: 'Lokal ng Sta. Monica',
+    title: 'LISTAHAN NG MGA TUTUPAD SA KASAL',
+    subtitle: 'October 12, 2026 (Friday 3:00 PM)',
+  })
+  assert.equal(
+    extraOccasionSheetHeading({
+      ...occasionSheet,
+      extraOccasion: { ...config, localeName: '' },
+    }).locale,
+    '',
+  )
+  assert.ok(occasionLayout.titleRowH > choirLayout.titleRowH)
+  assert.deepEqual(
+    occasionLayout.sections.map(({ label, headingType }) => [
+      label,
+      headingType,
+    ]),
+    [
+      ['Friday 3:00 PM', 'schedule'],
+      ['SOPRANO', 'voice'],
+    ],
+  )
+  assert.equal(occasionLayout.sections[0].rows.length, 0)
+  assert.equal(occasionLayout.sections[1].rows[0].name, 'Andao, Kimberly')
 })
 
 test('the shared Word builder renders the adapted occasion sheet', async () => {
@@ -170,4 +180,36 @@ test('the shared Word builder renders the adapted occasion sheet', async () => {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   )
   assert.ok(blob.size > 0)
+})
+
+test('the shared Excel builder uses the reference occasion font and headings', async () => {
+  const occasionSheet = buildExtraOccasionSheetSuguan(
+    suguan,
+    [voice],
+    [member],
+    config,
+  )
+  const blob = await createSuguanExcelBlob(
+    occasionSheet,
+    [member],
+    A4_LANDSCAPE,
+  )
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(await blob.arrayBuffer())
+
+  const sheet = workbook.worksheets[0]
+  assert.equal(sheet.getCell('A1').value, 'Lokal ng Sta. Monica')
+  assert.equal(sheet.getCell('A2').value, 'LISTAHAN NG MGA TUTUPAD SA KASAL')
+  assert.equal(sheet.getCell('A4').value, 'Blg.')
+  assert.equal(sheet.getCell('B4').value, 'PANGALAN')
+  assert.equal(sheet.getCell('C4').value, 'Pagsasanay\n10/11/2026')
+  assert.equal(sheet.getRow(4).height, 15)
+  assert.equal(sheet.getCell('B7').value, 'SOPRANO')
+  assert.equal(sheet.getCell('B7').font?.size, 12)
+  assert.equal(sheet.getCell('B7').font?.name, 'Book Antiqua')
+  assert.equal(sheet.getCell('A8').font?.size, 9)
+  assert.ok(Number(sheet.getCell('B8').font?.size) > 9)
+  assert.equal(sheet.getCell('B8').font?.size, 11)
+  assert.equal(sheet.getCell('B8').font?.name, 'Book Antiqua')
 })

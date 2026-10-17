@@ -50,6 +50,22 @@
   src: url("./assets/fonts/Inter-Bold.ttf") format("truetype");
 }
 
+@font-face {
+  font-family: "ExtraOccasionSheet";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./assets/fonts/BookAntiqua-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "ExtraOccasionSheet";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("./assets/fonts/BookAntiqua-Bold.ttf") format("truetype");
+}
+
 @theme {
   --font-sans: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui,
     -apple-system, "Helvetica Neue", Arial, "Noto Sans", sans-serif;

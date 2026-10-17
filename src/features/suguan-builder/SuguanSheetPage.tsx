@@ -2,12 +2,20 @@ import { useLayoutEffect, useMemo, useRef, type Ref } from 'react'
 import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
 import {
   eventTypeLabel,
+  extraOccasionSheetHeading,
   formatEventDate,
   resolveSignatureNames,
   suguanSheetTitle,
 } from '@/lib/suguanUtils'
 import {
   computeSuguanLayout,
+  EXTRA_OCCASION_HEADER_FONT_SIZE_PT,
+  EXTRA_OCCASION_LOCALE_FONT_SIZE_PT,
+  EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
+  EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
+  EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT,
+  EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
+  EXTRA_OCCASION_VOICE_FONT_SIZE_PT,
   fitFontSizePt,
   PT_TO_MM,
   SIG_LINE,
@@ -76,6 +84,7 @@ interface SuguanSheetPageProps {
   readout: SuguanSheetReadout
   mmToPx: number
   blocks: SheetPageBlock[]
+  firstPage?: boolean
   pageRef?: Ref<HTMLDivElement>
 }
 
@@ -84,6 +93,7 @@ export function SuguanSheetPage({
   readout,
   mmToPx,
   blocks,
+  firstPage = true,
   pageRef,
 }: SuguanSheetPageProps) {
   const { layout, sig } = readout
@@ -92,9 +102,17 @@ export function SuguanSheetPage({
   const accent = suguanSheetAccent(suguan.group)
   const px = (mm: number) => mm * mmToPx
   const sigGeo = layout.sig
+  const isExtraOccasion = Boolean(suguan.extraOccasion)
+  const extraHeading = isExtraOccasion
+    ? extraOccasionSheetHeading(suguan)
+    : null
+  const fontStack = isExtraOccasion
+    ? '"ExtraOccasionSheet", "Book Antiqua", serif'
+    : SHEET_FONT_STACK
 
   const titlePx = fs.titleFontSize * layout.scale * PT_TO_PX
   const headerPx = fs.headerFontSize * layout.scale * PT_TO_PX
+  const extraHeaderPx = EXTRA_OCCASION_HEADER_FONT_SIZE_PT * PT_TO_PX
   const bodyPx = layout.bodyFontSizePt * PT_TO_PX
   // Locked to fixed sizes so fit-page scaling never shrinks the signatures.
   const sigNameMm = sigGeo.nameFontSizePt * PT_TO_MM
@@ -114,7 +132,8 @@ export function SuguanSheetPage({
     )
   const sigTopMm =
     layout.margins.top +
-    layout.topBlockH +
+    layout.topBlockH -
+    (firstPage ? 0 : layout.titleRowH) +
     sigPrecedingContentMm +
     sigGeo.gapMm
 
@@ -140,34 +159,51 @@ export function SuguanSheetPage({
   const renderBlock = (block: SheetPageBlock) => {
     if (block.kind === 'section-label') {
       const section = layout.sections[block.sectionIndex]
+      const isVoiceHeading = section.headingType === 'voice'
       return (
         <tr key={`${block.kind}-${block.sectionIndex}`}>
           <td
             className="text-black"
             style={{
               height: px(layout.sectionLabelRowH),
+              background:
+                !isVoiceHeading && isExtraOccasion
+                  ? accent.scheduleFill
+                  : undefined,
               border: `0.5px solid ${BORDER}`,
             }}
           />
           <td
-            className="px-1 text-center font-semibold text-black"
+            className={`px-1 text-black ${
+              isVoiceHeading ? 'text-left font-bold' : 'text-center font-semibold'
+            }`}
             style={{
               height: px(layout.sectionLabelRowH),
-              fontSize: headerPx,
-              background: accent.scheduleFill,
+              fontSize: isVoiceHeading
+                ? EXTRA_OCCASION_VOICE_FONT_SIZE_PT * PT_TO_PX
+                : isExtraOccasion
+                  ? EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT * PT_TO_PX
+                  : headerPx,
+              background: isVoiceHeading ? undefined : accent.scheduleFill,
               border: `0.5px solid ${BORDER}`,
-              textAlign: 'center',
+              textAlign: isVoiceHeading ? 'left' : 'center',
               verticalAlign: 'middle',
               lineHeight: 1,
             }}
           >
-            {section.label}
+            {isExtraOccasion && !isVoiceHeading
+              ? section.label.toLocaleUpperCase()
+              : section.label}
           </td>
           {events.map((_, j) => (
             <td
               key={j}
               style={{
                 height: px(layout.sectionLabelRowH),
+                background:
+                  !isVoiceHeading && isExtraOccasion
+                    ? accent.scheduleFill
+                    : undefined,
                 border: `0.5px solid ${BORDER}`,
               }}
             />
@@ -185,7 +221,9 @@ export function SuguanSheetPage({
             className="text-center text-black"
             style={{
               height: px(layout.bodyRowH),
-              fontSize: bodyPx,
+              fontSize: isExtraOccasion
+                ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT * PT_TO_PX
+                : bodyPx,
               border: `0.5px solid ${BORDER}`,
             }}
           >
@@ -243,7 +281,7 @@ export function SuguanSheetPage({
       style={{
         width: px(layout.paperWidthMm),
         height: px(layout.paperHeightMm),
-        fontFamily: SHEET_FONT_STACK,
+        fontFamily: fontStack,
       }}
     >
       <div
@@ -255,6 +293,43 @@ export function SuguanSheetPage({
           paddingRight: px(layout.margins.right),
         }}
       >
+        {extraHeading && (
+          <div
+            className="flex shrink-0 flex-col items-center justify-center text-center text-black"
+            style={{
+              height: px(firstPage ? layout.titleRowH : 0),
+              lineHeight: 1.2,
+            }}
+          >
+            {firstPage && (
+              <>
+                {extraHeading.locale && (
+                  <span
+                    style={{
+                      fontSize: EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * PT_TO_PX,
+                    }}
+                  >
+                    {extraHeading.locale}
+                  </span>
+                )}
+                <strong
+                  style={{
+                    fontSize: EXTRA_OCCASION_TITLE_FONT_SIZE_PT * PT_TO_PX,
+                  }}
+                >
+                  {extraHeading.title}
+                </strong>
+                <span
+                  style={{
+                    fontSize: EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT * PT_TO_PX,
+                  }}
+                >
+                  {extraHeading.subtitle}
+                </span>
+              </>
+            )}
+          </div>
+        )}
         <table
           className="w-full border-collapse"
           style={{ tableLayout: 'fixed', borderCollapse: 'collapse' }}
@@ -267,20 +342,22 @@ export function SuguanSheetPage({
             ))}
           </colgroup>
           <thead>
-            <tr>
-              <th
-                colSpan={layout.totalCols}
-                className="px-1 text-center font-semibold text-black"
-                style={{
-                  height: px(layout.titleRowH),
-                  fontSize: titlePx,
-                  border: `0.5px solid ${BORDER}`,
-                  lineHeight: 1.15,
-                }}
-              >
-                {suguanSheetTitle(suguan)}
-              </th>
-            </tr>
+            {!isExtraOccasion && (
+              <tr>
+                <th
+                  colSpan={layout.totalCols}
+                  className="px-1 text-center font-semibold text-black"
+                  style={{
+                    height: px(layout.titleRowH),
+                    fontSize: titlePx,
+                    border: `0.5px solid ${BORDER}`,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  {suguanSheetTitle(suguan)}
+                </th>
+              </tr>
+            )}
             <tr>
               <th
                 rowSpan={2}
@@ -288,12 +365,12 @@ export function SuguanSheetPage({
                 style={{
                   width: px(layout.noColWidthMm),
                   height: px(layout.headerRowH * 2),
-                  fontSize: headerPx,
+                  fontSize: isExtraOccasion ? extraHeaderPx : headerPx,
                   background: '#F2F2F2',
                   border: `0.5px solid ${BORDER}`,
                 }}
               >
-                No.
+                {isExtraOccasion ? 'Blg.' : 'No.'}
               </th>
               <th
                 rowSpan={2}
@@ -301,7 +378,7 @@ export function SuguanSheetPage({
                 style={{
                   width: px(layout.nameColWidthMm),
                   height: px(layout.headerRowH * 2),
-                  fontSize: headerPx,
+                  fontSize: isExtraOccasion ? extraHeaderPx : headerPx,
                   background: '#F2F2F2',
                   border: `0.5px solid ${BORDER}`,
                 }}
@@ -313,39 +390,53 @@ export function SuguanSheetPage({
                 return (
                   <th
                     key={i}
+                    rowSpan={isExtraOccasion ? 2 : undefined}
                     className="text-center font-semibold text-black"
                     style={{
-                      height: px(layout.headerRowH),
-                      fontSize: headerPx,
+                      height: px(
+                        layout.headerRowH * (isExtraOccasion ? 2 : 1),
+                      ),
+                      fontSize: isExtraOccasion ? extraHeaderPx : headerPx,
                       background: bg,
                       border: `0.5px solid ${BORDER}`,
                     }}
                   >
-                    {eventTypeLabel(e.type, e.label)}
+                    {isExtraOccasion ? (
+                      <>
+                        {eventTypeLabel(e.type, e.label)}
+                        <br />
+                        {formatEventDate(e)}
+                      </>
+                    ) : (
+                      eventTypeLabel(e.type, e.label)
+                    )}
                   </th>
                 )
               })}
             </tr>
-            <tr>
-              {events.map((e, i) => {
-                const bg = e.type === 'pagsasanay' ? '#FFF2CC' : accent.pagtupadFill
-                return (
-                  <th
-                    key={`d${i}`}
-                    className="text-center text-black"
-                    style={{
-                      height: px(layout.headerRowH),
-                      fontSize: headerPx * 0.95,
-                      background: bg,
-                      border: `0.5px solid ${BORDER}`,
-                      fontWeight: 600,
-                    }}
-                  >
+            {!isExtraOccasion && (
+              <tr>
+                {events.map((e, i) => {
+                  const bg =
+                    e.type === 'pagsasanay' ? '#FFF2CC' : accent.pagtupadFill
+                  return (
+                    <th
+                      key={`d${i}`}
+                      className="text-center text-black"
+                      style={{
+                        height: px(layout.headerRowH),
+                        fontSize: headerPx * 0.95,
+                        background: bg,
+                        border: `0.5px solid ${BORDER}`,
+                        fontWeight: 600,
+                      }}
+                    >
                       {formatEventDate(e)}
                     </th>
-                )
-              })}
-            </tr>
+                  )
+                })}
+              </tr>
+            )}
           </thead>
           <tbody>{blocks.map(renderBlock)}</tbody>
         </table>
@@ -460,6 +551,7 @@ export function SuguanSheetPages({
           readout={readout}
           mmToPx={mmToPx}
           blocks={blocks}
+          firstPage={pageIdx === 0}
           pageRef={(el) => {
             if (el) pageEls.current.set(pageIdx, el)
             else pageEls.current.delete(pageIdx)

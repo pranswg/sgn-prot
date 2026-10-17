@@ -103,6 +103,7 @@ export function emptyOccasionState(
     name: '',
     draft: {
       ...initial,
+      group: 'mixed',
       coverage: null,
       date: '',
       time: '',
@@ -311,4 +312,3 @@ export function validateOccasion(state: ExtraOccasionOccasionState): string | nu
   }
   return null
 }
-

@@ -14,6 +14,7 @@ import test from 'node:test'
 import {
   buildSections,
   computeSuguanLayout,
+  createSuguanExcelBlob,
   fitFontSizePt,
   SIG_RULE_PAD,
   suguanSheetAccent,
@@ -24,6 +25,7 @@ import {
   CUSTOM_BODY_FONT_MAX,
   CUSTOM_BODY_FONT_MIN,
   DEFAULT_DOC_FORMAT,
+  docPaperDimensionsMm,
   FONT_SIZE_PRESETS,
   normalizeDocFormat,
   resolveFontSizePreset,
@@ -222,7 +224,7 @@ test('each schedule includes exactly two numbered blank write-in rows', () => {
 })
 
 test('automatic scaling fits compact schedules on supported paper sizes when readable', () => {
-  for (const paperSize of ['letter', 'a4', 'legal'] as const) {
+  for (const paperSize of ['letter', 'a4', 'legal', 'folio'] as const) {
     const format: SuguanDocFormat = {
       paperSize,
       orientation: 'portrait',
@@ -363,13 +365,31 @@ test('an empty roster still lays out a full page without a phantom gap', () => {
   assert.deepEqual(tail, ['sig-gap', 'sig-name', 'sig-title'])
 })
 
-test('the default document format is normal and reads one step larger than small', () => {
+test('Folio is the default paper size and font size remains normal', () => {
+  assert.equal(DEFAULT_DOC_FORMAT.paperSize, 'folio')
+  assert.equal(normalizeDocFormat(undefined).paperSize, 'folio')
+  assert.deepEqual(docPaperDimensionsMm(DEFAULT_DOC_FORMAT), {
+    width: 215.9,
+    height: 330.2,
+  })
+  const defaultLayout = computeSuguanLayout(makeSuguan(0), [])
+  assert.equal(defaultLayout.paperWidthMm, 215.9)
+  assert.equal(defaultLayout.paperHeightMm, 330.2)
   assert.equal(DEFAULT_DOC_FORMAT.fontSize, 'normal')
   assert.equal(FONT_SIZE_PRESETS.normal.bodyFontSize, 9)
   assert.ok(FONT_SIZE_PRESETS.normal.bodyFontSize > FONT_SIZE_PRESETS.small.bodyFontSize)
   assert.ok(FONT_SIZE_PRESETS.large.bodyFontSize > FONT_SIZE_PRESETS.normal.bodyFontSize)
   // Every preset must stay in ascending order or the picker stops meaning anything.
   assert.ok(FONT_SIZE_PRESETS.small.bodyFontSize < FONT_SIZE_PRESETS.normal.bodyFontSize)
+})
+
+test('Excel export uses the Folio print paper size', async () => {
+  const blob = await createSuguanExcelBlob(makeSuguan(0), [])
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(await blob.arrayBuffer())
+
+  assert.equal(workbook.worksheets[0].pageSetup.paperSize, 14)
 })
 
 test('a custom body size is clamped and rounded to a half point', () => {

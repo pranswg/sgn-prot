@@ -169,10 +169,18 @@ export function buildExtraOccasionSheetSuguan(
   const schedules: SuguanScheduleSection[] = sections.flatMap((section) => {
     const source = scheduleById.get(section.id)
     if (!source) return []
+    const scheduleHeading: SuguanScheduleSection = {
+      ...source,
+      id: `${section.id}-schedule`,
+      scheduleLabel: section.label,
+      headingType: 'schedule',
+      assignments: [],
+    }
     const voiceSchedules = section.voiceSections.map((voice) => ({
       ...source,
       id: `${section.id}-${voice.id}`,
-      scheduleLabel: `${section.label} — ${voice.label}`,
+      scheduleLabel: voice.label.toLocaleUpperCase(),
+      headingType: 'voice' as const,
       assignments: voice.rows.map((row) => ({
         memberId: row.memberId,
         memberName: row.name,
@@ -187,7 +195,8 @@ export function buildExtraOccasionSheetSuguan(
             {
               ...source,
               id: `${section.id}-organista`,
-              scheduleLabel: `${section.label} — ORGANISTA`,
+              scheduleLabel: 'ORGANISTA',
+              headingType: 'voice' as const,
               assignments: section.organistaRows.map((row) => ({
                 memberId: row.memberId,
                 memberName: row.name,
@@ -198,7 +207,7 @@ export function buildExtraOccasionSheetSuguan(
             },
           ]
         : []
-    return [...voiceSchedules, ...organistaSchedule]
+    return [scheduleHeading, ...voiceSchedules, ...organistaSchedule]
   })
   const events = [
     ...(config.pagsasanay.enabled

@@ -62,10 +62,11 @@ export interface SuguanScheduleSection {
    */
   scheduleDate?: string
   description?: string
+  headingType?: 'schedule' | 'voice'
   assignments: SuguanAssignment[]
 }
 
-export type DocPaperSize = 'letter' | 'a4' | 'legal' | 'custom'
+export type DocPaperSize = 'letter' | 'a4' | 'legal' | 'folio' | 'custom'
 export type DocOrientation = 'portrait' | 'landscape'
 export type DocMargins = 'normal' | 'narrow' | 'custom'
 export type DocScaling = 'fit-width' | 'fit-page' | 'auto'

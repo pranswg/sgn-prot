@@ -16,6 +16,7 @@ import type {
 import { useSettingsStore } from '@/store/settingsStore'
 import type { ChoirPosition } from '@/core/types/member'
 import {
+  formatDateKeyLongDate,
   formatDateKeyNumeric,
   formatMonthYearKey,
   isDateKey,
@@ -76,12 +77,13 @@ export function resolveSignatureNames(
 }
 
 export const DOC_PAPER_SIZES_MM: Record<
-  'letter' | 'a4' | 'legal',
+  'letter' | 'a4' | 'legal' | 'folio',
   { width: number; height: number; label: string }
 > = {
   letter: { width: 215.9, height: 279.4, label: 'Letter (8.5 x 11 inches)' },
   a4: { width: 210, height: 297, label: 'A4 (8.27 x 11.69 inches)' },
   legal: { width: 215.9, height: 355.6, label: 'Legal (8.5 x 14 inches)' },
+  folio: { width: 215.9, height: 330.2, label: 'Folio (8.5 x 13 inches)' },
 }
 
 export const PAPER_SIZE_LABELS: Record<
@@ -91,11 +93,12 @@ export const PAPER_SIZE_LABELS: Record<
   letter: { label: 'Letter (8.5 x 11 inches)', short: 'Letter' },
   a4: { label: 'A4 (8.27 x 11.69 inches)', short: 'A4' },
   legal: { label: 'Legal (8.5 x 14 inches)', short: 'Legal' },
+  folio: { label: 'Folio (8.5 x 13 inches)', short: 'Folio' },
   custom: { label: 'Custom Size', short: 'Custom' },
 }
 
 export const DEFAULT_DOC_FORMAT: SuguanDocFormat = {
-  paperSize: 'legal',
+  paperSize: 'folio',
   orientation: 'portrait',
   margins: 'normal',
   scaling: 'auto',
@@ -179,7 +182,7 @@ export const FONT_SIZE_PRESETS: Record<DocFontSizePreset, FontSizePreset> = {
   },
 }
 
-const PAPER_SIZES = new Set<string>(['letter', 'a4', 'legal', 'custom'])
+const PAPER_SIZES = new Set<string>(['letter', 'a4', 'legal', 'folio', 'custom'])
 const ORIENTATIONS = new Set<string>(['portrait', 'landscape'])
 const MARGIN_PRESETS = new Set<string>(['normal', 'narrow', 'custom'])
 const SCALING_OPTIONS = new Set<string>(['fit-width', 'fit-page', 'auto'])
@@ -578,6 +581,44 @@ export function suguanSheetTitle(suguan: Suguan): string {
     return 'EXTRA OCCASION SUGUAN'
   }
   return `${suguanTitle(suguan)} ${groupLabel(suguan.group)}`
+}
+
+export interface ExtraOccasionSheetHeading {
+  locale: string
+  title: string
+  subtitle: string
+}
+
+export function extraOccasionSheetHeading(
+  suguan: Suguan,
+): ExtraOccasionSheetHeading {
+  const occasion = suguan.extraOccasion
+  const serviceType = serviceTypeLabel(suguan).trim()
+  const schedule = suguan.schedules[0]
+  const scheduleLabel = schedule?.scheduleLabel.trim() ?? ''
+  const scheduleTime = schedule?.scheduleTime.trim() ?? ''
+  const scheduleText =
+    scheduleLabel &&
+    scheduleTime &&
+    !scheduleLabel.toLowerCase().includes(scheduleTime.toLowerCase())
+      ? `${scheduleLabel} · ${scheduleTime}`
+      : scheduleLabel || scheduleTime
+  const eventDate = occasion?.pagtupad.enabled
+    ? occasion.pagtupad.date
+    : occasion?.pagsasanay.date
+  const date = isDateKey(eventDate) ? formatDateKeyLongDate(eventDate) : ''
+  const subtitle = [date, scheduleText ? `(${scheduleText})` : '']
+    .filter(Boolean)
+    .join(' ')
+
+  const localeName = occasion?.localeName.trim()
+  return {
+    locale: localeName ? `Lokal ng ${localeName}` : '',
+    title: `LISTAHAN NG MGA TUTUPAD SA ${
+      occasion?.name?.trim() || serviceType || 'EXTRA OCCASION'
+    }`.toLocaleUpperCase(),
+    subtitle,
+  }
 }
 
 export function formatEventDate(event: SuguanEvent): string {

@@ -1,11 +1,19 @@
 import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
 import {
   computeSuguanLayout,
+  EXTRA_OCCASION_HEADER_FONT_SIZE_PT,
+  EXTRA_OCCASION_LOCALE_FONT_SIZE_PT,
+  EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
+  EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
+  EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT,
+  EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
+  EXTRA_OCCASION_VOICE_FONT_SIZE_PT,
   suguanSheetAccent,
   type SheetMembers,
 } from '@/lib/suguanExport'
 import {
   eventTypeLabel,
+  extraOccasionSheetHeading,
   formatEventDate,
   resolveSignatureNames,
   suguanFileName,
@@ -64,6 +72,11 @@ export async function createSuguanDocxBlob(
   ]
   const columnWidths = columnWidthsMm.map(toTwips)
   const totalWidthTwips = toTwips(totalWidth)
+  const isExtraOccasion = Boolean(suguan.extraOccasion)
+  const occasionHeading = isExtraOccasion
+    ? extraOccasionSheetHeading(suguan)
+    : null
+  const fontName = isExtraOccasion ? 'Book Antiqua' : undefined
   const border = {
     style: BorderStyle.SINGLE,
     size: 4,
@@ -81,12 +94,23 @@ export async function createSuguanDocxBlob(
   const makeCell = (
     text: string,
     width: number,
-    options: { bold?: boolean; fill?: string; align?: typeof AlignmentType[keyof typeof AlignmentType] } = {},
+    options: {
+      bold?: boolean
+      fill?: string
+      align?: typeof AlignmentType[keyof typeof AlignmentType]
+      size?: number
+      compact?: boolean
+    } = {},
   ) =>
     new TableCell({
       width: { size: width, type: WidthType.DXA },
       verticalAlign: VerticalAlign.CENTER,
-      margins: { top: 55, bottom: 55, left: 70, right: 70 },
+      margins: {
+        top: options.compact ? 15 : 55,
+        bottom: options.compact ? 15 : 55,
+        left: 70,
+        right: 70,
+      },
       shading: options.fill
         ? { type: ShadingType.CLEAR, fill: options.fill }
         : undefined,
@@ -94,21 +118,40 @@ export async function createSuguanDocxBlob(
         (line) =>
           new Paragraph({
             alignment: options.align ?? AlignmentType.CENTER,
-            children: [new TextRun({ text: line, bold: options.bold, size: 18 })],
+            children: [
+              new TextRun({
+                text: line,
+                bold: options.bold,
+                size: options.size ?? 18,
+                font: fontName,
+              }),
+            ],
           }),
       ),
     })
   const header = new TableRow({
     tableHeader: true,
     children: [
-      makeCell('No.', columnWidths[0], { bold: true, fill: 'F2F2F2' }),
-      makeCell('PANGALAN', columnWidths[1], { bold: true, fill: 'F2F2F2' }),
+      makeCell(isExtraOccasion ? 'Blg.' : 'No.', columnWidths[0], {
+        bold: true,
+        fill: 'F2F2F2',
+        size: isExtraOccasion ? EXTRA_OCCASION_HEADER_FONT_SIZE_PT * 2 : 18,
+        compact: isExtraOccasion,
+      }),
+      makeCell('PANGALAN', columnWidths[1], {
+        bold: true,
+        fill: 'F2F2F2',
+        size: isExtraOccasion ? EXTRA_OCCASION_HEADER_FONT_SIZE_PT * 2 : 18,
+        compact: isExtraOccasion,
+      }),
       ...layout.events.map((event, index) =>
         makeCell(
           `${eventTypeLabel(event.type, event.label)}\n${formatEventDate(event)}`,
           columnWidths[index + 2],
           {
             bold: true,
+            size: isExtraOccasion ? EXTRA_OCCASION_HEADER_FONT_SIZE_PT * 2 : 18,
+            compact: isExtraOccasion,
             fill:
               event.type === 'pagsasanay'
                 ? 'FFF2CC'
@@ -120,17 +163,45 @@ export async function createSuguanDocxBlob(
   })
   const rows = [header]
   layout.sections.forEach((section) => {
+    const voiceHeading =
+      isExtraOccasion && section.headingType === 'voice'
     rows.push(
       new TableRow({
         children: [
-          makeCell('', columnWidths[0], { fill: accent.scheduleFill.slice(1) }),
-          makeCell(section.label, columnWidths[1], {
-            bold: true,
-            fill: accent.scheduleFill.slice(1),
+          makeCell('', columnWidths[0], {
+            compact: isExtraOccasion,
+            fill:
+              !isExtraOccasion || section.headingType === 'schedule'
+                ? accent.scheduleFill.slice(1)
+                : undefined,
           }),
+          makeCell(
+            isExtraOccasion && section.headingType === 'schedule'
+              ? section.label.toLocaleUpperCase()
+              : section.label,
+            columnWidths[1],
+            {
+              bold: true,
+              size: isExtraOccasion
+                ? (voiceHeading
+                    ? EXTRA_OCCASION_VOICE_FONT_SIZE_PT
+                    : EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT) * 2
+                : 18,
+              compact: isExtraOccasion,
+              fill:
+                !isExtraOccasion || section.headingType === 'schedule'
+                  ? accent.scheduleFill.slice(1)
+                  : undefined,
+              align: voiceHeading ? AlignmentType.LEFT : AlignmentType.CENTER,
+            },
+          ),
           ...layout.events.map((_, index) =>
             makeCell('', columnWidths[index + 2], {
-              fill: accent.scheduleFill.slice(1),
+              compact: isExtraOccasion,
+              fill:
+                !isExtraOccasion || section.headingType === 'schedule'
+                  ? accent.scheduleFill.slice(1)
+                  : undefined,
             }),
           ),
         ],
@@ -140,7 +211,11 @@ export async function createSuguanDocxBlob(
       rows.push(
         new TableRow({
           children: [
-            makeCell(`${row.no}.`, columnWidths[0]),
+            makeCell(`${row.no}.`, columnWidths[0], {
+              size: isExtraOccasion
+                ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT * 2
+                : 18,
+            }),
             new TableCell({
               width: { size: columnWidths[1], type: WidthType.DXA },
               verticalAlign: VerticalAlign.CENTER,
@@ -148,7 +223,15 @@ export async function createSuguanDocxBlob(
               children: [
                 new Paragraph({
                   alignment: AlignmentType.LEFT,
-                  children: [new TextRun({ text: row.name, size: 18 })],
+                  children: [
+                    new TextRun({
+                      text: row.name,
+                      size: isExtraOccasion
+                        ? Math.round(layout.bodyFontSizePt * 2)
+                        : 18,
+                      font: fontName,
+                    }),
+                  ],
                 }),
               ],
             }),
@@ -203,11 +286,20 @@ export async function createSuguanDocxBlob(
                             color: '000000',
                           },
                         },
-                        children: [new TextRun({ text: name, bold: true, size: 22 })],
+                        children: [
+                          new TextRun({
+                            text: name,
+                            bold: true,
+                            size: 22,
+                            font: fontName,
+                          }),
+                        ],
                       }),
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: title, size: 18 })],
+                        children: [
+                          new TextRun({ text: title, size: 18, font: fontName }),
+                        ],
                       }),
                     ],
                   }),
@@ -238,17 +330,60 @@ export async function createSuguanDocxBlob(
           },
         },
         children: [
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 80 },
-            children: [
-              new TextRun({
-                text: suguanSheetTitle(suguan),
-                bold: true,
-                size: Math.round(layout.fs.titleFontSize * 2),
-              }),
-            ],
-          }),
+          ...(occasionHeading
+            ? [
+                ...(occasionHeading.locale
+                  ? [
+                      new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 60 },
+                        children: [
+                          new TextRun({
+                            text: occasionHeading.locale,
+                            size: EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 2,
+                            font: fontName,
+                          }),
+                        ],
+                      }),
+                    ]
+                  : []),
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 20 },
+                  children: [
+                    new TextRun({
+                      text: occasionHeading.title,
+                      bold: true,
+                      size: EXTRA_OCCASION_TITLE_FONT_SIZE_PT * 2,
+                      font: fontName,
+                    }),
+                  ],
+                }),
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 60 },
+                  children: [
+                    new TextRun({
+                      text: occasionHeading.subtitle,
+                      size: EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT * 2,
+                      font: fontName,
+                    }),
+                  ],
+                }),
+              ]
+            : [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  spacing: { after: 80 },
+                  children: [
+                    new TextRun({
+                      text: suguanSheetTitle(suguan),
+                      bold: true,
+                      size: Math.round(layout.fs.titleFontSize * 2),
+                    }),
+                  ],
+                }),
+              ]),
           new Table({
             width: { size: totalWidthTwips, type: WidthType.DXA },
             columnWidths,

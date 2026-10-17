@@ -49,6 +49,7 @@ export function SuguanSheetPreview({
                 readout={readout}
                 mmToPx={mmToPx}
                 blocks={blocks}
+                firstPage={pageIdx === 0}
               />
             </div>
             <p className="mt-1 text-center text-xs font-medium text-muted-foreground">

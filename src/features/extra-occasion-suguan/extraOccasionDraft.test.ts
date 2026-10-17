@@ -13,6 +13,10 @@ function occasion(): ExtraOccasionOccasionState {
   return emptyOccasionState([], [], 'Locale')
 }
 
+test('a new occasion defaults to Mixed Choir', () => {
+  assert.equal(occasion().draft.group, 'mixed')
+})
+
 test('occasionDate prefers the Pagsasanay date, then Pagtupad, then blank', () => {
   const state = occasion()
   state.pagsasanay = { enabled: true, label: 'Pagsasanay', date: '2026-01-04' }

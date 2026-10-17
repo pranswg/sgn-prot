@@ -214,6 +214,7 @@ export function DocumentSetupStep({
           { id: 'letter', label: PAPER_SIZE_LABELS.letter.short, description: '8.5 × 11 in' },
           { id: 'a4', label: PAPER_SIZE_LABELS.a4.short, description: '210 × 297 mm' },
           { id: 'legal', label: PAPER_SIZE_LABELS.legal.short, description: '8.5 × 14 in' },
+          { id: 'folio', label: PAPER_SIZE_LABELS.folio.short, description: '21.59 × 33.02 cm' },
           { id: 'custom', label: 'Custom', description: 'Enter your own' },
         ]}
       />

@@ -9,6 +9,7 @@ import {
   assignmentDisplayName,
   docMarginsMm,
   docPaperDimensionsMm,
+  extraOccasionSheetHeading,
   eventTypeLabel,
   formatEventDate,
   groupLabel,
@@ -41,6 +42,14 @@ export const SUGUAN_SHEET_ACCENTS: Record<SuguanGroup, SuguanSheetAccent> = {
   mixed: { scheduleFill: '#F8E7C0', pagtupadFill: '#FAF0D8' },
 }
 
+export const EXTRA_OCCASION_HEADER_FONT_SIZE_PT = 12
+export const EXTRA_OCCASION_VOICE_FONT_SIZE_PT = 12
+export const EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT = 11
+export const EXTRA_OCCASION_NUMBER_FONT_SIZE_PT = 9
+export const EXTRA_OCCASION_LOCALE_FONT_SIZE_PT = 9
+export const EXTRA_OCCASION_TITLE_FONT_SIZE_PT = 13
+export const EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT = 10
+
 export function suguanSheetAccent(group: SuguanGroup): SuguanSheetAccent {
   return SUGUAN_SHEET_ACCENTS[group] ?? SUGUAN_SHEET_ACCENTS.babae
 }
@@ -48,10 +57,11 @@ export function suguanSheetAccent(group: SuguanGroup): SuguanSheetAccent {
 /** Points to millimetres; shared so every renderer converts units identically. */
 export const PT_TO_MM = 25.4 / 72
 
-const EXCEL_PAPER_SIZE: Record<'letter' | 'a4' | 'legal', number> = {
+const EXCEL_PAPER_SIZE: Record<'letter' | 'a4' | 'legal' | 'folio', number> = {
   letter: 1,
   legal: 5,
   a4: 9,
+  folio: 14,
 }
 
 function colLetter(n: number): string {
@@ -93,6 +103,7 @@ export interface SheetMembers {
 export interface SuguanSheetSection {
   sectionId: string
   label: string
+  headingType: 'schedule' | 'voice'
   rows: { no: number; name: string }[]
 }
 
@@ -169,6 +180,7 @@ export function buildSections(
     return schedules.map((sec) => ({
       sectionId: sec.id,
       label: sec.scheduleLabel || 'SUGUAN',
+      headingType: sec.headingType ?? 'schedule',
       rows: mapRows(sec.assignments),
     }))
   }
@@ -176,6 +188,7 @@ export function buildSections(
     {
       sectionId: 'single',
       label: groupLabel(suguan.group),
+      headingType: 'schedule',
       rows: mapRows(suguan.assignments),
     },
   ]
@@ -373,6 +386,7 @@ export type SheetPageBlock =
 
 interface FlowOptions {
   usableTableH: number
+  continuationExtraMm: number
   sectionLabelRowH: number
   bodyRowH: number
   sig: SignatureGeometry
@@ -384,10 +398,16 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
   const pages: SheetPageBlock[][] = []
   let blocks: SheetPageBlock[] = []
   let cursor = 0
-  const contentCapacity = Math.max(0, opts.usableTableH - opts.sig.totalMm)
+  let contentCapacity = Math.max(0, opts.usableTableH - opts.sig.totalMm)
 
   const breakPage = () => {
-    if (blocks.length > 0) pages.push(blocks)
+    if (blocks.length > 0) {
+      pages.push(blocks)
+      contentCapacity = Math.max(
+        0,
+        opts.usableTableH + opts.continuationExtraMm - opts.sig.totalMm,
+      )
+    }
     blocks = []
     cursor = 0
   }
@@ -397,10 +417,12 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
     let needsLabel = true
 
     do {
-      if (cursor + opts.sectionLabelRowH > contentCapacity) breakPage()
-      blocks.push({ kind: 'section-label', sectionIndex: si })
-      cursor += opts.sectionLabelRowH
-      needsLabel = false
+      if (needsLabel) {
+        if (cursor + opts.sectionLabelRowH > contentCapacity) breakPage()
+        blocks.push({ kind: 'section-label', sectionIndex: si })
+        cursor += opts.sectionLabelRowH
+        needsLabel = false
+      }
 
       while (
         rowIndex < section.rows.length &&
@@ -413,9 +435,9 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
 
       if (rowIndex < section.rows.length) {
         breakPage()
-        needsLabel = true
+        needsLabel = section.headingType !== 'voice'
       }
-    } while (needsLabel)
+    } while (rowIndex < section.rows.length)
   })
 
   if (opts.showSignatures) {
@@ -435,6 +457,9 @@ export function computeSuguanLayout(
   const dims = docPaperDimensionsMm(fmt)
   const margins = docMarginsMm(fmt)
   const fs = resolveFontSizePreset(fmt)
+  const signatureFs = suguan.extraOccasion
+    ? resolveFontSizePreset({ ...fmt, fontSize: 'normal' })
+    : fs
   const events = suguan.events ?? []
   const totalCols = 2 + events.length
 
@@ -453,10 +478,18 @@ export function computeSuguanLayout(
     ? (fs.eventColWidth / totalUnits) * usableWidthMm
     : 0
 
-  const titleRowH = fs.titleRowHeight * PT_TO_MM
-  const headerRowH = fs.headerRowHeight * PT_TO_MM
+  const titleRowH = suguan.extraOccasion
+    ? (
+        EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 1.2 +
+        EXTRA_OCCASION_TITLE_FONT_SIZE_PT * 1.2 +
+        EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT * 1.2 +
+        9 * 0.6 * 2 +
+        6
+      ) * PT_TO_MM
+    : fs.titleRowHeight * PT_TO_MM
+  const headerRowH = (suguan.extraOccasion ? 15 : fs.headerRowHeight) * PT_TO_MM
   const globalHeaderBlockH = headerRowH * 2
-  const sectionLabelRowH = fs.headerRowHeight * PT_TO_MM
+  const sectionLabelRowH = headerRowH
   const baseBodyRowMm = Math.max(fs.rowHeight * PT_TO_MM, fs.bodyFontSize * PT_TO_MM * 1.5)
   let bodyRowH = baseBodyRowMm
 
@@ -464,9 +497,14 @@ export function computeSuguanLayout(
   // it stays identical between the preview and the PDF and is never affected by
   // fit-page scaling.
   const calculatedSig = computeSignatureGeometry({
-    fs,
+    fs: signatureFs,
     tableWidthMm: usableWidthMm,
-    baseBodyRowMm,
+    baseBodyRowMm: suguan.extraOccasion
+      ? Math.max(
+          signatureFs.rowHeight * PT_TO_MM,
+          signatureFs.bodyFontSize * PT_TO_MM * 1.5,
+        )
+      : baseBodyRowMm,
     hasRows: rowCount > 0 && showSignatures,
   })
   const sig = showSignatures
@@ -506,6 +544,7 @@ export function computeSuguanLayout(
 
   const pages = buildPageFlow({
     usableTableH,
+    continuationExtraMm: suguan.extraOccasion ? titleRowH : 0,
     sectionLabelRowH,
     bodyRowH,
     sig,
@@ -550,11 +589,10 @@ export function computeSuguanLayout(
   }
 }
 
-export async function exportSuguanExcel(
+export async function createSuguanExcelBlob(
   suguan: Suguan,
   members: SheetMembers[],
   docFormat?: SuguanDocFormat | null,
-  filename?: string,
 ) {
   const ExcelJS = (await import('exceljs')).default
   const workbook = new ExcelJS.Workbook()
@@ -603,71 +641,174 @@ export async function exportSuguanExcel(
     key: `c_${i + 1}`,
   }))
 
-  sheet.pageSetup.printTitlesRow = '1:3'
+  const isExtraOccasion = Boolean(suguan.extraOccasion)
+  const firstTableHeaderRow = isExtraOccasion ? 4 : 2
+  const secondTableHeaderRow = firstTableHeaderRow + 1
+  const headerRow1 = firstTableHeaderRow
+  const headerRow2 = secondTableHeaderRow
+  const fontName = isExtraOccasion ? 'Book Antiqua' : undefined
+  const font = (size: number, bold = false) => ({
+    ...(fontName ? { name: fontName } : {}),
+    size,
+    bold,
+  })
 
-  const titleRow = 1
-  const headerRow1 = 2
-  const headerRow2 = 3
+  if (isExtraOccasion) {
+    const heading = extraOccasionSheetHeading(suguan)
+    const headingRows = [
+      {
+        text: heading.locale,
+        size: EXTRA_OCCASION_LOCALE_FONT_SIZE_PT,
+        bold: false,
+        height:
+          EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 1.2 +
+          EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 0.6,
+      },
+      {
+        text: heading.title,
+        size: EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
+        bold: true,
+        height:
+          EXTRA_OCCASION_TITLE_FONT_SIZE_PT * 1.2 +
+          EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 0.6,
+      },
+      {
+        text: heading.subtitle,
+        size: EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT,
+        bold: false,
+        height: EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT * 1.2 + 6,
+      },
+    ]
+    headingRows.forEach((row, index) => {
+      const excelRow = index + 1
+      sheet.mergeCells(excelRow, 1, excelRow, lastCol)
+      const cell = sheet.getCell(excelRow, 1)
+      cell.value = row.text
+      cell.font = font(row.size, row.bold)
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+      sheet.getRow(excelRow).height = row.height
+    })
+  } else {
+    sheet.mergeCells(1, 1, 1, lastCol)
+    const titleCell = sheet.getCell(1, 1)
+    titleCell.value = suguanSheetTitle(suguan)
+    titleCell.font = { bold: true, size: fs.titleFontSize, family: 2 }
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    titleCell.border = fullBorder()
+    sheet.getRow(1).height = fs.titleRowHeight
+  }
 
-  sheet.mergeCells(titleRow, 1, titleRow, lastCol)
-  const titleCell = sheet.getCell(titleRow, 1)
-  titleCell.value = suguanSheetTitle(suguan)
-  titleCell.font = { bold: true, size: fs.titleFontSize, family: 2 }
-  titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-  titleCell.border = fullBorder()
-  sheet.getRow(titleRow).height = fs.titleRowHeight
+  sheet.pageSetup.printTitlesRow = isExtraOccasion
+    ? `${firstTableHeaderRow}:${secondTableHeaderRow}`
+    : '1:3'
 
   events.forEach((event, i) => {
     const labelCell = sheet.getCell(headerRow1, 3 + i)
-    labelCell.value = eventTypeLabel(event.type, event.label)
-    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}` } }
-    labelCell.font = { bold: true, size: fs.headerFontSize }
-    labelCell.alignment = { horizontal: 'center', vertical: 'middle' }
-    labelCell.border = { top: thinBorder(), left: thinBorder(), right: thinBorder(), bottom: thinBorder() }
-
-    const dateCell = sheet.getCell(headerRow2, 3 + i)
-    dateCell.value = formatEventDate(event)
-    dateCell.font = { bold: true, size: fs.headerFontSize }
-    dateCell.alignment = { horizontal: 'center', vertical: 'middle' }
-    dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}` } }
-    dateCell.border = { top: thinBorder(), left: thinBorder(), right: thinBorder(), bottom: thinBorder() }
+    labelCell.value = isExtraOccasion
+      ? `${eventTypeLabel(event.type, event.label)}\n${formatEventDate(event)}`
+      : eventTypeLabel(event.type, event.label)
+    labelCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: {
+        argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}`,
+      },
+    }
+    labelCell.font = font(
+      isExtraOccasion ? EXTRA_OCCASION_HEADER_FONT_SIZE_PT : fs.headerFontSize,
+      true,
+    )
+    labelCell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: isExtraOccasion,
+    }
+    labelCell.border = fullBorder()
+    if (isExtraOccasion) {
+      sheet.mergeCells(headerRow1, 3 + i, headerRow2, 3 + i)
+    } else {
+      const dateCell = sheet.getCell(headerRow2, 3 + i)
+      dateCell.value = formatEventDate(event)
+      dateCell.font = { bold: true, size: fs.headerFontSize }
+      dateCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      dateCell.fill = labelCell.fill
+      dateCell.border = fullBorder()
+    }
   })
 
   for (const col of [1, 2]) {
-    sheet.getCell(headerRow1, col).font = { bold: true }
-    sheet.getCell(headerRow1, col).alignment = { horizontal: 'center', vertical: 'middle' }
-    sheet.getCell(headerRow1, col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${HEADER_FILL}` } }
-    sheet.getCell(headerRow1, col).border = { top: thinBorder(), left: thinBorder(), right: thinBorder(), bottom: thinBorder() }
+    const cell = sheet.getCell(headerRow1, col)
+    cell.font = isExtraOccasion
+      ? font(fs.headerFontSize, true)
+      : { bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: `FF${HEADER_FILL}` },
+    }
+    cell.border = fullBorder()
     sheet.mergeCells(headerRow1, col, headerRow2, col)
-    sheet.getCell(headerRow2, col).border = { top: thinBorder(), left: thinBorder(), right: thinBorder(), bottom: thinBorder() }
+    sheet.getCell(headerRow2, col).border = fullBorder()
   }
 
-  sheet.getRow(headerRow1).height = fs.headerRowHeight
-  sheet.getRow(headerRow2).height = fs.headerRowHeight
+  sheet.getRow(headerRow1).height = isExtraOccasion ? 15 : fs.headerRowHeight
+  sheet.getRow(headerRow2).height = isExtraOccasion ? 15 : fs.headerRowHeight
+  sheet.getCell(headerRow1, 1).value = isExtraOccasion ? 'Blg.' : 'No.'
+  sheet.getCell(headerRow1, 2).value = isExtraOccasion ? 'PANGALAN' : 'Pangalan'
 
-  sheet.getCell(headerRow1, 1).value = 'No.'
-  sheet.getCell(headerRow1, 2).value = 'Pangalan'
-
-  let rn = 4
+  let rn = secondTableHeaderRow + 1
   const sections = layout.sections
   for (let si = 0; si < sections.length; si++) {
     const section = sections[si]
 
     const labelCell = sheet.getCell(rn, 2)
-    labelCell.value = section.label
-    labelCell.font = { bold: true, size: fs.headerFontSize, family: 2 }
-    labelCell.alignment = { horizontal: 'center', vertical: 'middle' }
-    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${accent.scheduleFill.slice(1)}` } }
+    labelCell.value =
+      isExtraOccasion && section.headingType === 'schedule'
+        ? section.label.toLocaleUpperCase()
+        : section.label
+    labelCell.font = isExtraOccasion
+      ? font(
+          section.headingType === 'voice'
+            ? EXTRA_OCCASION_VOICE_FONT_SIZE_PT
+            : 11,
+          true,
+        )
+      : { bold: true, size: fs.headerFontSize, family: 2 }
+    labelCell.alignment = {
+      horizontal:
+        isExtraOccasion && section.headingType === 'voice'
+          ? 'left'
+          : 'center',
+      vertical: 'middle',
+    }
+    if (isExtraOccasion && section.headingType === 'schedule') {
+      for (let col = 1; col <= lastCol; col++) {
+        sheet.getCell(rn, col).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: `FF${accent.scheduleFill.slice(1)}` },
+        }
+      }
+    } else if (!isExtraOccasion) {
+      labelCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: `FF${accent.scheduleFill.slice(1)}` },
+      }
+    }
     for (let col = 1; col <= lastCol; col++) {
       sheet.getCell(rn, col).border = fullBorder()
     }
-    sheet.getRow(rn).height = fs.headerRowHeight
+    sheet.getRow(rn).height = isExtraOccasion ? 15 : fs.headerRowHeight
     rn++
 
     for (const row of section.rows) {
       const noCell = sheet.getCell(rn, 1)
       noCell.value = row.no
-      noCell.font = { size: fs.bodyFontSize }
+      noCell.font = font(
+        isExtraOccasion ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT : fs.bodyFontSize,
+      )
       noCell.alignment = { horizontal: 'center', vertical: 'middle' }
       const nameCell = sheet.getCell(rn, 2)
       if (
@@ -678,17 +819,17 @@ export async function exportSuguanExcel(
           richText: [
             {
               text: row.name.slice(0, -6),
-              font: { size: layout.nameFontSize },
+              font: font(layout.nameFontSize),
             },
             {
               text: row.name.slice(-6),
-              font: { size: layout.nameFontSize, bold: true },
+              font: font(layout.nameFontSize, true),
             },
           ],
         }
       } else {
         nameCell.value = row.name
-        nameCell.font = { size: layout.nameFontSize }
+        nameCell.font = font(layout.nameFontSize)
       }
       nameCell.alignment = { horizontal: 'left', vertical: 'middle' }
       for (let col = 1; col <= lastCol; col++) {
@@ -718,21 +859,21 @@ export async function exportSuguanExcel(
     const sigRow = rn + 1
     const pmCell = sheet.getCell(sigRow, 2)
     pmCell.value = pmName || ''
-    pmCell.font = { bold: true, size: sig.nameFontSizePt }
+    pmCell.font = font(sig.nameFontSizePt, true)
     pmCell.alignment = { horizontal: 'center', vertical: 'middle' }
     const destCell = sheet.getCell(sigRow, lastCol)
     destCell.value = destinadoName || ''
-    destCell.font = { bold: true, size: sig.nameFontSizePt }
+    destCell.font = font(sig.nameFontSizePt, true)
     destCell.alignment = { horizontal: 'center', vertical: 'middle' }
     sheet.getRow(sigRow).height = sigNameRowPt
 
     const pmRole = sheet.getCell(sigRow + 1, 2)
     pmRole.value = 'PANGULONG MANG-AAWIT'
-    pmRole.font = { size: sig.roleFontSizePt }
+    pmRole.font = font(sig.roleFontSizePt)
     pmRole.alignment = { horizontal: 'center', vertical: 'top' }
     const destRole = sheet.getCell(sigRow + 1, lastCol)
     destRole.value = 'DESTINADO'
-    destRole.font = { size: sig.roleFontSizePt }
+    destRole.font = font(sig.roleFontSizePt)
     destRole.alignment = { horizontal: 'center', vertical: 'top' }
     sheet.getRow(sigRow + 1).height = sigRoleRowPt
     lastContentRow = sigRow + 1
@@ -741,9 +882,18 @@ export async function exportSuguanExcel(
   sheet.pageSetup.printArea = `A1:${colLetter(lastCol)}${lastContentRow}`
 
   const buffer = await workbook.xlsx.writeBuffer()
-  const blob = new Blob([buffer], {
+  return new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
+}
+
+export async function exportSuguanExcel(
+  suguan: Suguan,
+  members: SheetMembers[],
+  docFormat?: SuguanDocFormat | null,
+  filename?: string,
+): Promise<void> {
+  const blob = await createSuguanExcelBlob(suguan, members, docFormat)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

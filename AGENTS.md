@@ -200,10 +200,12 @@ rather than reaching the layout maths as `NaN`.
 
 `src/assets/fonts/Inter-{Regular,Bold}.ttf` are registered in `src/index.css`
 under the family name **`SuguanSheet`** and used by both the preview and the
-PDF export. Do not rename the family to `Inter`. The app's own UI deliberately
-uses a different font, and registering this file as `Inter` restyles the entire
-application. The user prefers the preview font; keep both renderers on the same
-files.
+PDF export for Choir Suguan. Do not rename the family to `Inter`. The app's own
+UI deliberately uses a different font, and registering this file as `Inter`
+restyles the entire application. Extra Occasion is the intentional exception:
+its shared sheet renderers use the bundled Book Antiqua files via the scoped
+`ExtraOccasionSheet` family to match the user's PDF reference. Keep the preview
+and all exports on the same occasion-specific face.
 
 The Organist Suguan PDF keeps a second bundled font:
 `src/assets/fonts/SegoeScript.ttf` is a copy of the Windows system font,
@@ -656,7 +658,9 @@ boundaries, so a change in one feature rarely reaches another.
   It reuses the Choir Suguan schedule and assignment UI and adapts its custom
   Pagsasanay/Pagtupad dates, column labels, signatory toggles, and optional
   Organista assignments into the shared Choir Suguan preview and PDF/Excel/Word
-  renderers. Records save through
+  renderers. It uses the reference PDF's Book Antiqua face, heading above the
+  table, and larger left-aligned voice labels while retaining shared table
+  geometry and colors. Records save through
   `suguanStore` into Suguan History with their custom settings, where they can
   be previewed, re-exported, edited in this maker, and deleted.
 - **suguan-history** — saved Suguan list and detail view.

@@ -93,11 +93,21 @@ test('page access follows the permission matrix', () => {
     ),
     true,
   )
-  // The dedicated permission is additive: Edit Members still opens Koro Maker.
+  // Koro Maker is gated on its own permission only. Edit Members no longer
+  // opens it, so turning the Koro Maker permission off actually hides the page.
   assert.equal(
     canAccessPage(
       'koro-maker',
       { ...staff, customPermissions: ['edit-members'] },
+      {},
+    ),
+    false,
+  )
+  // The dedicated permission on its own is enough.
+  assert.equal(
+    canAccessPage(
+      'koro-maker',
+      { ...staff, customPermissions: ['koro-maker'] },
       {},
     ),
     true,

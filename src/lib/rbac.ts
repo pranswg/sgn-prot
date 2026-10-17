@@ -121,12 +121,12 @@ export function canAccessPage(
     return hasPermission(account, 'create-suguan', rolePermissions)
   }
   if (page === 'koro-maker') {
-    // The dedicated permission is new; Edit Members keeps working so a role
-    // granted before it existed does not lose the Koro Maker.
-    return (
-      hasPermission(account, 'koro-maker', rolePermissions) ||
-      hasPermission(account, 'edit-members', rolePermissions)
-    )
+    // The Koro Maker page is gated on its own permission only. `edit-members`
+    // used to keep it open, which made the permission impossible to revoke:
+    // an account still holding Edit Members saw the page no matter what.
+    // Migration 0016 grandfathers every role and per-user grant that already
+    // held `edit-members`, so nothing loses access by this tightening.
+    return hasPermission(account, 'koro-maker', rolePermissions)
   }
   const pagePermission: Record<string, Permission> = {
     dashboard: 'view-dashboard',

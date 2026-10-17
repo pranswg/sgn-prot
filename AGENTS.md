@@ -75,8 +75,11 @@ in this repo.
   the role matrix and the per-user permission checkboxes are all checkable. The
   `admin_only_permissions()` function stays as the single place to re-restrict a
   permission later; Admin still holds every one through `all_permissions()`.
-  `koro-maker` is a real permission now (Choir Management); `canAccessPage`
-  accepts it **or** `edit-members` for the Koro Maker page, and the Settings /
+  `koro-maker` is a real permission now (Choir Management); the Koro Maker page
+  is gated on `koro-maker` **alone** (`edit-members` used to be an accepted
+  fallback, which made the permission impossible to revoke — migration `0016`
+  grandfathers every role and per-user grant that already held `edit-members`,
+  so nothing loses access by the tightening), and the Settings /
   Administration pages follow `change-settings` / any `ADMINISTRATION_PERMISSIONS`
   instead of the Admin role (the Administration screen also hides each section
   the caller cannot act on). The

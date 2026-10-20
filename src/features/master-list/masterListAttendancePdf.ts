@@ -123,7 +123,7 @@ export async function exportMasterListAttendancePdf(
   const regularPageHeight =
     pageHeight - tableTop - tableHeaderHeight - 32
   const finalPageHeight =
-    pageHeight - 20 - 30 - 45 - tableTop - tableHeaderHeight
+    pageHeight - 20 - 30 - 54 - tableTop - tableHeaderHeight
   const rowPages = paginateMasterListAttendanceRows(
     rows,
     regularPageHeight,
@@ -243,25 +243,25 @@ export async function exportMasterListAttendancePdf(
         doc.setFont('BookAntiqua', 'normal')
         doc.setFontSize(10)
         doc.text('Naghanda:', pageWidth / 2, signatureTop, { align: 'center' })
-        doc.setLineWidth(0.6)
-        doc.line(
-          pageWidth / 2 - 75,
-          signatureTop + 16,
-          pageWidth / 2 + 75,
-          signatureTop + 16,
-        )
         doc.setFont('BookAntiqua', 'bold')
         doc.setFontSize(10)
         doc.text(pangulongName.trim(), pageWidth / 2, signatureTop + 31, {
           align: 'center',
           maxWidth: pageWidth - margin * 2,
         })
+        doc.setLineWidth(0.6)
+        doc.line(
+          pageWidth / 2 - 75,
+          signatureTop + 37,
+          pageWidth / 2 + 75,
+          signatureTop + 37,
+        )
         doc.setFont('BookAntiqua', 'normal')
         doc.setFontSize(9)
         doc.text(
           'Pangulong Mang-aawit',
           pageWidth / 2,
-          signatureTop + 45,
+          signatureTop + 54,
           { align: 'center' },
         )
       }

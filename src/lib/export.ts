@@ -9,6 +9,7 @@ import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
 import { useSettingsStore } from '@/store/settingsStore'
 import type { VoicePosition, DutyRole } from '@/core/types/suguan'
 import {
+  DEFAULT_MASTER_LIST_PAPER_SIZE,
   MASTER_LIST_PAPER_SIZES,
   type MasterListPaperSize,
 } from '@/features/master-list/masterListPaperSizes'
@@ -302,7 +303,7 @@ export async function createMasterListWordBlob(
   voices: VoicePosition[],
   dutyRoles: DutyRole[],
   localeName: string,
-  paperSize: MasterListPaperSize = 'legal',
+  paperSize: MasterListPaperSize = DEFAULT_MASTER_LIST_PAPER_SIZE,
 ): Promise<Blob> {
   const {
     AlignmentType,

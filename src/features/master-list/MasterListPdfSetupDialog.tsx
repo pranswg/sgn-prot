@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  DEFAULT_MASTER_LIST_PAPER_SIZE,
   MASTER_LIST_PAPER_SIZES,
   isMasterListPaperSize,
   type MasterListPaperSize,
@@ -37,7 +38,9 @@ export function MasterListPdfSetupDialog({
   documentType = 'PDF',
 }: MasterListPdfSetupDialogProps) {
   const [localeName, setLocaleName] = useState(savedLocaleName)
-  const [paperSize, setPaperSize] = useState<MasterListPaperSize>('legal')
+  const [paperSize, setPaperSize] = useState<MasterListPaperSize>(
+    DEFAULT_MASTER_LIST_PAPER_SIZE,
+  )
   const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState('')
   const selectedPaper = MASTER_LIST_PAPER_SIZES.find(

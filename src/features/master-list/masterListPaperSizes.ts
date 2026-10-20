@@ -8,6 +8,8 @@ export const MASTER_LIST_PAPER_SIZES = [
 export type MasterListPaperSize =
   (typeof MASTER_LIST_PAPER_SIZES)[number]['id']
 
+export const DEFAULT_MASTER_LIST_PAPER_SIZE: MasterListPaperSize = 'folio'
+
 export function isMasterListPaperSize(
   value: string,
 ): value is MasterListPaperSize {

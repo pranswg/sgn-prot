@@ -94,7 +94,12 @@ import { MobileMemberFormSheet } from './MobileMemberFormSheet'
 import {
   MasterListPdfSetupDialog,
 } from './MasterListPdfSetupDialog'
+import { MasterListAttendanceDialog } from './MasterListAttendanceDialog'
 import type { MasterListPaperSize } from './masterListPaperSizes'
+import {
+  exportMasterListAttendancePdf,
+  type MasterListAttendanceOptions,
+} from './masterListAttendancePdf'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import {
@@ -206,6 +211,7 @@ export function MasterListPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [pdfSetupOpen, setPdfSetupOpen] = useState(false)
   const [wordSetupOpen, setWordSetupOpen] = useState(false)
+  const [attendanceSetupOpen, setAttendanceSetupOpen] = useState(false)
   const { exportPreview, requestExport } = useExportPreview()
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [actionTarget, setActionTarget] = useState<Member | null>(null)
@@ -449,6 +455,49 @@ export function MasterListPage() {
     }
   }
 
+  const handleAttendanceGenerate = (
+    options: Pick<
+      MasterListAttendanceOptions,
+      | 'dates'
+      | 'title'
+      | 'groupByVoice'
+      | 'selectedVoiceIds'
+      | 'includeNagsasanayMen'
+      | 'includeNagsasanayWomen'
+      | 'lastNameFirst'
+      | 'paperSize'
+      | 'orientation'
+      | 'pangulongName'
+    >,
+  ) => {
+    const fileName = exportFileName(options.title, 'pdf')
+    requestExport({
+      filename: fileName,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await exportMasterListAttendancePdf({
+              ...options,
+              members: directoryMembers,
+              trainees,
+              voices,
+              filename: fileName,
+              pangulongName: options.pangulongName,
+            })
+            toast.success('Attendance sheet exported as PDF.')
+          } catch (error) {
+            console.error(error)
+            toast.error(
+              error instanceof Error
+                ? `Attendance sheet export failed: ${error.message}`
+                : 'Could not export the attendance sheet.',
+            )
+          }
+        })()
+      },
+    })
+  }
+
   const directoryProps = {
     members: filteredMembers,
     voices,
@@ -497,10 +546,17 @@ export function MasterListPage() {
       <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
 
       {canExportDocuments && (
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setAttendanceSetupOpen(true)}
+          >
+            <FileDown className="size-4" />
+            Generate Attendance Sheet
+          </Button>
           <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="ml-auto">
+                <Button variant="outline">
                   <Download className="size-4" />
                   Export Data
                 </Button>
@@ -1057,6 +1113,17 @@ export function MasterListPage() {
           onOpenChange={setWordSetupOpen}
           savedLocaleName={localeName}
           onExport={handleWordExport}
+        />
+      )}
+      {attendanceSetupOpen && (
+        <MasterListAttendanceDialog
+          open={attendanceSetupOpen}
+          onOpenChange={setAttendanceSetupOpen}
+          members={directoryMembers}
+          trainees={trainees}
+          voices={voices}
+          dutyRoles={dutyRoles}
+          onGenerate={handleAttendanceGenerate}
         />
       )}
 

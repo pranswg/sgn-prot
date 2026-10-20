@@ -9,18 +9,17 @@ import {
   toDateKeyFromInstant,
   type DateKey,
 } from '@/lib/phDate'
+import {
+  ATTENDANCE_PAPER_SIZES,
+  type AttendancePaperSize,
+} from './attendancePaperSizes'
 import type { jsPDF } from 'jspdf'
-import { createAttendanceDatePanels } from './attendanceSheetDates'
+import { createAttendanceDatePanels } from '@/lib/attendanceDatePanels'
 import { sortTraineesForAttendanceSheet } from './attendanceSheetSort'
 
-export type AttendancePaperSize = 'a4' | 'letter' | 'legal'
+export { ATTENDANCE_PAPER_SIZES, DEFAULT_ATTENDANCE_PAPER_SIZE } from './attendancePaperSizes'
+export type { AttendancePaperSize } from './attendancePaperSizes'
 export type AttendanceOrientation = 'portrait' | 'landscape'
-
-const PAPER_DIMENSIONS: Record<AttendancePaperSize, [number, number]> = {
-  a4: [210, 297],
-  letter: [215.9, 279.4],
-  legal: [215.9, 355.6],
-}
 
 async function fontAsBase64(url: string): Promise<string> {
   const response = await fetch(url)
@@ -120,8 +119,10 @@ export async function exportTraineeAttendancePdf(options: {
     fontAsBase64(segoeScriptUrl),
   ])
   const generatedAt = new Date()
-  const paperDimensions = PAPER_DIMENSIONS[paperSize]
-  const [firstMm, secondMm] = paperDimensions
+  const paper = ATTENDANCE_PAPER_SIZES.find((item) => item.id === paperSize)
+  if (!paper) throw new Error('The selected paper size is not supported.')
+  const firstMm = paper.width
+  const secondMm = paper.height
   const firstPt = firstMm * 72 / 25.4
   const secondPt = secondMm * 72 / 25.4
   const isLandscape = orientation === 'landscape'

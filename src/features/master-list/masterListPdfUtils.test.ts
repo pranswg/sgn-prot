@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { MASTER_LIST_PAPER_SIZES } from './masterListPaperSizes'
+import {
+  DEFAULT_MASTER_LIST_PAPER_SIZE,
+  MASTER_LIST_PAPER_SIZES,
+} from './masterListPaperSizes'
 import {
   formatMasterListPdfTimestamp,
   paperSizePoints,
@@ -10,6 +13,14 @@ test('PDF export supports only A4, Letter, Legal, and Folio', () => {
   assert.deepEqual(
     MASTER_LIST_PAPER_SIZES.map((paper) => paper.label),
     ['A4', 'Letter', 'Legal', 'Folio'],
+  )
+})
+
+test('Folio is the default Master List paper size with the requested dimensions', () => {
+  assert.equal(DEFAULT_MASTER_LIST_PAPER_SIZE, 'folio')
+  assert.deepEqual(
+    MASTER_LIST_PAPER_SIZES.find((paper) => paper.id === 'folio'),
+    { id: 'folio', label: 'Folio', width: 215.9, height: 330.2 },
   )
 })
 

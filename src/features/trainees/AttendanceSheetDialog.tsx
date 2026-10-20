@@ -49,25 +49,17 @@ import {
 } from '@/lib/phDate'
 import { generatePracticeDates } from './attendanceSheetDates'
 import {
+  ATTENDANCE_PAPER_SIZES,
+  DEFAULT_ATTENDANCE_PAPER_SIZE,
+  type AttendancePaperSize,
+} from './attendancePaperSizes'
+import {
   exportTraineeAttendancePdf,
   type AttendanceOrientation,
-  type AttendancePaperSize,
 } from './traineeAttendancePdf'
 
-const PAPER_OPTIONS: { id: AttendancePaperSize; label: string }[] = [
-  { id: 'a4', label: 'A4' },
-  { id: 'letter', label: 'Letter' },
-  { id: 'legal', label: 'Legal' },
-]
-
-const PAPER_DIMENSIONS: Record<AttendancePaperSize, [number, number]> = {
-  a4: [210, 297],
-  letter: [215.9, 279.4],
-  legal: [215.9, 355.6],
-}
-
 function isAttendancePaperSize(value: string): value is AttendancePaperSize {
-  return PAPER_OPTIONS.some((option) => option.id === value)
+  return ATTENDANCE_PAPER_SIZES.some((option) => option.id === value)
 }
 
 interface AttendanceSheetDialogProps {
@@ -92,7 +84,9 @@ export function AttendanceSheetDialog({
   const [startDate, setStartDate] = useState<DateKey>(initialStart)
   const [endDate, setEndDate] = useState<DateKey>(() => addDays(initialStart, 35))
   const [weekdays, setWeekdays] = useState<number[]>([6])
-  const [paperSize, setPaperSize] = useState<AttendancePaperSize>('legal')
+  const [paperSize, setPaperSize] = useState<AttendancePaperSize>(
+    DEFAULT_ATTENDANCE_PAPER_SIZE,
+  )
   const [orientation, setOrientation] =
     useState<AttendanceOrientation>('portrait')
   const [pangulongMemberId, setPangulongMemberId] = useState('')
@@ -125,7 +119,11 @@ export function AttendanceSheetDialog({
         ? (WEEKDAY_OPTIONS.find((option) => option.weekday === weekdays[0])
             ?.english ?? '1 day selected')
         : `${weekdays.length} days selected`
-  const [paperWidth, paperHeight] = PAPER_DIMENSIONS[paperSize]
+  const selectedPaper = ATTENDANCE_PAPER_SIZES.find(
+    (paper) => paper.id === paperSize,
+  )!
+  const paperWidth = selectedPaper.width
+  const paperHeight = selectedPaper.height
   const landscape = orientation === 'landscape'
   const previewAspectRatio = landscape
     ? `${paperHeight} / ${paperWidth}`
@@ -208,7 +206,7 @@ export function AttendanceSheetDialog({
         />
       </div>
       <div>
-        <p className="text-sm font-medium">{PAPER_OPTIONS.find((item) => item.id === paperSize)?.label} paper</p>
+        <p className="text-sm font-medium">{selectedPaper.label} paper</p>
         <p className="text-xs text-muted-foreground">
           {landscape ? 'Landscape' : 'Portrait'} layout · {practiceDates.length} practice date
           {practiceDates.length === 1 ? '' : 's'}
@@ -316,7 +314,7 @@ export function AttendanceSheetDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PAPER_OPTIONS.map((option) => (
+              {ATTENDANCE_PAPER_SIZES.map((option) => (
                 <SelectItem key={option.id} value={option.id}>
                   {option.label}
                 </SelectItem>

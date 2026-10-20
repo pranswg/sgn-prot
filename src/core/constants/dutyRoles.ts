@@ -47,3 +47,18 @@ export function resolvePmDutyRole<T extends { id: string; name: string }>(
 ): T | undefined {
   return findDutyRoleByName(roles, PM_DUTY_ROLE_NAME)
 }
+
+/**
+ * Name a configured role must carry to be treated as the Organista ranking.
+ * The Organist Suguan pickers and the Extra Occasion organista slots read it,
+ * so a member the administrator ranked as Organista is available there even
+ * when their membership category is plain "Mang-aawit".
+ */
+export const ORGANISTA_DUTY_ROLE_NAME = 'Organista'
+
+/** The configured duty role that represents the Organista ranking. */
+export function resolveOrganistaDutyRole<
+  T extends { id: string; name: string },
+>(roles: readonly T[]): T | undefined {
+  return findDutyRoleByName(roles, ORGANISTA_DUTY_ROLE_NAME)
+}

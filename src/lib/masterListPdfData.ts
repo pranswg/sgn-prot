@@ -186,7 +186,7 @@ export function summarizeMasterList(
     {
       kind: 'item',
       category: 'Organists',
-      count: members.filter(memberIsOrganist).length,
+      count: members.filter((member) => memberIsOrganist(member, dutyRoles)).length,
     },
     // One count per configured duty role, so the summary reflects the ranks the
     // administrator actually uses instead of a built-in list.

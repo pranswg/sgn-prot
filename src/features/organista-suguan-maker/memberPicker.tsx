@@ -52,11 +52,12 @@ export function MemberPicker({
   const members = useMemberStore((state) => state.members)
   const allVoices = useSettingsStore((state) => state.allVoices)
   const voices = allVoices()
+  const dutyRoles = useSettingsStore((state) => state.dutyRoles)
 
   const options = useMemo<MemberOption[]>(() => {
     const taken = new Set(exclude.map((name) => name.trim().toLowerCase()))
     return members
-      .filter((member) => member.isActive && memberIsOrganist(member))
+      .filter((member) => member.isActive && memberIsOrganist(member, dutyRoles))
       .filter((member) => {
         const name = fullName(member.firstName, member.lastName)
           .trim()
@@ -67,9 +68,9 @@ export function MemberPicker({
       .map((member) => ({
         id: member.id,
         name: fullName(member.firstName, member.lastName),
-        subtitle: memberSubtitle(member, voices),
+        subtitle: memberSubtitle(member, voices, dutyRoles),
       }))
-  }, [members, exclude, voices])
+  }, [members, exclude, voices, dutyRoles])
 
   const currentKey = value.trim().toLowerCase()
   const isNA = currentKey === 'n/a'

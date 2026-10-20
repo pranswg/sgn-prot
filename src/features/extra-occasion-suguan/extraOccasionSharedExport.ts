@@ -3,6 +3,7 @@ import { exportSuguanExcel } from '@/lib/suguanExport'
 import { exportSuguanDocx } from '@/features/suguan-builder/suguanDocxExport'
 import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import { exportFileName } from '@/lib/exportNaming'
+import { useSettingsStore } from '@/store/settingsStore'
 import { buildExtraOccasionSheetSuguan } from './extraOccasionData'
 import type { ExtraOccasionExportOptions } from './extraOccasionExport'
 
@@ -20,6 +21,7 @@ function sharedSheetSuguan(options: ExtraOccasionExportOptions): Suguan {
     options.voices,
     options.members,
     config,
+    useSettingsStore.getState().allDutyRoles(),
   )
 }
 

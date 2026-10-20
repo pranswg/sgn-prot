@@ -88,6 +88,19 @@ test('organistPrivilegeLabel falls back to the stored position for legacy member
   )
 })
 
+test('organistPrivilegeLabel names the configured Organista role for a ranked member', () => {
+  const dutyRoles = [
+    { id: 'zTudCx73-YMHh0PCdbjs2', name: 'Organista', abbreviation: 'ORG' },
+  ]
+  const ranked = {
+    membershipType: 'regular' as const,
+    positions: [],
+    assignedDutyRoleIds: ['zTudCx73-YMHh0PCdbjs2'],
+  }
+  assert.equal(organistPrivilegeLabel(ranked, dutyRoles), 'Organista')
+  assert.equal(organistPrivilegeLabel(ranked), '')
+})
+
 test('memberSubtitle joins voice and privilege, omitting each when absent', () => {
   assert.equal(
     memberSubtitle(

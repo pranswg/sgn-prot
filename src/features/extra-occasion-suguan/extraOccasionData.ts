@@ -1,5 +1,6 @@
 import type { Member } from '@/core/types/member'
 import type {
+  DutyRole,
   ExtraOccasionOrganistaAssignment,
   ExtraOccasionOrganistaRole,
   Suguan,
@@ -49,6 +50,7 @@ export function buildExtraOccasionSections(
   voices: VoicePosition[],
   members: Member[],
   organistaAssignments: Record<string, ExtraOrganistaAssignment[]>,
+  dutyRoles: readonly DutyRole[] = [],
 ): ExtraOccasionSection[] {
   const memberById = new Map(members.map((member) => [member.id, member]))
   const oicMemberId = suguan.dutyRoles.find(
@@ -104,7 +106,8 @@ export function buildExtraOccasionSections(
       organistaRows: (organistaAssignments[schedule.id] ?? [])
         .map((assignment) => {
           const member = memberById.get(assignment.memberId)
-          if (!member || !member.isActive || !memberIsOrganist(member)) return null
+          if (!member || !member.isActive || !memberIsOrganist(member, dutyRoles))
+            return null
           return {
             memberId: member.id,
             member,
@@ -130,8 +133,11 @@ export function buildExtraOccasionSections(
   })
 }
 
-export function memberIsEligibleExtraOrganista(member: Member): boolean {
-  return member.isActive && memberIsOrganist(member)
+export function memberIsEligibleExtraOrganista(
+  member: Member,
+  dutyRoles: readonly DutyRole[] = [],
+): boolean {
+  return member.isActive && memberIsOrganist(member, dutyRoles)
 }
 
 /** The name typed into "Occasion name", trimmed, or `''` when it is blank. */
@@ -156,12 +162,14 @@ export function buildExtraOccasionSheetSuguan(
   voices: VoicePosition[],
   members: Member[],
   config: ExtraOccasionSuguanConfig,
+  dutyRoles: readonly DutyRole[] = [],
 ): Suguan {
   const sections = buildExtraOccasionSections(
     suguan,
     voices,
     members,
     config.organistaAssignments,
+    dutyRoles,
   )
   const scheduleById = new Map(
     suguan.schedules.map((schedule) => [schedule.id, schedule]),

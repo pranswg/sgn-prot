@@ -5,6 +5,7 @@ import type {
 } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { SuguanSheetPreview } from '@/features/suguan-builder/SuguanSheetPreview'
+import { useSettingsStore } from '@/store/settingsStore'
 import { buildExtraOccasionSheetSuguan } from './extraOccasionData'
 
 interface ExtraOccasionPreviewProps {
@@ -20,11 +21,13 @@ export function ExtraOccasionPreview({
   members,
   voices,
 }: ExtraOccasionPreviewProps) {
+  const dutyRoles = useSettingsStore((state) => state.dutyRoles)
   const sheetSuguan = buildExtraOccasionSheetSuguan(
     suguan,
     voices,
     members,
     config,
+    dutyRoles,
   )
 
   return (

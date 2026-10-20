@@ -7,6 +7,7 @@ import type {
 } from '@/core/constants/worshipSchedules'
 import { worshipDayName } from '@/core/constants/worshipSchedules'
 import { LEGACY_POSITION_RANK_NAMES } from '@/lib/memberRanks'
+import { resolveOrganistaDutyRole } from '@/core/constants/dutyRoles'
 import {
   isOrganistMembership,
   MEMBERSHIP_LABELS,
@@ -15,7 +16,7 @@ import {
   getVoiceName,
   UNASSIGNED_VOICE_LABEL,
 } from '@/core/constants/voicePositions'
-import type { VoicePosition } from '@/core/types/suguan'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 
 export type WorshipScheduleCategory = 'midweek' | 'weekend'
 
@@ -74,12 +75,14 @@ export function servicesFromCategories(
 
 /**
  * The privilege a member qualifies under on the Organist Suguan: their
- * membership label for the three organist-family memberships, or the stored
+ * membership label for the three organist-family memberships, the configured
+ * Organista role's name for a member ranked as Organista, or the stored
  * Organista / Assistant Tagapagturo position for legacy members. Empty for
  * members who should not appear at all.
  */
 export function organistPrivilegeLabel(
-  member: Pick<Member, 'membershipType' | 'positions'>,
+  member: Pick<Member, 'membershipType' | 'positions' | 'assignedDutyRoleIds'>,
+  dutyRoles: readonly DutyRole[] = [],
 ): string {
   if (isOrganistMembership(member.membershipType)) {
     return MEMBERSHIP_LABELS[member.membershipType]
@@ -87,7 +90,17 @@ export function organistPrivilegeLabel(
   const stored = (member.positions ?? []).find(
     (p) => p === 'organista' || p === 'assistant-tagapagturo',
   )
-  return stored ? LEGACY_POSITION_RANK_NAMES[stored] : ''
+  if (stored) return LEGACY_POSITION_RANK_NAMES[stored]
+  // A member the administrator ranked as Organista in the directory reads as
+  // Organista here too, whatever their membership category says.
+  const organistaRole = resolveOrganistaDutyRole(dutyRoles)
+  if (
+    organistaRole !== undefined &&
+    (member.assignedDutyRoleIds ?? []).includes(organistaRole.id)
+  ) {
+    return organistaRole.name
+  }
+  return ''
 }
 
 /**
@@ -95,15 +108,19 @@ export function organistPrivilegeLabel(
  * is assigned) and the privilege label, e.g. "Soprano 1 · Organista".
  */
 export function memberSubtitle(
-  member: Pick<Member, 'membershipType' | 'positions' | 'voicePosition'>,
+  member: Pick<
+    Member,
+    'membershipType' | 'positions' | 'voicePosition' | 'assignedDutyRoleIds'
+  >,
   voices: VoicePosition[] = [],
+  dutyRoles: readonly DutyRole[] = [],
 ): string {
   const parts: string[] = []
   if (member.voicePosition) {
     const voice = getVoiceName(member.voicePosition, voices)
     if (voice && voice !== UNASSIGNED_VOICE_LABEL) parts.push(voice)
   }
-  const privilege = organistPrivilegeLabel(member)
+  const privilege = organistPrivilegeLabel(member, dutyRoles)
   if (privilege) parts.push(privilege)
   return parts.join(' · ')
 }

@@ -368,8 +368,13 @@ Tagapagturo ng Awit, and Assistant Tagapagturo ng Awit. **The three
 organist-family memberships are one category**: `isOrganistMembership()` marks
 them, `memberRankIds()` (`src/lib/memberRanks.ts`) counts them as the configured
 `Organista` rank, and `memberIsOrganist()` gates the Organist Suguan member
-picker. The old `provisional` membership was removed in store version 4 and
-migrates to `regular`; anything that still reads
+picker. **`memberIsOrganist(member, dutyRoles)` also accepts a member ranked with
+the configured role the administrator named "Organista"** (`resolveOrganistaDutyRole`),
+because a plain "Mang-aawit" can be given that rank in the directory and the
+pickers, the printed organista rows and the Master List PDF's `Organists` count
+must agree with it; every call site must pass `settingsStore.dutyRoles` or the
+rank is invisible. The old `provisional` membership was removed in store version
+4 and migrates to `regular`; anything that still reads
 `membershipType === 'provisional'` is working on dead data.
 
 **The configured Duty Roles are the single source of truth for choir ranks.**
@@ -699,7 +704,8 @@ boundaries, so a change in one feature rarely reaches another.
   `Layout`; see the sign-in section above.
 - **dashboard** — `DashboardPage.tsx`, read-only summaries.
 - **master-list** — members and trainees. The largest feature. Directory table
-  and grid, mobile sheets, roster import, and CSV/Excel export.
+  and grid, mobile sheets, roster import, CSV/Excel export, and a configurable
+  attendance-sheet PDF with custom dates, title, and voice-position grouping.
   `MasterListPage.tsx` owns the filters; child components receive
   `members`, `references`, and `sort` as props.
 - **suguan-builder** — the multi-step Suguan sheet. Steps are defined in

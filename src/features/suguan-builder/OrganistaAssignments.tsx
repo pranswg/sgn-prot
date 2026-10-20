@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { memberIsOrganist } from '@/core/constants/memberMembership'
+import { useSettingsStore } from '@/store/settingsStore'
 import type { Member } from '@/core/types/member'
 import type {
   ExtraOccasionOrganistaAssignment,
@@ -69,13 +70,14 @@ export function OrganistaAssignments({
 }: OrganistaAssignmentsConfig) {
   const schedule = schedules[0]
   const rows = schedule ? assignments[schedule.id] ?? [] : []
+  const dutyRoles = useSettingsStore((state) => state.dutyRoles)
 
   const eligibleOrganistas = useMemo(
     () =>
       members
-        .filter((member) => member.isActive && memberIsOrganist(member))
+        .filter((member) => member.isActive && memberIsOrganist(member, dutyRoles))
         .sort(compareOrganistas),
-    [members],
+    [members, dutyRoles],
   )
 
   const assignedIds = new Set(rows.map((row) => row.memberId))

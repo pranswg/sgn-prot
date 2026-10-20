@@ -1,7 +1,10 @@
 import type { ChoirPosition, MembershipType } from '@/core/types/member'
 import type { DutyRole } from '@/core/types/suguan'
 import { isOrganistMembership } from '@/core/constants/memberMembership'
-import { findDutyRoleByName } from '@/core/constants/dutyRoles'
+import {
+  ORGANISTA_DUTY_ROLE_NAME,
+  findDutyRoleByName,
+} from '@/core/constants/dutyRoles'
 
 /**
  * A member's ranks are the Duty Roles the administrator configured in Settings,
@@ -20,7 +23,7 @@ export const LEGACY_POSITION_RANK_NAMES: Record<ChoirPosition, string> = {
 }
 
 /** The rank the organist-family Member categories count as. */
-const ORGANIST_RANK_NAME = 'Organista'
+const ORGANIST_RANK_NAME = ORGANISTA_DUTY_ROLE_NAME
 
 type RankMember = {
   assignedDutyRoleIds?: readonly string[]

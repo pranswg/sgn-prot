@@ -1,6 +1,7 @@
-import type { Member, MembershipType } from '@/core/types/member'
-import type { VoicePosition } from '@/core/types/suguan'
+import type { ChoirPosition, Member, MembershipType } from '@/core/types/member'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import { getVoiceName } from '@/core/constants/voicePositions'
+import { resolveOrganistaDutyRole } from '@/core/constants/dutyRoles'
 
 /**
  * The membership categories the member forms offer. Order here is the order
@@ -39,17 +40,34 @@ export function isOrganistMembership(type: MembershipType): boolean {
 
 /**
  * True when the member should appear on the Organist Suguan's member list:
- * either a contemporary membership category, or a legacy member who holds the
- * stored Organista / Assistant Tagapagturo position.
+ * a contemporary organist-family membership category, a legacy member who
+ * holds the stored Organista / Assistant Tagapagturo position, or a member the
+ * administrator ranked with the configured Organista duty role. The last case
+ * matters because a plain "Mang-aawit" member can be given the Organista rank
+ * in the directory, and the pickers must agree with that ranking.
  */
 export function memberIsOrganist(
-  member: Pick<Member, 'membershipType' | 'positions'>,
+  member: {
+    membershipType?: MembershipType
+    positions?: readonly ChoirPosition[]
+    assignedDutyRoleIds?: readonly string[]
+  },
+  dutyRoles: readonly DutyRole[] = [],
 ): boolean {
-  return (
-    isOrganistMembership(member.membershipType) ||
+  if (member.membershipType && isOrganistMembership(member.membershipType)) {
+    return true
+  }
+  if (
     (member.positions ?? []).some(
       (p) => p === 'organista' || p === 'assistant-tagapagturo',
     )
+  ) {
+    return true
+  }
+  const organistaRole = resolveOrganistaDutyRole(dutyRoles)
+  return (
+    organistaRole !== undefined &&
+    (member.assignedDutyRoleIds ?? []).includes(organistaRole.id)
   )
 }
 

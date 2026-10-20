@@ -137,6 +137,32 @@ test('Extra Occasion organista entries only include active organist-family membe
   )
 })
 
+test('a member ranked as Organista is offered even with a regular membership', () => {
+  // The reported case: a plain Mang-aawit the administrator ranked with the
+  // configured Organista duty role. Detection has to read that rank, or the
+  // picker and the printed organista row both miss her.
+  const dutyRoles = [
+    { id: 'zTudCx73-YMHh0PCdbjs2', name: 'Organista', abbreviation: 'ORG' },
+  ]
+  const ranked = makeMember('ranked', 'Marion', 'Quijano', {
+    membershipType: 'regular',
+    assignedDutyRoleIds: ['zTudCx73-YMHh0PCdbjs2'],
+  })
+
+  assert.equal(memberIsEligibleExtraOrganista(ranked, dutyRoles), true)
+  assert.equal(memberIsEligibleExtraOrganista(ranked), false)
+  assert.deepEqual(
+    buildExtraOccasionSections(
+      suguan,
+      [],
+      [ranked],
+      { 'schedule-1': [{ memberId: ranked.id, role: 'organista' }] },
+      dutyRoles,
+    )[0].organistaRows,
+    [{ memberId: 'ranked', name: 'Quijano, Marion - ORGANISTA' }],
+  )
+})
+
 test('Extra Occasion section label uses service type and time', () => {
   const members = [
     makeMember('member-b', 'Kimberly', 'Andao'),

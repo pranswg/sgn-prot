@@ -22,10 +22,14 @@ EMPTY_DIRECTORY_FILTERS,
   formatMemberName,
   groupMembersByGender,
 hasActiveDirectoryFilters,
+  isAdminPageSize,
   isMemberPageSize,
   memberInitials,
+  ADMIN_PAGE_SIZES,
+  DEFAULT_ADMIN_PAGE_SIZE,
   DEFAULT_MEMBER_PAGE_SIZE,
   MEMBER_PAGE_SIZES,
+  normalizeAdminPageSize,
   normalizeMemberPageSize,
   paginate,
   quickFilterLabel,
@@ -384,6 +388,24 @@ test('normalizeMemberPageSize falls back to the default for junk', () => {
   assert.equal(normalizeMemberPageSize(7), DEFAULT_MEMBER_PAGE_SIZE)
   assert.equal(normalizeMemberPageSize(0), DEFAULT_MEMBER_PAGE_SIZE)
   assert.equal(normalizeMemberPageSize(NaN), DEFAULT_MEMBER_PAGE_SIZE)
+})
+
+test('the Administration scale is wider and separate from the member scale', () => {
+  assert.deepEqual([...ADMIN_PAGE_SIZES], [10, 25, 50, 100])
+  assert.equal(DEFAULT_ADMIN_PAGE_SIZE, 10)
+  assert.ok(isAdminPageSize(DEFAULT_ADMIN_PAGE_SIZE))
+  // The two scales stay independent: widening the admin tables must not move
+  // the Master List or Suguan History pagers.
+  assert.deepEqual([...MEMBER_PAGE_SIZES], [5, 10, 15, 20, 25])
+  assert.equal(isAdminPageSize(5), false)
+  assert.equal(isAdminPageSize(100), true)
+})
+
+test('normalizeAdminPageSize falls back to the default for junk', () => {
+  assert.equal(normalizeAdminPageSize(50), 50)
+  assert.equal(normalizeAdminPageSize(15), DEFAULT_ADMIN_PAGE_SIZE)
+  assert.equal(normalizeAdminPageSize(0), DEFAULT_ADMIN_PAGE_SIZE)
+  assert.equal(normalizeAdminPageSize(NaN), DEFAULT_ADMIN_PAGE_SIZE)
 })
 
 test('paginate slices a page and reports its position', () => {

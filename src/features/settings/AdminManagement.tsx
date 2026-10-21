@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import {
   Activity,
   Check,
@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { PasswordInput } from '@/components/PasswordInput'
+import { TablePageSizeControl, TablePaginator } from '@/components/TablePaginator'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -61,6 +62,12 @@ import type {
   Permission,
 } from '@/core/types/auth'
 import { initialsFor } from '@/lib/credentials'
+import {
+  ADMIN_PAGE_SIZES,
+  DEFAULT_ADMIN_PAGE_SIZE,
+  paginate,
+  type AdminPageSize,
+} from '@/lib/memberDirectory'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
@@ -970,6 +977,19 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
+  /**
+   * `paginate` clamps a stale page, but the page number itself has to be reset
+   * when a filter shrinks the list, or a search made from page 3 leaves the user
+   * looking at rows far past the end of the new result set.
+   */
+  const [usersPage, setUsersPage] = useState(1)
+  const [adminPageSize, setAdminPageSize] = useState<AdminPageSize>(
+    DEFAULT_ADMIN_PAGE_SIZE,
+  )
+  const [auditPage, setAuditPage] = useState(1)
+  const [loginPage, setLoginPage] = useState(1)
+  const [sessionsPage, setSessionsPage] = useState(1)
+
   const filteredAccounts = accounts.filter((account) => {
     const search = query.trim().toLowerCase()
     const searchMatch =
@@ -985,6 +1005,14 @@ export function AdminManagement({ actorId }: { actorId: string }) {
   })
   const selectedAccount =
     accounts.find((account) => account.id === selectedAccountId) ?? null
+  const usersPageResult = paginate(filteredAccounts, usersPage, adminPageSize)
+  const auditPageResult = paginate(auditLogs, auditPage, adminPageSize)
+  const loginPageResult = paginate(loginHistory, loginPage, adminPageSize)
+  const sessionsPageResult = paginate(
+    activeSessions,
+    sessionsPage,
+    adminPageSize,
+  )
   const today = new Date().toDateString()
   const actionsToday = auditLogs.filter(
     (log) => new Date(log.createdAt).toDateString() === today,
@@ -992,6 +1020,19 @@ export function AdminManagement({ actorId }: { actorId: string }) {
 
   const inspectUser = (account: Account) => {
     setSelectedAccountId(account.id)
+  }
+
+  /**
+   * Changing the page size starts every list over at the top. Keeping the
+   * current page while the size changes would silently jump the user, and the
+   * four sections share one size choice.
+   */
+  const changeAdminPageSize = (size: number) => {
+    setAdminPageSize(size as AdminPageSize)
+    setUsersPage(1)
+    setAuditPage(1)
+    setLoginPage(1)
+    setSessionsPage(1)
   }
 
   const changeRolePermission = async (
@@ -1094,12 +1135,21 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 id="admin-user-search"
                 placeholder="Search name, username, or role..."
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  setUsersPage(1)
+                }}
               />
             </div>
             <div className="grid gap-1.5">
               <Label>Role</Label>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <Select
+                value={roleFilter}
+                onValueChange={(value) => {
+                  setRoleFilter(value)
+                  setUsersPage(1)
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-44">
                   <SelectValue />
                 </SelectTrigger>
@@ -1113,7 +1163,13 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             </div>
             <div className="grid gap-1.5">
               <Label>Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value)
+                  setUsersPage(1)
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-44">
                   <SelectValue />
                 </SelectTrigger>
@@ -1127,6 +1183,13 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 </SelectContent>
               </Select>
             </div>
+            <TablePageSizeControl
+              value={adminPageSize}
+              sizes={ADMIN_PAGE_SIZES}
+              label="Users per page"
+              className="pb-1.5"
+              onChange={changeAdminPageSize}
+            />
             <Button onClick={() => setCreateOpen(true)} disabled={READ_ONLY}>
               <Plus className="size-4" />
               Create User
@@ -1147,7 +1210,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredAccounts.map((account) => (
+                {usersPageResult.items.map((account) => (
                   <TableRow key={account.id}>
                     <TableCell>
                       <span className="flex size-9 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
@@ -1176,7 +1239,7 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filteredAccounts.length === 0 && (
+                {usersPageResult.items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       No system users match these filters.
@@ -1185,10 +1248,16 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 )}
               </TableBody>
             </Table>
+            <TablePaginator
+              label="system users"
+              page={usersPageResult}
+              className="border-t border-slate-200"
+              onPageChange={setUsersPage}
+            />
           </div>
 
           <div className="grid gap-3 md:hidden">
-            {filteredAccounts.map((account) => (
+            {usersPageResult.items.map((account) => (
               <Card key={account.id} className="rounded-xl border-slate-200 shadow-none">
                 <CardContent className="grid gap-3 p-4">
                   <div className="flex items-start gap-3">
@@ -1226,11 +1295,17 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                 </CardContent>
               </Card>
             ))}
-            {filteredAccounts.length === 0 && (
+            {usersPageResult.items.length === 0 && (
               <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                 No system users match these filters.
               </p>
             )}
+            <TablePaginator
+              label="system users"
+              page={usersPageResult}
+              className="rounded-xl border border-slate-200 bg-white"
+              onPageChange={setUsersPage}
+            />
           </div>
         </div>
       )}
@@ -1364,35 +1439,69 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       )}
 
       {section === 'audit' && (
-        <ActivityTable
-          title="Audit Logs"
-          description="Administrative changes and security actions recorded on this browser."
-          empty="No administrative activity has been recorded yet."
-          headings={['Action', 'Performed By', 'Affected User', 'Details', 'Date & Time']}
-          rows={auditLogs.map((log) => [
-            log.action,
-            `${log.actorName} (@${log.actorUsername})`,
-            log.affectedUserName ?? '—',
-            log.details ?? log.module,
-            dateTime(log.createdAt),
-          ])}
-        />
+        <div className="grid gap-3">
+          <TablePageSizeControl
+            value={adminPageSize}
+            sizes={ADMIN_PAGE_SIZES}
+            label="Audit log entries per page"
+            className="justify-end"
+            onChange={changeAdminPageSize}
+          />
+          <ActivityTable
+            title="Audit Logs"
+            description="Administrative changes and security actions recorded on this browser."
+            empty="No administrative activity has been recorded yet."
+            headings={['Action', 'Performed By', 'Affected User', 'Details', 'Date & Time']}
+            rows={auditPageResult.items.map((log) => [
+              log.action,
+              `${log.actorName} (@${log.actorUsername})`,
+              log.affectedUserName ?? '—',
+              log.details ?? log.module,
+              dateTime(log.createdAt),
+            ])}
+            pager={
+              <TablePaginator
+                label="log entries"
+                page={auditPageResult}
+                className="border-t"
+                onPageChange={setAuditPage}
+              />
+            }
+          />
+        </div>
       )}
 
       {section === 'logins' && (
-        <ActivityTable
-          title="Login History"
-          description="Successful and failed sign-in attempts recorded by this browser."
-          empty="No login attempts have been recorded yet."
-          headings={['User', 'Device', 'Location / IP', 'Date & Time', 'Status']}
-          rows={loginHistory.map((entry) => [
-            `${entry.userName} (@${entry.username})`,
-            entry.device,
-            entry.locationIp,
-            dateTime(entry.createdAt),
-            entry.status,
-          ])}
-        />
+        <div className="grid gap-3">
+          <TablePageSizeControl
+            value={adminPageSize}
+            sizes={ADMIN_PAGE_SIZES}
+            label="Login history entries per page"
+            className="justify-end"
+            onChange={changeAdminPageSize}
+          />
+          <ActivityTable
+            title="Login History"
+            description="Successful and failed sign-in attempts recorded by this browser."
+            empty="No login attempts have been recorded yet."
+            headings={['User', 'Device', 'Location / IP', 'Date & Time', 'Status']}
+            rows={loginPageResult.items.map((entry) => [
+              `${entry.userName} (@${entry.username})`,
+              entry.device,
+              entry.locationIp,
+              dateTime(entry.createdAt),
+              entry.status,
+            ])}
+            pager={
+              <TablePaginator
+                label="login attempts"
+                page={loginPageResult}
+                className="border-t"
+                onPageChange={setLoginPage}
+              />
+            }
+          />
+        </div>
       )}
 
       {section === 'sessions' && (
@@ -1404,8 +1513,15 @@ export function AdminManagement({ actorId }: { actorId: string }) {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <TablePageSizeControl
+              value={adminPageSize}
+              sizes={ADMIN_PAGE_SIZES}
+              label="Active sessions per page"
+              className="mb-3 justify-end"
+              onChange={changeAdminPageSize}
+            />
             <div className="grid gap-3">
-              {activeSessions.map((session) => (
+              {sessionsPageResult.items.map((session) => (
                 <div
                   key={session.id}
                   className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center"
@@ -1436,12 +1552,18 @@ export function AdminManagement({ actorId }: { actorId: string }) {
                   </Button>
                 </div>
               ))}
-              {activeSessions.length === 0 && (
+              {sessionsPageResult.items.length === 0 && (
                 <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
                   No active sessions.
                 </p>
               )}
             </div>
+            <TablePaginator
+              label="active sessions"
+              page={sessionsPageResult}
+              className="mt-3 rounded-lg border border-slate-200"
+              onPageChange={setSessionsPage}
+            />
           </CardContent>
         </Card>
       )}
@@ -1500,12 +1622,15 @@ function ActivityTable({
   empty,
   headings,
   rows,
+  pager,
 }: {
   title: string
   description: string
   empty: string
   headings: string[]
   rows: string[][]
+  /** Optional pager rendered under the table. The rows arrive pre-sliced. */
+  pager?: ReactNode
 }) {
   return (
     <Card className="rounded-xl border-slate-200 shadow-none">
@@ -1540,6 +1665,7 @@ function ActivityTable({
               )}
             </TableBody>
           </Table>
+          {pager}
         </div>
       </CardContent>
     </Card>

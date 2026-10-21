@@ -37,6 +37,28 @@ export type MemberPageSize = (typeof MEMBER_PAGE_SIZES)[number]
 
 export const DEFAULT_MEMBER_PAGE_SIZE: MemberPageSize = 10
 
+/**
+ * Page sizes offered by the Administration tables. Deliberately separate from
+ * `MEMBER_PAGE_SIZES`: the directory pages a few dozen members, while Audit
+ * Logs and Login History hold up to 5000 server rows, so the useful sizes are
+ * larger. Widening the member scale instead would silently change the Master
+ * List and Suguan History pagers.
+ */
+export const ADMIN_PAGE_SIZES = [10, 25, 50, 100] as const
+
+export type AdminPageSize = (typeof ADMIN_PAGE_SIZES)[number]
+
+export const DEFAULT_ADMIN_PAGE_SIZE: AdminPageSize = 10
+
+export function isAdminPageSize(value: number): value is AdminPageSize {
+  return (ADMIN_PAGE_SIZES as readonly number[]).includes(value)
+}
+
+/** Clamp a requested page size to the offered options, defaulting to 10. */
+export function normalizeAdminPageSize(value: number): AdminPageSize {
+  return isAdminPageSize(value) ? value : DEFAULT_ADMIN_PAGE_SIZE
+}
+
 export interface MemberPage<T> {
   items: T[]
   /** 1-based. Always at least 1, even when empty. */

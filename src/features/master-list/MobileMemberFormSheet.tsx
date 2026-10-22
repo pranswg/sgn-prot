@@ -18,9 +18,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
-import type { Member, MemberInput, MembershipType } from '@/core/types/member'
+import type {
+  Choir,
+  Member,
+  MemberInput,
+  MembershipType,
+} from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { CHOIR_LABELS, membersOf, pnkVoicePositionId } from '@/lib/choirs'
 import { cn } from '@/lib/utils'
 import { phtInstantISO } from '@/lib/phDate'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -33,6 +39,8 @@ interface MobileMemberFormSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   member: Member | null
+  /** Choir the new member joins, and the only pool duplicates are checked in. */
+  choir?: Choir
   onSaved?: () => void
 }
 
@@ -48,14 +56,14 @@ interface FormState {
   assignedDutyRoleIds: string[]
 }
 
-function blankForm(): FormState {
+function blankForm(voicePosition = 'soprano-1'): FormState {
   return {
     firstName: '',
     middleName: '',
     suffix: '',
     lastName: '',
     gender: 'female',
-    voicePosition: 'soprano-1',
+    voicePosition,
     membershipType: 'regular',
     isActive: true,
     assignedDutyRoleIds: [],
@@ -72,6 +80,7 @@ export function MobileMemberFormSheet({
   open,
   onOpenChange,
   member,
+  choir = 'aws',
   onSaved,
 }: MobileMemberFormSheetProps) {
   const addMember = useMemberStore((s) => s.addMember)
@@ -79,6 +88,10 @@ export function MobileMemberFormSheet({
   const members = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
+  // PNK is a single-voice choir: every member is a Soprano 2, so the sheet hides
+  // the voice picker and saves that configured position instead.
+  const isPnk = choir === 'pnk'
+  const sopranoVoiceId = pnkVoicePositionId(allVoices())
   const [form, setForm] = useState<FormState>(blankForm)
   const [duplicateCandidates, setDuplicateCandidates] = useState<Member[]>([])
   // "Create New Member Anyway" is a one-shot bypass; it is reset on the next
@@ -106,12 +119,12 @@ export function MobileMemberFormSheet({
               suffix: member.suffix ?? '',
               lastName: member.lastName,
               gender: member.gender,
-              voicePosition: member.voicePosition,
+              voicePosition: isPnk ? sopranoVoiceId : member.voicePosition,
               membershipType: member.membershipType,
               isActive: member.isActive,
               assignedDutyRoleIds: member.assignedDutyRoleIds ?? [],
             }
-          : blankForm(),
+          : blankForm(isPnk ? sopranoVoiceId : undefined),
       )
     }
   }
@@ -125,8 +138,9 @@ export function MobileMemberFormSheet({
     setForm((f) => ({
       ...f,
       gender,
-      voicePosition:
-        options.find((v) => v.id === f.voicePosition)?.id ?? fallback,
+      voicePosition: isPnk
+        ? sopranoVoiceId
+        : (options.find((v) => v.id === f.voicePosition)?.id ?? fallback),
     }))
   }
 
@@ -142,7 +156,7 @@ export function MobileMemberFormSheet({
         suffix: form.suffix.trim() || undefined,
         lastName: form.lastName.trim(),
         gender: form.gender,
-        voicePosition: form.voicePosition,
+        voicePosition: isPnk ? sopranoVoiceId : form.voicePosition,
         membershipType: form.membershipType,
         assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: form.isActive,
@@ -151,10 +165,13 @@ export function MobileMemberFormSheet({
       updateMember(member.id, input)
       toast.success('Member updated.')
     } else {
-      const duplicates = findPossibleDuplicateMembers(members, {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-      })
+      const duplicates = findPossibleDuplicateMembers(
+        membersOf(members, choir),
+        {
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+        },
+      )
       if (duplicates.length > 0 && !skipDuplicateCheck) {
         setDuplicateCandidates(duplicates)
         return
@@ -165,11 +182,12 @@ export function MobileMemberFormSheet({
         suffix: form.suffix.trim() || undefined,
         lastName: form.lastName.trim(),
         gender: form.gender,
-        voicePosition: form.voicePosition,
+        voicePosition: isPnk ? sopranoVoiceId : form.voicePosition,
         membershipType: form.membershipType,
         assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: form.isActive,
         dateAdded: phtInstantISO(),
+        choir,
       }
       addMember(input)
       toast.success('Member added.')
@@ -214,7 +232,7 @@ export function MobileMemberFormSheet({
                   ? 'A member with this name already exists in the Master List.'
                   : member
                     ? `Update ${member.firstName} ${member.lastName}.`
-                    : 'Add a new choir member to the Master List.'}
+                    : `Add a new member to the ${CHOIR_LABELS[choir]} Master List.`}
               </SheetDescription>
             </div>
           </div>
@@ -328,7 +346,12 @@ export function MobileMemberFormSheet({
               open={choirOpen}
               onToggle={() => setChoirOpen((o) => !o)}
             >
-              <div className="grid w-full grid-cols-2 gap-3">
+              <div
+                className={cn(
+                  'grid w-full gap-3',
+                  !isPnk && 'grid-cols-2',
+                )}
+              >
                 <div className="grid min-w-0 gap-1.5">
                   <Label>Gender</Label>
                   <Select
@@ -346,26 +369,28 @@ export function MobileMemberFormSheet({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid min-w-0 gap-1.5">
-                  <Label>Voice Position</Label>
-                  <Select
-                    value={form.voicePosition}
-                    onValueChange={(v) => set('voicePosition', v)}
-                  >
-                    <SelectTrigger className="h-11 w-full rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {voicePositionsForGender(form.gender, allVoices()).map(
-                        (v) => (
-                          <SelectItem key={v.id} value={v.id}>
-                            {v.name}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!isPnk && (
+                  <div className="grid min-w-0 gap-1.5">
+                    <Label>Voice Position</Label>
+                    <Select
+                      value={form.voicePosition}
+                      onValueChange={(v) => set('voicePosition', v)}
+                    >
+                      <SelectTrigger className="h-11 w-full rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {voicePositionsForGender(form.gender, allVoices()).map(
+                          (v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.name}
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </SectionCard>
 

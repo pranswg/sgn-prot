@@ -19,6 +19,8 @@ interface MobileMemberCardProps {
   number: number
   reference?: string
   voices: VoicePosition[]
+  /** PNK sings one voice, so its cards carry no voice badge. */
+  showVoice?: boolean
   sort: MemberSort
   onOpenMenu: (member: Member) => void
   hasActions: boolean
@@ -34,6 +36,7 @@ export function MobileMemberCard({
   number,
   reference,
   voices,
+  showVoice = true,
   sort,
   onOpenMenu,
   hasActions,
@@ -65,7 +68,9 @@ export function MobileMemberCard({
             </span>
             <span className="mt-2 flex flex-wrap items-center gap-1.5">
               <GenderBadge gender={member.gender} />
-              <VoiceBadge name={memberPositionLabel(member, voices)} />
+              {showVoice && (
+                <VoiceBadge name={memberPositionLabel(member, voices)} />
+              )}
               <MemberLifecycleBadge member={member} />
               {memberIsReturned(member) && <ReturnedMemberBadge />}
             </span>

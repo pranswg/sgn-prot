@@ -1,6 +1,14 @@
 export type Gender = 'male' | 'female'
 
 /**
+ * Which choir a person belongs to. Every list in the app used to be the single
+ * AWS pool; PNK is a second, sealed pool with its own Master List, trainees and
+ * history. The field is optional on stored records so data saved before store
+ * version 8 keeps reading: `choirOf()` treats a missing value as AWS.
+ */
+export type Choir = 'aws' | 'pnk'
+
+/**
  * A member's category in the choir. The three organist-family categories —
  * `organista`, `tagapagturo`, and `assistant-tagapagturo` — are one category:
  * all of them count as Organists for the Organist Suguan and the Choir
@@ -62,6 +70,8 @@ export interface Member {
   membershipType: MembershipType
   isActive: boolean
   dateAdded: string
+  /** Owning choir. Absent on records saved before store version 8 (AWS). */
+  choir?: Choir
   positions: ChoirPosition[]
   assignedDutyRoleIds?: string[]
   notes?: string
@@ -82,6 +92,8 @@ export interface Trainee {
   voicePosition: string
   status: 'active' | 'inactive' | 'promoted' | 'removed' | 'transferred-out'
   dateAdded: string
+  /** Owning choir. Absent on records saved before store version 8 (AWS). */
+  choir?: Choir
   promotedToMemberId?: string
   notes?: string
   /** Why a trainee left without ever becoming a member. */
@@ -104,6 +116,8 @@ export interface MemberInput {
   membershipType: MembershipType
   isActive: boolean
   dateAdded: string
+  /** Choir the new member joins. Defaults to AWS in the store. */
+  choir?: Choir
   positions?: ChoirPosition[]
   assignedDutyRoleIds?: string[]
   notes?: string
@@ -118,5 +132,7 @@ export interface TraineeInput {
   voicePosition: string
   status: 'active' | 'inactive'
   dateAdded: string
+  /** Choir the new trainee joins. Defaults to AWS in the store. */
+  choir?: Choir
   notes?: string
 }

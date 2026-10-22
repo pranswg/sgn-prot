@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CalendarPlus, FileDown, X } from 'lucide-react'
-import type { Member, Trainee } from '@/core/types/member'
+import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
 import { memberHasRank } from '@/lib/memberRanks'
@@ -35,9 +35,12 @@ import type {
   MasterListAttendanceOrientation,
 } from './masterListAttendancePdf'
 
+export type MasterListAttendanceExportFormat = 'pdf' | 'docx'
+
 interface MasterListAttendanceDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  choir: Choir
   members: Member[]
   trainees: Trainee[]
   voices: VoicePosition[]
@@ -56,18 +59,21 @@ interface MasterListAttendanceDialogProps {
       | 'orientation'
       | 'pangulongName'
     >,
+    format: MasterListAttendanceExportFormat,
   ) => void
 }
 
 export function MasterListAttendanceDialog({
   open,
   onOpenChange,
+  choir,
   members,
   trainees,
   voices,
   dutyRoles,
   onGenerate,
 }: MasterListAttendanceDialogProps) {
+  const isPnk = choir === 'pnk'
   const activeMembers = members.filter((member) => member.isActive)
   const activeTrainees = trainees.filter(
     (trainee) => trainee.status === 'active',
@@ -88,12 +94,10 @@ export function MasterListAttendanceDialog({
   const [dates, setDates] = useState<DateKey[]>([])
   const [title, setTitle] = useState('')
   const [groupByVoice, setGroupByVoice] = useState(true)
-  const [selectedVoiceIds, setSelectedVoiceIds] = useState<string[]>(() =>
-    voices.map((voice) => voice.id),
-  )
+  const [selectedVoiceIds, setSelectedVoiceIds] = useState<string[]>([])
   const [includeNagsasanayMen, setIncludeNagsasanayMen] = useState(false)
   const [includeNagsasanayWomen, setIncludeNagsasanayWomen] = useState(false)
-  const [lastNameFirst, setLastNameFirst] = useState(false)
+  const [lastNameFirst, setLastNameFirst] = useState(true)
   const [pangulongMemberId, setPangulongMemberId] = useState('')
   const [paperSize, setPaperSize] = useState<MasterListPaperSize>(
     DEFAULT_MASTER_LIST_PAPER_SIZE,
@@ -117,7 +121,7 @@ export function MasterListAttendanceDialog({
     setError('')
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = (format: MasterListAttendanceExportFormat) => {
     if (!title.trim()) {
       setError('Enter a title for the attendance sheet.')
       return
@@ -126,10 +130,11 @@ export function MasterListAttendanceDialog({
       setError('Add at least one attendance date.')
       return
     }
-    const selectedPangulong =
-      pangulongMembers.find((member) => member.id === pangulongMemberId) ??
-      (pangulongMembers.length === 1 ? pangulongMembers[0] : undefined)
-    if (!selectedPangulong) {
+    const selectedPangulong = isPnk
+      ? undefined
+      : pangulongMembers.find((member) => member.id === pangulongMemberId) ??
+        (pangulongMembers.length === 1 ? pangulongMembers[0] : undefined)
+    if (!isPnk && !selectedPangulong) {
       setError(
         pangulongMembers.length === 0
           ? 'No active Pangulong Mang-aawit is available in the Master List.'
@@ -146,11 +151,17 @@ export function MasterListAttendanceDialog({
       setError('There are no active members or selected trainees to include.')
       return
     }
-    if (groupByVoice && activeMembers.length > 0 && selectedVoiceIds.length === 0) {
+    if (
+      !isPnk &&
+      groupByVoice &&
+      activeMembers.length > 0 &&
+      selectedVoiceIds.length === 0
+    ) {
       setError('Select at least one voice position.')
       return
     }
     if (
+      !isPnk &&
       groupByVoice &&
       activeMembers.length > 0 &&
       !hasTraineesToInclude &&
@@ -163,25 +174,30 @@ export function MasterListAttendanceDialog({
     }
     setError('')
     onOpenChange(false)
-    onGenerate({
-      dates,
-      title: title.trim(),
-      groupByVoice,
-      selectedVoiceIds,
-      includeNagsasanayMen,
-      includeNagsasanayWomen,
-      lastNameFirst,
-      paperSize,
-      orientation,
-      pangulongName: [
-        selectedPangulong.firstName,
-        selectedPangulong.middleName,
-        selectedPangulong.lastName,
-        selectedPangulong.suffix,
-      ]
-        .filter(Boolean)
-        .join(' '),
-    })
+    onGenerate(
+      {
+        dates,
+        title: title.trim(),
+        groupByVoice: isPnk ? false : groupByVoice,
+        selectedVoiceIds: isPnk ? [] : selectedVoiceIds,
+        includeNagsasanayMen,
+        includeNagsasanayWomen,
+        lastNameFirst,
+        paperSize,
+        orientation,
+        pangulongName: selectedPangulong
+          ? [
+              selectedPangulong.firstName,
+              selectedPangulong.middleName,
+              selectedPangulong.lastName,
+              selectedPangulong.suffix,
+            ]
+              .filter(Boolean)
+              .join(' ')
+          : '',
+      },
+      format,
+    )
   }
 
   return (
@@ -277,7 +293,7 @@ export function MasterListAttendanceDialog({
                     setIncludeNagsasanayMen(checked === true)
                   }
                 />
-                Nagsasanay Men
+                Nagsasanay {isPnk ? 'Lalaki' : 'Men'}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox
@@ -286,7 +302,7 @@ export function MasterListAttendanceDialog({
                     setIncludeNagsasanayWomen(checked === true)
                   }
                 />
-                Nagsasanay Women
+                Nagsasanay {isPnk ? 'Babae' : 'Women'}
               </label>
             </div>
             {activeTrainees.length === 0 && (
@@ -308,98 +324,102 @@ export function MasterListAttendanceDialog({
                 Use “Last Name, First Name” format
               </span>
               <span className="block text-xs text-muted-foreground">
-                By default, names appear as First Name Last Name.
+                By default, names appear as Last Name, First Name.
               </span>
             </span>
           </label>
 
-          <section className="space-y-2">
-            <Label htmlFor="master-attendance-pangulong">
-              Pangulong Mang-aawit signatory
-            </Label>
-            <Select
-              value={pangulongMemberId}
-              onValueChange={(value) => {
-                setPangulongMemberId(value)
-                setError('')
-              }}
-            >
-              <SelectTrigger id="master-attendance-pangulong">
-                <SelectValue
-                  placeholder={
-                    pangulongMembers.length === 1
-                      ? `${pangulongMembers[0].firstName} ${pangulongMembers[0].lastName}`
-                      : 'Select Pangulong Mang-aawit'
+          {!isPnk && (
+            <section className="space-y-2">
+              <Label htmlFor="master-attendance-pangulong">
+                Pangulong Mang-aawit signatory
+              </Label>
+              <Select
+                value={pangulongMemberId}
+                onValueChange={(value) => {
+                  setPangulongMemberId(value)
+                  setError('')
+                }}
+              >
+                <SelectTrigger id="master-attendance-pangulong">
+                  <SelectValue
+                    placeholder={
+                      pangulongMembers.length === 1
+                        ? `${pangulongMembers[0].firstName} ${pangulongMembers[0].lastName}`
+                        : 'Select Pangulong Mang-aawit'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {pangulongMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {[member.lastName, member.firstName, member.middleName]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Printed under “Naghanda:” with the Pangulong Mang-aawit title.
+              </p>
+            </section>
+          )}
+
+          {!isPnk && (
+            <section className="space-y-3 rounded-md border p-3">
+              <div>
+                <h3 className="text-sm font-semibold">Voice Positions</h3>
+                <p className="text-xs text-muted-foreground">
+                  Select each configured voice section to include.
+                </p>
+              </div>
+              {voices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No voice positions are configured.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {voices.map((voice) => (
+                    <label
+                      key={voice.id}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <Checkbox
+                        checked={selectedVoiceIds.includes(voice.id)}
+                        disabled={!groupByVoice}
+                        onCheckedChange={(checked) => {
+                          setSelectedVoiceIds((current) =>
+                            checked === true
+                              ? [...new Set([...current, voice.id])]
+                              : current.filter((id) => id !== voice.id),
+                          )
+                          setError('')
+                        }}
+                      />
+                      {voice.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-start gap-3 border-t pt-3">
+                <Checkbox
+                  checked={!groupByVoice}
+                  onCheckedChange={(checked) =>
+                    setGroupByVoice(checked !== true)
                   }
                 />
-              </SelectTrigger>
-              <SelectContent>
-                {pangulongMembers.map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {[member.lastName, member.firstName, member.middleName]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Printed under “Naghanda:” with the Pangulong Mang-aawit title.
-            </p>
-          </section>
-
-          <section className="space-y-3 rounded-md border p-3">
-            <div>
-              <h3 className="text-sm font-semibold">Voice Positions</h3>
-              <p className="text-xs text-muted-foreground">
-                Select each configured voice section to include.
-              </p>
-            </div>
-            {voices.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No voice positions are configured.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {voices.map((voice) => (
-                  <label
-                    key={voice.id}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Checkbox
-                      checked={selectedVoiceIds.includes(voice.id)}
-                      disabled={!groupByVoice}
-                      onCheckedChange={(checked) => {
-                        setSelectedVoiceIds((current) =>
-                          checked === true
-                            ? [...new Set([...current, voice.id])]
-                            : current.filter((id) => id !== voice.id),
-                        )
-                        setError('')
-                      }}
-                    />
-                    {voice.name}
-                  </label>
-                ))}
-              </div>
-            )}
-            <label className="flex items-start gap-3 border-t pt-3">
-              <Checkbox
-                checked={!groupByVoice}
-                onCheckedChange={(checked) =>
-                  setGroupByVoice(checked !== true)
-                }
-              />
-              <span className="space-y-1">
-                <span className="block text-sm font-medium">
-                  Include all members without voice sections
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">
+                    Include all members without voice sections
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Lists women first, then men, without gender labels.
+                  </span>
                 </span>
-                <span className="block text-xs text-muted-foreground">
-                  Lists women first, then men, without gender labels.
-                </span>
-              </span>
-            </label>
-          </section>
+              </label>
+            </section>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -457,9 +477,13 @@ export function MasterListAttendanceDialog({
           >
             Cancel
           </Button>
-          <Button type="button" onClick={handleGenerate}>
+          <Button type="button" onClick={() => handleGenerate('pdf')}>
             <FileDown className="size-4" />
-            Continue to export
+            Export to PDF
+          </Button>
+          <Button type="button" onClick={() => handleGenerate('docx')}>
+            <FileDown className="size-4" />
+            Export to Word
           </Button>
         </DialogFooter>
       </DialogContent>

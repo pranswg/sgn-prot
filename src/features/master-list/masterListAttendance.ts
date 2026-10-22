@@ -1,11 +1,40 @@
-import type { Member, Trainee } from '@/core/types/member'
+import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import { sortMasterListPdfMembers } from '@/lib/masterListPdfData'
+import { formatDateKeyLongDate, type DateKey } from '@/lib/phDate'
 
 export type MasterListAttendanceRow =
   | { kind: 'section'; label: string }
   | { kind: 'member'; member: Member; name: string; number: number }
   | { kind: 'trainee'; name: string; number: number }
+
+export function formatAttendanceDateSummary(dates: readonly DateKey[]): string {
+  const uniqueDates = [...new Set(dates)].sort((left, right) =>
+    left.localeCompare(right),
+  )
+  const datesByMonth = new Map<string, DateKey[]>()
+
+  for (const date of uniqueDates) {
+    const monthKey = date.slice(0, 7)
+    const monthDates = datesByMonth.get(monthKey) ?? []
+    monthDates.push(date)
+    datesByMonth.set(monthKey, monthDates)
+  }
+
+  return [...datesByMonth.values()]
+    .map((monthDates) => {
+      if (monthDates.length === 1) {
+        return formatDateKeyLongDate(monthDates[0])
+      }
+      const year = monthDates[0].slice(0, 4)
+      const monthName = formatDateKeyLongDate(monthDates[0]).split(' ')[0]
+      const dayList = monthDates.map((date) =>
+        String(Number(date.slice(8, 10))),
+      )
+      return `${monthName} ${dayList.join(', ')}, ${year}`
+    })
+    .join('; ')
+}
 
 export function paginateMasterListAttendanceRows(
   rows: MasterListAttendanceRow[],
@@ -64,6 +93,7 @@ export function buildMasterListAttendanceRows(
   includeNagsasanayMen = false,
   includeNagsasanayWomen = false,
   lastNameFirst = false,
+  choir: Choir = 'aws',
 ): MasterListAttendanceRow[] {
   const activeMembers = members.filter((member) => member.isActive)
   let number = 0
@@ -86,7 +116,67 @@ export function buildMasterListAttendanceRows(
     }))
 
   const rows =
-    selectedVoiceIds === null
+    choir === 'pnk'
+      ? (['female', 'male'] as const).flatMap((gender) => {
+          const genderMembers = activeMembers.filter(
+            (member) => member.gender === gender,
+          )
+          const genderTrainees = trainees
+            .filter(
+              (trainee) =>
+                trainee.status === 'active' &&
+                trainee.gender === gender &&
+                (gender === 'male'
+                  ? includeNagsasanayMen
+                  : includeNagsasanayWomen),
+            )
+            .sort(
+              (left, right) =>
+                left.lastName.localeCompare(right.lastName) ||
+                left.firstName.localeCompare(right.firstName) ||
+                left.id.localeCompare(right.id),
+            )
+          const people: (
+            | { person: Member; kind: 'member' }
+            | { person: Trainee; kind: 'trainee' }
+          )[] = [
+            ...genderMembers.map((person) => ({
+              person,
+              kind: 'member' as const,
+            })),
+            ...genderTrainees.map((person) => ({
+              person,
+              kind: 'trainee' as const,
+            })),
+          ].sort(
+            (left, right) =>
+              left.person.lastName.localeCompare(right.person.lastName) ||
+              left.person.firstName.localeCompare(right.person.firstName) ||
+              left.person.id.localeCompare(right.person.id),
+          )
+          if (people.length === 0) return []
+          return [
+            {
+              kind: 'section' as const,
+              label: gender === 'female' ? 'Babae' : 'Lalaki',
+            },
+            ...people.map(({ person, kind }) =>
+              kind === 'member'
+                ? {
+                    kind,
+                    member: person,
+                    name: formatName(person),
+                    number: ++number,
+                  }
+                : {
+                    kind,
+                    name: formatName(person),
+                    number: ++number,
+                  },
+            ),
+          ]
+        })
+      : selectedVoiceIds === null
       ? [
           ...memberRows(
             activeMembers.filter((member) => member.gender === 'female'),
@@ -136,10 +226,10 @@ export function buildMasterListAttendanceRows(
 
   return [
     ...rows,
-    ...(includeNagsasanayMen
+    ...(choir !== 'pnk' && includeNagsasanayMen
       ? traineeSection('Nagsasanay Men', 'male')
       : []),
-    ...(includeNagsasanayWomen
+    ...(choir !== 'pnk' && includeNagsasanayWomen
       ? traineeSection('Nagsasanay Women', 'female')
       : []),
   ]

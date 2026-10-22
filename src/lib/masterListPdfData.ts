@@ -1,11 +1,9 @@
-import {
-  MEMBERSHIP_LABELS,
-  memberIsOrganist,
-} from '@/core/constants/memberMembership'
-import { countMembersByRank, memberRankIds, memberRankNames } from '@/lib/memberRanks'
-import type { Member, Trainee } from '@/core/types/member'
+import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
+import { memberRankIds, memberRankNames } from '@/lib/memberRanks'
+import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import { getVoiceName } from '@/core/constants/voicePositions'
+import { CHOIR_LABELS, pnkVoicePositionId } from '@/lib/choirs'
 
 export type MasterListPdfSection =
   | {
@@ -25,12 +23,13 @@ export function groupMasterListPdfSections(
   trainees: Trainee[],
   localeName: string,
   dutyRoles: DutyRole[],
+  choir: Choir = 'aws',
 ): MasterListPdfSection[] {
-  const choirName = `${localeName.trim().toLocaleUpperCase()} CHOIR`
+  const choirName = `${CHOIR_LABELS[choir]} ${localeName.trim().toLocaleUpperCase()} CHOIR`
   const sections: MasterListPdfSection[] = [
     {
       kind: 'members',
-      title: `${choirName} - Women`,
+      title: `${choirName} - ${choir === 'pnk' ? 'Babae' : 'Women'}`,
       order: 'voice',
       members: members.filter(
         (member) =>
@@ -39,7 +38,7 @@ export function groupMasterListPdfSections(
     },
     {
       kind: 'members',
-      title: `${choirName} - Men`,
+      title: `${choirName} - ${choir === 'pnk' ? 'Lalaki' : 'Men'}`,
       order: 'voice',
       members: members.filter(
         (member) =>
@@ -52,7 +51,7 @@ export function groupMasterListPdfSections(
   // them, so the sheet names each rank exactly as the administrator typed it. A
   // member appears under every rank they hold, and a rank with no members is
   // skipped.
-  for (const role of dutyRoles) {
+  for (const role of choir === 'aws' ? dutyRoles : []) {
     const assigned = members.filter((member) =>
       memberRankIds(member, dutyRoles).includes(role.id),
     )
@@ -75,9 +74,10 @@ export function groupMasterListPdfSections(
     if (genderTrainees.length > 0) {
       sections.push({
         kind: 'trainees',
-        title: `${choirName} - Nagsasanay ${
-          gender === 'female' ? 'Women' : 'Men'
-        }`,
+        title:
+          choir === 'pnk'
+            ? `${choirName} - Nagsasanay ${gender === 'female' ? 'Babae' : 'Lalaki'}`
+            : `${choirName} - Nagsasanay ${gender === 'female' ? 'Women' : 'Men'}`,
         trainees: genderTrainees,
       })
     }
@@ -97,7 +97,9 @@ export function splitMasterListPdfSections(
   ): section is Extract<MasterListPdfSection, { kind: 'members' }> =>
     section.kind === 'members' &&
     !section.title.endsWith(' - Women') &&
-    !section.title.endsWith(' - Men')
+    !section.title.endsWith(' - Men') &&
+    !section.title.endsWith(' - Babae') &&
+    !section.title.endsWith(' - Lalaki')
   const hierarchySections = sections.filter(isHierarchySection)
   return {
     contentSections: sections.filter((section) => !isHierarchySection(section)),
@@ -126,32 +128,11 @@ export function sortMasterListPdfMembers(
   })
 }
 
-function voiceFamilyCount(
-  members: Member[],
-  voices: VoicePosition[],
-  gender: Member['gender'],
-  family: string,
-): number {
-  return members.filter(
-    (member) =>
-      member.membershipType === 'regular' &&
-      member.gender === gender &&
-      getVoiceName(member.voicePosition, voices)
-        .trim()
-        .toLowerCase()
-        .startsWith(family),
-  ).length
-}
-
 export function summarizeMasterList(
   members: Member[],
   trainees: Trainee[],
-  voices: VoicePosition[],
-  dutyRoles: DutyRole[] = [],
 ): MasterListSummaryRow[] {
-  const rankCounts = countMembersByRank(members, dutyRoles)
   return [
-    { kind: 'section', category: 'CHOIR MEMBERS' },
     { kind: 'item', category: 'Total Choir Members', count: members.length },
     {
       kind: 'item',
@@ -165,40 +146,6 @@ export function summarizeMasterList(
     },
     {
       kind: 'item',
-      category: 'Sopranos',
-      count: voiceFamilyCount(members, voices, 'female', 'soprano'),
-    },
-    {
-      kind: 'item',
-      category: 'Altos',
-      count: voiceFamilyCount(members, voices, 'female', 'alto'),
-    },
-    {
-      kind: 'item',
-      category: 'Tenors',
-      count: voiceFamilyCount(members, voices, 'male', 'tenor'),
-    },
-    {
-      kind: 'item',
-      category: 'Basses',
-      count: voiceFamilyCount(members, voices, 'male', 'bass'),
-    },
-    {
-      kind: 'item',
-      category: 'Organists',
-      count: members.filter((member) => memberIsOrganist(member, dutyRoles)).length,
-    },
-    // One count per configured duty role, so the summary reflects the ranks the
-    // administrator actually uses instead of a built-in list.
-    ...dutyRoles.map(
-      (role): MasterListSummaryRow => ({
-        kind: 'item',
-        category: role.name,
-        count: rankCounts.get(role.id) ?? 0,
-      }),
-    ),
-    {
-      kind: 'item',
       category: 'Active Members',
       count: members.filter((member) => member.isActive).length,
     },
@@ -208,46 +155,24 @@ export function summarizeMasterList(
       count: members.filter((member) => !member.isActive).length,
     },
     {
-      kind: 'section',
-      category: 'TRAINEES / NAGSASANAY',
-    },
-    {
       kind: 'item',
-      category: 'Total Trainees',
+      category: 'Trainees / Nagsasanay',
       count: trainees.filter(
         (trainee) =>
           trainee.status === 'active' || trainee.status === 'inactive',
       ).length,
     },
-    {
-      kind: 'item',
-      category: 'Female Trainees',
-      count: trainees.filter(
-        (trainee) =>
-          trainee.gender === 'female' &&
-          (trainee.status === 'active' || trainee.status === 'inactive'),
-      ).length,
-    },
-    {
-      kind: 'item',
-      category: 'Male Trainees',
-      count: trainees.filter(
-        (trainee) =>
-          trainee.gender === 'male' &&
-          (trainee.status === 'active' || trainee.status === 'inactive'),
-      ).length,
-    },
-    {
-      category: 'Active Trainees',
-      count: trainees.filter((trainee) => trainee.status === 'active').length,
-      kind: 'item',
-    },
-    {
-      kind: 'item',
-      category: 'Inactive Trainees',
-      count: trainees.filter((trainee) => trainee.status === 'inactive').length,
-    },
   ]
+}
+
+export function masterListPdfVoice(
+  member: Member,
+  voices: VoicePosition[],
+  choir: Choir = 'aws',
+): string {
+  const voicePosition =
+    choir === 'pnk' ? pnkVoicePositionId(voices) : member.voicePosition
+  return getVoiceName(voicePosition, voices)
 }
 
 export function masterListPdfPosition(

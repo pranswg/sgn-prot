@@ -12,6 +12,8 @@
  * export follows the convention by construction.
  */
 import type { SuguanGroup } from '@/core/types/suguan'
+import type { Choir } from '@/core/types/member'
+import { CHOIR_LABELS } from './choirs'
 import { filenameTimestampPHT } from './phDate'
 
 /** Characters Windows and other platforms reject inside a filename. */
@@ -58,7 +60,8 @@ export function suguanExportGroupLabel(group: SuguanGroup): string {
 /**
  * The gender word for a Master List spreadsheet that exports one gender; an
  * "everyone" export returns an empty label so the name becomes plain
- * `- Master List.xlsx` (no "Mixed Choir" — the directory is the full roster).
+ * `{AWS|PNK} Master List` (no "Mixed Choir" — the directory is the full
+ * roster).
  */
 export function masterListExportGroupLabel(
   gender: 'all' | 'male' | 'female',
@@ -69,12 +72,17 @@ export function masterListExportGroupLabel(
 }
 
 /**
- * `Master List`, `Women Choir Master List`, or `Men Choir Master List` — the
- * full human-readable document name for a directory spreadsheet.
+ * `AWS Master List`, `PNK Women Choir Master List`, … — the full human-readable
+ * document name for a directory spreadsheet.
+ *
+ * The choir prefix is not decoration: both choirs export a Master List, and an
+ * untagged file could not be told apart once it left the app.
  */
 export function masterListExportDocumentName(
   gender: 'all' | 'male' | 'female',
+  choir: Choir = 'aws',
 ): string {
   const group = masterListExportGroupLabel(gender)
-  return group ? `${group} Master List` : 'Master List'
+  const base = group ? `${group} Master List` : 'Master List'
+  return `${CHOIR_LABELS[choir]} ${base}`
 }

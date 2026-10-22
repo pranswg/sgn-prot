@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
-import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
 import {
   countActiveDirectoryFilters,
   toggleInList,
@@ -33,6 +32,8 @@ interface MobileFilterSheetProps {
   /** Configured duty roles, which are the directory's choir positions. */
   dutyRoles: DutyRole[]
   stats: DirectoryStats
+  /** Chips this directory offers, in order. PNK omits `voices`. */
+  sections?: MobileFilterSection[]
   /** Live count for the in-progress edits, not the already-applied filters. */
   previewCount: (filters: MemberDirectoryFilters) => number
 }
@@ -74,7 +75,7 @@ function countSection(
     case 'status':
       return filters.status === 'all' ? 0 : 1
     case 'roles':
-      return filters.positions.length + (filters.quick !== 'all' ? 1 : 0)
+      return filters.positions.length
   }
 }
 
@@ -178,6 +179,7 @@ export function MobileFilterSheet({
   voices,
   dutyRoles,
   stats,
+  sections = MOBILE_FILTER_SECTIONS,
   previewCount,
 }: MobileFilterSheetProps) {
   const [draft, setDraft] = useState(filters)
@@ -198,7 +200,7 @@ export function MobileFilterSheet({
   const activeCount = section
     ? countSection(draft, section)
     : countActiveDirectoryFilters(draft)
-  const shown = section ? [section] : MOBILE_FILTER_SECTIONS
+  const shown = section ? [section] : sections
 
   const renderSection = (id: MobileFilterSection) => {
     switch (id) {
@@ -243,31 +245,6 @@ export function MobileFilterSheet({
         return (
           <SheetSection icon={SECTION_ICON.roles} title={MOBILE_FILTER_LABEL.roles}>
             <ul className="flex flex-col gap-2">
-              <CheckRow
-                label="Recently Added"
-                count={stats.total}
-                active={draft.quick === 'recent'}
-                onToggle={() =>
-                  setDraft((d) => ({
-                    ...d,
-                    quick: d.quick === 'recent' ? 'all' : 'recent',
-                  }))
-                }
-              />
-              {MEMBERSHIP_OPTIONS.map((option) => (
-                <CheckRow
-                  key={option.value}
-                  label={option.label}
-                  count={stats.membershipCounts.get(option.value) ?? 0}
-                  active={draft.quick === option.value}
-                  onToggle={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      quick: d.quick === option.value ? 'all' : option.value,
-                    }))
-                  }
-                />
-              ))}
               {dutyRoles.map((role) => (
                 <CheckRow
                   key={role.id}
@@ -301,7 +278,7 @@ export function MobileFilterSheet({
           <SheetDescription>
             {activeCount > 0
               ? `${activeCount} filter${activeCount !== 1 ? 's' : ''} selected`
-              : 'Narrow the directory by membership, voice, or choir position.'}
+              : 'Narrow the directory by status or choir position.'}
           </SheetDescription>
         </SheetHeader>
 

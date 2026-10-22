@@ -12,6 +12,7 @@ import test from 'node:test'
 
 import type { Member } from '@/core/types/member'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
+import { membersOf } from './choirs.ts'
 import {
   buildMemberReferences,
   computeDirectoryStats,
@@ -317,6 +318,28 @@ test('references are display-only codes assigned from roster position', () => {
   assert.equal(refs.get('1'), 'M-001')
   assert.equal(refs.get('3'), 'M-003')
   assert.equal(MEMBERS[0].id, '1')
+})
+
+test('each choir numbers its own list from M-001', () => {
+  // The pages hand `buildMemberReferences` their choir's members only, because
+  // AWS and PNK are separate Master Lists. PNK must not start at M-004 just
+  // because AWS happens to hold three people.
+  const roster: Member[] = [
+    { ...MEMBERS[0], id: 'aws-1', choir: 'aws' },
+    { ...MEMBERS[1], id: 'aws-2', choir: 'aws' },
+    { ...MEMBERS[2], id: 'aws-3', choir: 'aws' },
+    { ...MEMBERS[0], id: 'pnk-1', choir: 'pnk' },
+    { ...MEMBERS[1], id: 'pnk-2', choir: 'pnk' },
+  ]
+
+  const aws = buildMemberReferences(membersOf(roster, 'aws'))
+  const pnk = buildMemberReferences(membersOf(roster, 'pnk'))
+
+  assert.equal(aws.get('aws-1'), 'M-001')
+  assert.equal(aws.get('aws-3'), 'M-003')
+  assert.equal(pnk.get('pnk-1'), 'M-001')
+  assert.equal(pnk.get('pnk-2'), 'M-002')
+  assert.equal(pnk.has('aws-1'), false)
 })
 
 test('formatMemberName matches the active sort order', () => {

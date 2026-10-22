@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { Page } from '@/store/navStore'
+import type { Choir } from '@/core/types/member'
 
 export interface NavItem {
   label: string
@@ -69,17 +70,40 @@ export const SIDEBAR_METRICS = {
 /**
  * Single source of truth for navigation order. `NAV_GROUPS` below references
  * these by page, so a label or icon is only ever declared once.
+ *
+ * The AWS labels carry the choir name because the sidebar now reads as two
+ * choirs rather than one. PNK has its own three lists; its Suguan group lands
+ * with the PNK Suguan feature.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', page: 'dashboard', icon: LayoutDashboard },
-  { label: 'Master List', page: 'master-list', icon: Users },
-  { label: 'Trainees', page: 'trainees', icon: GraduationCap },
-  { label: 'Members History', page: 'members-history', icon: ArchiveRestore },
+  { label: 'AWS Master List', page: 'master-list', icon: Users },
+  { label: 'AWS Nagsasanay', page: 'trainees', icon: GraduationCap },
+  {
+    label: 'AWS Members History',
+    page: 'members-history',
+    icon: ArchiveRestore,
+  },
   { label: 'Koro Maker', page: 'koro-maker', icon: Grid2X2 },
-  { label: 'Organist Suguan', page: 'organista-suguan-maker', icon: Music4 },
-  { label: 'Choir Suguan', page: 'suguan-builder', icon: CalendarPlus },
-  { label: 'Extra Occasion Suguan', page: 'extra-occasion-suguan', icon: CalendarRange },
-  { label: 'Suguan History', page: 'suguan-history', icon: History },
+  { label: 'AWS Choir Suguan', page: 'suguan-builder', icon: CalendarPlus },
+  {
+    label: 'Extra Occasion Suguan',
+    page: 'extra-occasion-suguan',
+    icon: CalendarRange,
+  },
+  {
+    label: 'Organist Suguan',
+    page: 'organista-suguan-maker',
+    icon: Music4,
+  },
+  { label: 'AWS Suguan History', page: 'suguan-history', icon: History },
+  { label: 'PNK Master List', page: 'pnk-master-list', icon: Users },
+  { label: 'PNK Nagsasanay', page: 'pnk-trainees', icon: GraduationCap },
+  {
+    label: 'PNK Members History',
+    page: 'pnk-members-history',
+    icon: ArchiveRestore,
+  },
   { label: 'Settings', page: 'settings', icon: Settings },
   { label: 'Administration', page: 'administration', icon: ShieldCheck },
 ]
@@ -87,11 +111,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
 export const NAV_GROUPS: readonly NavGroup[] = [
   { label: 'Overview', pages: ['dashboard'] },
   {
-    label: 'Choir Management',
+    label: 'AWS Choir',
     pages: ['master-list', 'trainees', 'members-history', 'koro-maker'],
   },
   {
-    label: 'Suguan',
+    label: 'AWS Suguan',
     pages: [
       'suguan-builder',
       'extra-occasion-suguan',
@@ -99,8 +123,22 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       'suguan-history',
     ],
   },
+  {
+    label: 'PNK Choir',
+    pages: ['pnk-master-list', 'pnk-trainees', 'pnk-members-history'],
+  },
   { label: 'System', pages: ['settings', 'administration'] },
 ]
+
+/**
+ * The three choir-scoped list pages, so a page or a KPI card can resolve "the
+ * Master List for this choir" without a second page map.
+ */
+export const CHOIR_PAGES = {
+  masterList: { aws: 'master-list', pnk: 'pnk-master-list' },
+  trainees: { aws: 'trainees', pnk: 'pnk-trainees' },
+  membersHistory: { aws: 'members-history', pnk: 'pnk-members-history' },
+} as const satisfies Record<string, Record<Choir, Page>>
 
 /**
  * Detail pages that should light up their parent entry. `suguan-detail` is

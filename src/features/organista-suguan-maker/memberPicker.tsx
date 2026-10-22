@@ -10,6 +10,7 @@ import { fullName } from '@/lib/format'
 import { memberIsOrganist } from '@/core/constants/memberMembership'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { membersOf } from '@/lib/choirs'
 import { memberSubtitle } from './organistaSuguanService'
 
 interface MemberOption {
@@ -49,7 +50,8 @@ export function MemberPicker({
   placeholder,
 }: MemberPickerProps) {
   const isMobile = useIsMobile()
-  const members = useMemberStore((state) => state.members)
+  const allMembers = useMemberStore((state) => state.members)
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const allVoices = useSettingsStore((state) => state.allVoices)
   const voices = allVoices()
   const dutyRoles = useSettingsStore((state) => state.dutyRoles)

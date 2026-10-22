@@ -52,10 +52,18 @@ test('masterListExportGroupLabel leaves the full roster unlabelled', () => {
 })
 
 test('masterListExportDocumentName names the master list document', () => {
-  assert.equal(masterListExportDocumentName('all'), 'Master List')
+  assert.equal(masterListExportDocumentName('all'), 'AWS Master List')
   assert.equal(
     masterListExportDocumentName('female'),
-    'Women Choir Master List',
+    'AWS Women Choir Master List',
   )
-  assert.equal(masterListExportDocumentName('male'), 'Men Choir Master List')
+  assert.equal(masterListExportDocumentName('male'), 'AWS Men Choir Master List')
+})
+
+test('masterListExportDocumentName tags the PNK choir', () => {
+  assert.equal(masterListExportDocumentName('all', 'pnk'), 'PNK Master List')
+  assert.equal(
+    masterListExportDocumentName('female', 'pnk'),
+    'PNK Women Choir Master List',
+  )
 })

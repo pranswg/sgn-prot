@@ -80,11 +80,17 @@ function CurrentPage() {
 
   switch (page) {
     case 'master-list':
-      return <MasterListPage />
+      return <MasterListPage choir="aws" />
+    case 'pnk-master-list':
+      return <MasterListPage choir="pnk" />
     case 'members-history':
-      return <MembersHistoryPage />
+      return <MembersHistoryPage choir="aws" />
+    case 'pnk-members-history':
+      return <MembersHistoryPage choir="pnk" />
     case 'trainees':
-      return <TraineePage />
+      return <TraineePage choir="aws" />
+    case 'pnk-trainees':
+      return <TraineePage choir="pnk" />
     case 'koro-maker':
       return <KoroMakerPage />
     case 'organista-suguan-maker':
@@ -109,68 +115,100 @@ function CurrentPage() {
 
 const PAGE_META: Record<
   Page,
-  { group: string; title: string; subtitle: string }
+  { group: string; groupTarget: Page; title: string; subtitle: string }
 > = {
   dashboard: {
     group: 'Overview',
+    groupTarget: 'dashboard',
     title: 'Dashboard',
     subtitle: 'Choir overview, upcoming Suguan, and quick actions.',
   },
   'master-list': {
-    group: 'Choir Management',
-    title: 'Master List',
+    group: 'AWS Choir',
+    groupTarget: 'master-list',
+    title: 'AWS Master List',
     subtitle:
-      'Manage choir members, trainees, voice assignments, and choir positions.',
+      'Manage Adult Worship Service members, voice assignments, and choir positions.',
+  },
+  'pnk-master-list': {
+    group: 'PNK Choir',
+    groupTarget: 'pnk-master-list',
+    title: 'PNK Master List',
+    subtitle:
+      'Manage Pagsamba ng Kabataan members, voice assignments, and choir positions.',
   },
   'members-history': {
-    group: 'Choir Management',
-    title: 'Members History',
+    group: 'AWS Choir',
+    groupTarget: 'master-list',
+    title: 'AWS Members History',
     subtitle:
-      'Track membership changes: joined dates, transfers, returns, and gaps.',
+      'Track AWS membership changes: joined dates, transfers, returns, and gaps.',
+  },
+  'pnk-members-history': {
+    group: 'PNK Choir',
+    groupTarget: 'pnk-master-list',
+    title: 'PNK Members History',
+    subtitle:
+      'Track PNK membership changes: joined dates, transfers, returns, and gaps.',
   },
   trainees: {
-    group: 'Choir Management',
-    title: 'Trainees',
-    subtitle: 'Track choir trainees and promote them into the Master List.',
+    group: 'AWS Choir',
+    groupTarget: 'trainees',
+    title: 'AWS Nagsasanay (Trainees)',
+    subtitle: 'Track AWS choir trainees and promote them into the AWS Master List.',
+  },
+  'pnk-trainees': {
+    group: 'PNK Choir',
+    groupTarget: 'pnk-trainees',
+    title: 'PNK Nagsasanay (Trainees)',
+    subtitle: 'Track PNK trainees and promote them into the PNK Master List.',
   },
   'koro-maker': {
-    group: 'Choir Management',
+    group: 'AWS Choir',
+    groupTarget: 'master-list',
     title: 'Koro Maker',
     subtitle: 'Arrange choir members and voice parts for special occasions.',
   },
   'organista-suguan-maker': {
-    group: 'Suguan',
+    group: 'AWS Suguan',
+    groupTarget: 'suguan-builder',
     title: 'Organist Suguan',
     subtitle: 'Create a printable organist sign-up sheet from a church service schedule.',
   },
   'suguan-builder': {
-    group: 'Suguan',
-    title: 'Choir Suguan',
+    group: 'AWS Suguan',
+    groupTarget: 'suguan-builder',
+    title: 'AWS Choir Suguan',
     subtitle: 'Build worship service schedules, assignments, and duty roles.',
   },
   'extra-occasion-suguan': {
-    group: 'Suguan',
+    group: 'AWS Suguan',
+    groupTarget: 'suguan-builder',
     title: 'Extra Occasion Suguan',
     subtitle: 'Create a choir sign-up sheet with the dates and labels you choose.',
   },
   'suguan-history': {
-    group: 'Suguan',
-    title: 'Suguan History',
+    group: 'AWS Suguan',
+    groupTarget: 'suguan-builder',
+    title: 'AWS Suguan History',
     subtitle: 'Review, print, and export past Suguan documents.',
   },
   'suguan-detail': {
-    group: 'Suguan',
+    group: 'AWS Suguan',
+    groupTarget: 'suguan-builder',
     title: 'Suguan Detail',
     subtitle: 'Review a saved Suguan schedule and its assignments.',
   },
   settings: {
     group: 'System',
+    groupTarget: 'dashboard',
     title: 'Settings',
     subtitle:
       'Configure voices, choir positions, duty roles, and service types.',
   },
   administration: {
     group: 'System',
+    groupTarget: 'dashboard',
     title: 'Administration',
     subtitle:
       'Manage accounts, roles, permissions, and security activity.',
@@ -188,11 +226,7 @@ function Breadcrumb() {
         <li className="hidden sm:block">
           <button
             type="button"
-            onClick={() => {
-              if (meta.group === 'Suguan') navigate('suguan-builder')
-              else if (meta.group === 'Choir Management') navigate('master-list')
-              else navigate('dashboard')
-            }}
+            onClick={() => navigate(meta.groupTarget)}
             className="text-muted-foreground transition-colors hover:text-foreground"
           >
             {meta.group}
@@ -287,7 +321,9 @@ export function Layout() {
           (`bg-background`, foreground text) so every mobile header is uniform.
         */}
         {page !== 'master-list' &&
+          page !== 'pnk-master-list' &&
           page !== 'members-history' &&
+          page !== 'pnk-members-history' &&
           page !== 'settings' &&
           page !== 'suguan-detail' && (
           <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background px-3 md:hidden">

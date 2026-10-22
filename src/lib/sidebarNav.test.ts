@@ -37,6 +37,9 @@ const ALL_PAGES = [
   'extra-occasion-suguan',
   'suguan-history',
   'suguan-detail',
+  'pnk-master-list',
+  'pnk-trainees',
+  'pnk-members-history',
   'settings',
   'administration',
 ] as const
@@ -72,19 +75,25 @@ test('resolvedNavGroups preserves group order and item order', () => {
   const resolved = resolvedNavGroups()
   assert.deepEqual(
     resolved.map((g) => g.label),
-    ['Overview', 'Choir Management', 'Suguan', 'System'],
+    ['Overview', 'AWS Choir', 'AWS Suguan', 'PNK Choir', 'System'],
   )
   assert.deepEqual(
     resolved.map((g) => g.items.map((i) => i.label)),
     [
       ['Dashboard'],
-      ['Master List', 'Trainees', 'Members History', 'Koro Maker'],
       [
-        'Choir Suguan',
+        'AWS Master List',
+        'AWS Nagsasanay',
+        'AWS Members History',
+        'Koro Maker',
+      ],
+      [
+        'AWS Choir Suguan',
         'Extra Occasion Suguan',
         'Organist Suguan',
-        'Suguan History',
+        'AWS Suguan History',
       ],
+      ['PNK Master List', 'PNK Nagsasanay', 'PNK Members History'],
       ['Settings', 'Administration'],
     ],
   )

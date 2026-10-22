@@ -1,11 +1,12 @@
 import bookAntiquaRegularUrl from '@/assets/fonts/BookAntiqua-Regular.ttf?url'
 import bookAntiquaBoldUrl from '@/assets/fonts/BookAntiqua-Bold.ttf?url'
-import type { Member, Trainee } from '@/core/types/member'
+import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import { createAttendanceDatePanels } from '@/lib/attendanceDatePanels'
 import { formatDateKeyNumeric, isDateKey, type DateKey } from '@/lib/phDate'
 import {
   buildMasterListAttendanceRows,
+  formatAttendanceDateSummary,
   paginateMasterListAttendanceRows,
 } from './masterListAttendance'
 import {
@@ -28,6 +29,7 @@ export interface MasterListAttendanceOptions {
   lastNameFirst: boolean
   paperSize: MasterListPaperSize
   orientation: MasterListAttendanceOrientation
+  choir: Choir
   pangulongName: string
   filename: string
 }
@@ -61,11 +63,12 @@ export async function exportMasterListAttendancePdf(
     lastNameFirst,
     paperSize,
     orientation,
+    choir,
     pangulongName,
     filename,
   } = options
   if (!title.trim()) throw new Error('Enter a title for the attendance sheet.')
-  if (!pangulongName.trim()) {
+  if (choir === 'aws' && !pangulongName.trim()) {
     throw new Error('Select an active Pangulong Mang-aawit for the signatory.')
   }
   if (dates.length === 0 || dates.some((date) => !isDateKey(date))) {
@@ -102,6 +105,7 @@ export async function exportMasterListAttendancePdf(
     includeNagsasanayMen,
     includeNagsasanayWomen,
     lastNameFirst,
+    choir,
   )
   if (rows.length === 0) {
     throw new Error('There are no active members or selected trainees to include.')
@@ -109,6 +113,7 @@ export async function exportMasterListAttendancePdf(
   const datePanels = createAttendanceDatePanels(
     [...new Set(dates)].sort((left, right) => left.localeCompare(right)),
   )
+  const dateSummary = formatAttendanceDateSummary(dates)
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 34
@@ -116,14 +121,20 @@ export async function exportMasterListAttendancePdf(
   const numberWidth = 34
   const titleLines = doc.splitTextToSize(title.trim(), tableWidth)
   const titleTop = 34
-  const tableTop = titleTop + titleLines.length * 23 + 16
+  const dateSummaryTop = titleTop + titleLines.length * 23 + 18
+  const tableTop = dateSummaryTop + 16 + 16
   const tableHeaderHeight = 38
   const memberRowHeight = 26
   const sectionRowHeight = 22
   const regularPageHeight =
     pageHeight - tableTop - tableHeaderHeight - 32
   const finalPageHeight =
-    pageHeight - 20 - 30 - 54 - tableTop - tableHeaderHeight
+    pageHeight -
+    20 -
+    30 -
+    (choir === 'aws' ? 54 : 0) -
+    tableTop -
+    tableHeaderHeight
   const rowPages = paginateMasterListAttendanceRows(
     rows,
     regularPageHeight,
@@ -150,6 +161,12 @@ export async function exportMasterListAttendancePdf(
       doc.text(titleLines, pageWidth / 2, titleTop, {
         align: 'center',
         baseline: 'top',
+      })
+      doc.setFont('BookAntiqua', 'normal')
+      doc.setFontSize(12)
+      doc.text(dateSummary, pageWidth / 2, dateSummaryTop, {
+        align: 'center',
+        maxWidth: tableWidth,
       })
 
       const headerY = tableTop
@@ -230,7 +247,7 @@ export async function exportMasterListAttendancePdf(
         pageHeight - 14,
         { align: 'right' },
       )
-      if (pageNumber === totalPages) {
+      if (pageNumber === totalPages && choir === 'aws') {
         const lastTableBottom =
           headerY +
           tableHeaderHeight +

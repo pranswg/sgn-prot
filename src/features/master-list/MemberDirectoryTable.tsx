@@ -49,6 +49,8 @@ interface MemberDirectoryTableProps {
   onClearFilters: () => void
   pageSize: MemberPageSize
   onPageSizeChange: (size: MemberPageSize) => void
+  /** PNK sings one voice, so its table has no Position column. */
+  showVoice?: boolean
 }
 
 const COLUMN_COUNT = 7
@@ -97,6 +99,8 @@ interface ChoirSectionHeaderProps {
   count: number
   /** e.g. `#3-#7`. Omitted when the section is empty. */
   rangeLabel?: string
+  /** Table width, which shrinks by one when the voice column is hidden. */
+  columnCount: number
 }
 
 function ChoirSectionHeader({
@@ -105,10 +109,11 @@ function ChoirSectionHeader({
   title,
   count,
   rangeLabel,
+  columnCount,
 }: ChoirSectionHeaderProps) {
   return (
     <TableRow className="border-y border-border bg-background hover:bg-background">
-      <TableCell colSpan={COLUMN_COUNT} className="px-4 py-2">
+      <TableCell colSpan={columnCount} className="px-4 py-2">
         <div className="flex items-center gap-2.5">
           <Icon className={cn('size-3.5', iconClass)} />
           <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-foreground/75">
@@ -176,10 +181,12 @@ export function MemberDirectoryTable({
   onClearFilters,
   pageSize,
   onPageSizeChange,
+  showVoice = true,
 }: MemberDirectoryTableProps) {
   // The women's and men's tables page independently, so each keeps its own page
   // number rather than sharing one cursor across both sections.
   const [pages, setPages] = useState<Record<string, number>>({})
+  const columnCount = showVoice ? COLUMN_COUNT : COLUMN_COUNT - 1
 
   const setSectionPage = (key: string, page: number) =>
     setPages((current) => ({ ...current, [key]: page }))
@@ -249,7 +256,7 @@ export function MemberDirectoryTable({
               <TableHead className={`${headClass} hidden lg:table-cell`}>
                 Gender
               </TableHead>
-              <TableHead className={headClass}>Position</TableHead>
+              {showVoice && <TableHead className={headClass}>Position</TableHead>}
               <TableHead className={headClass}>Membership</TableHead>
               <TableHead className={headClass}>Status</TableHead>
               <TableHead className={`${headClass} w-24 text-right`}>
@@ -266,6 +273,8 @@ export function MemberDirectoryTable({
                 icon={section.icon}
                 iconClass={section.iconClass}
                 voices={voices}
+                showVoice={showVoice}
+                columnCount={columnCount}
                 references={references}
                 sort={sort}
                 dutyRoles={dutyRoles}
@@ -292,6 +301,8 @@ interface ChoirSectionProps {
   icon: typeof Users
   iconClass: string
   voices: VoicePosition[]
+  showVoice: boolean
+  columnCount: number
   references: Map<string, string>
   sort: MemberSort
   dutyRoles: DutyRole[]
@@ -310,6 +321,8 @@ function ChoirSection({
   icon,
   iconClass,
   voices,
+  showVoice,
+  columnCount,
   references,
   sort,
   dutyRoles,
@@ -328,6 +341,7 @@ function ChoirSection({
         iconClass={iconClass}
         title={title}
         count={page.total}
+        columnCount={columnCount}
         rangeLabel={
           page.pageCount > 1
             ? `#${page.firstItem}-#${page.lastItem} of #${page.total}`
@@ -361,9 +375,11 @@ function ChoirSection({
           <TableCell className="hidden lg:table-cell">
             <GenderBadge gender={member.gender} />
           </TableCell>
-          <TableCell>
-            <VoiceBadge name={memberPositionLabel(member, voices)} />
-          </TableCell>
+          {showVoice && (
+            <TableCell>
+              <VoiceBadge name={memberPositionLabel(member, voices)} />
+            </TableCell>
+          )}
           <TableCell>
             <ChoirRankings
               names={rankingsFor(member, dutyRoles)}
@@ -389,7 +405,7 @@ function ChoirSection({
 
       {page.pageCount > 1 ? (
         <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={COLUMN_COUNT} className="p-0">
+          <TableCell colSpan={columnCount} className="p-0">
             <SectionPaginator
               label={title}
               page={page}

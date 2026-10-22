@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useMemberStore } from '@/store/memberStore'
+import { membersOf } from '@/lib/choirs'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useKoroStore } from '@/store/koroStore'
 import { exportFileName } from '@/lib/exportNaming'
@@ -31,7 +32,9 @@ const GROUPS: { value: SuguanGroup; label: string }[] = [
 ]
 
 export function KoroMakerPage() {
-  const members = useMemberStore((state) => state.members)
+  const allMembers = useMemberStore((state) => state.members)
+  // AWS only: a PNK member must never be arranged into an AWS Koro.
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const voices = useSettingsStore((state) => state.allVoices())
   const documents = useKoroStore((state) => state.documents)
   const activeDocumentId = useKoroStore((state) => state.activeDocumentId)

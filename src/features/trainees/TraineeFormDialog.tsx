@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Trainee, TraineeInput } from '@/core/types/member'
+import type { Choir, Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender, UNASSIGNED_VOICE_ID } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -29,6 +29,8 @@ interface TraineeFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   trainee?: Trainee | null
+  /** Choir the new trainee joins. */
+  choir?: Choir
 }
 
 interface TraineeFormState {
@@ -65,6 +67,7 @@ export function TraineeFormDialog({
   open,
   onOpenChange,
   trainee,
+  choir = 'aws',
 }: TraineeFormDialogProps) {
   const addTrainee = useMemberStore((s) => s.addTrainee)
   const updateTrainee = useMemberStore((s) => s.updateTrainee)
@@ -130,6 +133,7 @@ export function TraineeFormDialog({
       voicePosition: form.voicePosition,
       status: form.status,
       dateAdded: form.trainingStartDate,
+      choir,
       // Notes are preserved untouched by this editor; a trainee has no notes UI.
       ...(trainee?.notes ? { notes: trainee.notes } : {}),
     }

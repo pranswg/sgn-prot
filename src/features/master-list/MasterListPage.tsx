@@ -8,6 +8,8 @@ import {
   SlidersHorizontal,
   ArrowDownAZ,
   ChevronDown,
+  Music2,
+  ShieldCheck,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -18,6 +20,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -33,7 +36,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -44,8 +46,9 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
 import { formatPHTDateTime } from '@/lib/phDate'
-import type { Member } from '@/core/types/member'
-import { MEMBERSHIP_OPTIONS } from '@/core/constants/memberMembership'
+import type { Choir, Member } from '@/core/types/member'
+import { CHOIR_LABELS, membersOf, traineesOf } from '@/lib/choirs'
+import { CHOIR_PAGES } from '@/lib/sidebarNav'
 import {
   exportCSVRows,
   exportMasterListExcel,
@@ -94,12 +97,16 @@ import { MobileMemberFormSheet } from './MobileMemberFormSheet'
 import {
   MasterListPdfSetupDialog,
 } from './MasterListPdfSetupDialog'
-import { MasterListAttendanceDialog } from './MasterListAttendanceDialog'
+import {
+  MasterListAttendanceDialog,
+  type MasterListAttendanceExportFormat,
+} from './MasterListAttendanceDialog'
 import type { MasterListPaperSize } from './masterListPaperSizes'
 import {
   exportMasterListAttendancePdf,
   type MasterListAttendanceOptions,
 } from './masterListAttendancePdf'
+import { exportMasterListAttendanceWord } from './masterListAttendanceWord'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import {
@@ -112,6 +119,13 @@ const GENDER_LABEL: Record<string, string> = {
   female: "Women's Choir",
   male: "Men's Choir",
 }
+
+/**
+ * Sentinel value for the "Clear" row inside the voice/position dropdowns.
+ * It never reaches a filter: the handlers turn it into an empty list, and the
+ * triggers read an empty list as their placeholder.
+ */
+const CLEAR_FILTER = '__clear'
 
 /** Mobile grouping control above the card list. */
 const GENDER_SEGMENTS: {
@@ -142,16 +156,31 @@ function filterChipValue(
         ? `${filters.voices.length} selected`
         : undefined
     case 'roles': {
-      const count =
-        filters.positions.length + (filters.quick !== 'all' ? 1 : 0)
+      const count = filters.positions.length
       return count > 0 ? `${count} selected` : undefined
     }
   }
 }
 
-export function MasterListPage() {
-  const members = useMemberStore((s) => s.members)
-  const trainees = useMemberStore((s) => s.trainees)
+export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
+  // The page is reused for both choirs; every read below is scoped, and the
+  // forms stamp the same choir on anything added from here.
+  // PNK sings in one voice — everyone is a Soprano 2 — so it hides the voice
+  // filters, the voice column and the form's voice picker, and hides the
+  // membership filter too (its list is one membership pool).
+  const isPnk = choir === 'pnk'
+  // One chip row drives the phone filter sheets, so PNK simply drops the Voice
+  // chip rather than opening a sheet with nothing in it.
+  const mobileFilterSections: MobileFilterSection[] = isPnk
+    ? MOBILE_FILTER_SECTIONS.filter((section) => section !== 'voices')
+    : MOBILE_FILTER_SECTIONS
+  const allMembers = useMemberStore((s) => s.members)
+  const allTrainees = useMemberStore((s) => s.trainees)
+  const members = useMemo(() => membersOf(allMembers, choir), [allMembers, choir])
+  const trainees = useMemo(
+    () => traineesOf(allTrainees, choir),
+    [allTrainees, choir],
+  )
   const lastUpdatedAt = useMemberStore((s) => s.lastUpdatedAt)
   const removeMember = useMemberStore((s) => s.removeMember)
   const voices = useSettingsStore((s) => s.voices)
@@ -170,8 +199,12 @@ export function MasterListPage() {
   // the lifecycle form records the date, reason, and notes as history events.
   const canManageHistory = can('manage-membership-history')
   const canDeleteMembers = can('delete-members')
-  const canAssignMembers = can('assign-members')
+  // Choosing a member and then landing in an AWS Suguan is only meaningful for
+  // AWS. PNK has no Suguan yet, so its directory offers no Assign action.
+  const canAssignMembers = can('assign-members') && choir === 'aws'
   const canExportDocuments = can('export-documents')
+  const choirLabel = CHOIR_LABELS[choir]
+  const documentName = `${choirLabel} Master List`
   const updatedAt = new Date(lastUpdatedAt)
   const lastUpdatedLabel = `${formatPHTDateTime(updatedAt, {
     month: 'long',
@@ -224,8 +257,9 @@ export function MasterListPage() {
   const [filterSheetSection, setFilterSheetSection] =
     useState<MobileFilterSection | null>(null)
 
-  // References are built from the full persisted roster so M-001 codes never
-  // shift for the remaining members when someone is transferred out.
+  // References are built from this choir's persisted roster so M-001 codes
+  // never shift for the remaining members when someone is transferred out. The
+  // two choirs are separate lists, so each one numbers from M-001.
   const references = useMemo(() => buildMemberReferences(members), [members])
   // A formal transfer moves the member off the Master List entirely — they
   // live on the Members History page from then on — so every list-scoped read
@@ -237,13 +271,6 @@ export function MasterListPage() {
   const stats = useMemo(
     () => computeDirectoryStats(directoryMembers, trainees, voices, dutyRoles),
     [directoryMembers, trainees, voices, dutyRoles],
-  )
-  // Configured duty roles are the rankings list; `positionCounts` reports how
-  // many members hold each one.
-  const positionCounts = stats.positionCounts
-  const voiceCounts = useMemo(
-    () => new Map(stats.voiceCounts.map((v) => [v.id, v.count] as const)),
-    [stats],
   )
 
   const filteredMembers = useMemo(
@@ -305,7 +332,7 @@ export function MasterListPage() {
   // the cohort the card counts.
   const selectStat = (action: StatAction) => {
     if (action === 'trainees') {
-      navigate('trainees')
+      navigate(CHOIR_PAGES.trainees[choir])
       return
     }
     setFilters(
@@ -339,7 +366,7 @@ export function MasterListPage() {
       return
     }
     const fileName = exportFileName(
-      masterListExportDocumentName(filters.gender),
+      masterListExportDocumentName(filters.gender, choir),
       format,
     )
     requestExport({
@@ -361,6 +388,7 @@ export function MasterListPage() {
       voices,
       dutyRoles,
       localeName,
+      choir,
     )
     try {
       if (format === 'csv') {
@@ -369,7 +397,7 @@ export function MasterListPage() {
         await exportMasterListExcel(rows, fileName)
       }
       toast.success(
-        `Exported the Master List as ${format.toUpperCase()}.`,
+        `Exported the ${documentName} as ${format.toUpperCase()}.`,
       )
     } catch (error) {
       console.error(error)
@@ -387,7 +415,7 @@ export function MasterListPage() {
   ) => {
     setPdfSetupOpen(false)
     setLocaleName(name)
-    const fileName = exportFileName('Master List', 'pdf')
+    const fileName = exportFileName(documentName, 'pdf')
     requestExport({
       filename: fileName,
       onConfirm: () => void runPdfExport(name, paperSize, fileName),
@@ -408,11 +436,12 @@ export function MasterListPage() {
         name,
         paperSize,
         fileName,
+        choir,
       )
-      toast.success('Master List exported as PDF.')
+      toast.success(`${documentName} exported as PDF.`)
     } catch (error) {
       console.error(error)
-      toast.error('Could not export the Master List PDF.')
+      toast.error(`Could not export the ${documentName} PDF.`)
     }
   }
 
@@ -422,7 +451,7 @@ export function MasterListPage() {
   ) => {
     setWordSetupOpen(false)
     setLocaleName(name)
-    const fileName = exportFileName('Master List', 'docx')
+    const fileName = exportFileName(documentName, 'docx')
     requestExport({
       filename: fileName,
       onConfirm: () => void runWordExport(name, paperSize, fileName),
@@ -443,14 +472,15 @@ export function MasterListPage() {
         name,
         paperSize,
         fileName,
+        choir,
       )
-      toast.success('Master List exported as Word.')
+      toast.success(`${documentName} exported as Word.`)
     } catch (error) {
       console.error(error)
       toast.error(
         error instanceof Error
           ? `Word export failed: ${error.message}`
-          : 'Could not export the Master List Word document.',
+          : `Could not export the ${documentName} Word document.`,
       )
     }
   }
@@ -469,28 +499,38 @@ export function MasterListPage() {
       | 'orientation'
       | 'pangulongName'
     >,
+    format: MasterListAttendanceExportFormat,
   ) => {
-    const fileName = exportFileName(options.title, 'pdf')
+    const extension = format === 'pdf' ? 'pdf' : 'docx'
+    const fileName = exportFileName(options.title, extension)
     requestExport({
       filename: fileName,
+      confirmLabel: `Export ${format === 'pdf' ? 'PDF' : 'Word'}`,
       onConfirm: () => {
         void (async () => {
           try {
-            await exportMasterListAttendancePdf({
+            const exportOptions: MasterListAttendanceOptions = {
               ...options,
               members: directoryMembers,
               trainees,
               voices,
               filename: fileName,
-              pangulongName: options.pangulongName,
-            })
-            toast.success('Attendance sheet exported as PDF.')
+              choir,
+            }
+            if (format === 'pdf') {
+              await exportMasterListAttendancePdf(exportOptions)
+            } else {
+              await exportMasterListAttendanceWord(exportOptions)
+            }
+            toast.success(
+              `Attendance sheet exported as ${format === 'pdf' ? 'PDF' : 'Word'}.`,
+            )
           } catch (error) {
             console.error(error)
             toast.error(
               error instanceof Error
-                ? `Attendance sheet export failed: ${error.message}`
-                : 'Could not export the attendance sheet.',
+                ? `Attendance sheet ${format === 'pdf' ? 'PDF' : 'Word'} export failed: ${error.message}`
+                : `Could not export the attendance sheet as ${format === 'pdf' ? 'PDF' : 'Word'}.`,
             )
           }
         })()
@@ -504,6 +544,8 @@ export function MasterListPage() {
     references,
     sort,
     dutyRoles,
+    // PNK is a single-voice choir, so its table drops the voice column.
+    showVoice: !isPnk,
     onEdit: openEditDialog,
     onTransfer: (member: Member) =>
       setLifecycleTarget({ member, kind: 'transfer' }),
@@ -519,21 +561,21 @@ export function MasterListPage() {
     <div className="flex flex-col gap-5">
       {exportPreview}
       <MobileDirectoryHeader
-        title="Master List"
-        description="Manage choir members"
+        title={documentName}
+        description={`Manage ${choirLabel} members`}
         onOpenMenu={() => setMobileDrawerOpen(true)}
       />
 
       <PageHeader
-        eyebrow="Choir Registry"
-        title="Master List"
+        eyebrow={choir === 'pnk' ? 'Pagsamba ng Kabataan' : 'Adult Worship Service'}
+        title={documentName}
         description="Manage your choir members, trainees, and positions."
         className="hidden md:flex"
       />
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border/70 bg-card px-4 py-3 text-sm">
         <span className="font-medium text-foreground">
-          Master List last updated on
+          {documentName} last updated on
         </span>
         <time
           dateTime={lastUpdatedAt}
@@ -660,127 +702,73 @@ export function MasterListPage() {
               </SelectContent>
             </Select>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
+            {!isPnk && (
+              <Select
+                value={filters.voices[0] ?? ''}
+                onValueChange={(v) =>
+                  setFilter('voices', v === CLEAR_FILTER ? [] : [v])
+                }
+              >
+                <SelectTrigger
+                  aria-label="Filter by voice position"
                   className={cn(
-                    'h-9 gap-1.5 px-3 text-[0.8125rem] font-normal',
+                    'h-9 w-[11.5rem] bg-background text-[0.8125rem]',
                     filters.voices.length > 0 &&
                       'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
                   )}
                 >
-                  {filters.voices.length === 0
-                    ? 'Voice Positions'
-                    : filters.voices.length === 1
-                      ? (voices.find((v) => v.id === filters.voices[0])
-                          ?.name ?? 'Voice Positions')
-                      : `${filters.voices.length} Voices`}
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                  Voice Positions
-                </DropdownMenuLabel>
-                {voices.map((voice) => (
-                  <DropdownMenuCheckboxItem
-                    key={voice.id}
-                    checked={filters.voices.includes(voice.id)}
-                    onSelect={(event) => event.preventDefault()}
-                    onCheckedChange={() =>
-                      setFilter('voices', toggleInList(filters.voices, voice.id))
-                    }
+                  <Music2 className="size-4 text-muted-foreground" />
+                  <SelectValue placeholder="Voice Positions" />
+                </SelectTrigger>
+                <SelectContent>
+                  {voices.map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </SelectItem>
+                  ))}
+                  <SelectSeparator />
+                  <SelectItem
+                    value={CLEAR_FILTER}
+                    disabled={filters.voices.length === 0}
                   >
-                    <span className="flex-1">{voice.name}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {voiceCounts.get(voice.id) ?? 0}
-                    </span>
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                    Clear
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'h-9 gap-1.5 px-3 text-[0.8125rem] font-normal',
-                    (filters.positions.length > 0 ||
-                      filters.quick !== 'all') &&
-                      'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
-                  )}
-                >
-                  {filters.positions.length === 0 && filters.quick === 'all'
-                    ? 'Membership & Roles'
-                    : `${
-                        filters.positions.length +
-                        (filters.quick !== 'all' ? 1 : 0)
-                      } Selected`}
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-60">
-                <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                  Membership
-                </DropdownMenuLabel>
-                <DropdownMenuCheckboxItem
-                  checked={filters.quick === 'recent'}
-                  onSelect={(event) => event.preventDefault()}
-                  onCheckedChange={() =>
-                    setFilter(
-                      'quick',
-                      filters.quick === 'recent' ? 'all' : 'recent',
-                    )
-                  }
-                >
-                  <span className="flex-1">Recently Added</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {stats.total}
-                  </span>
-                </DropdownMenuCheckboxItem>
-                {MEMBERSHIP_OPTIONS.map((option) => (
-                  <DropdownMenuCheckboxItem
-                    key={option.value}
-                    checked={filters.quick === option.value}
-                    onSelect={(event) => event.preventDefault()}
-                    onCheckedChange={() =>
-                      setFilter(
-                        'quick',
-                        filters.quick === option.value ? 'all' : option.value,
-                      )
-                    }
-                  >
-                    <span className="flex-1">{option.label}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {stats.membershipCounts.get(option.value) ?? 0}
-                    </span>
-                  </DropdownMenuCheckboxItem>
-                ))}
-                <DropdownMenuLabel className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                  Choir Positions
-                </DropdownMenuLabel>
+            <Select
+              value={filters.positions[0] ?? ''}
+              onValueChange={(v) =>
+                setFilter('positions', v === CLEAR_FILTER ? [] : [v])
+              }
+            >
+              <SelectTrigger
+                aria-label="Filter by choir position"
+                className={cn(
+                  'h-9 w-[11.5rem] bg-background text-[0.8125rem]',
+                  filters.positions.length > 0 &&
+                    'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
+                )}
+              >
+                <ShieldCheck className="size-4 text-muted-foreground" />
+                <SelectValue placeholder="Choir Positions" />
+              </SelectTrigger>
+              <SelectContent>
                 {dutyRoles.map((role) => (
-                  <DropdownMenuCheckboxItem
-                    key={role.id}
-                    checked={filters.positions.includes(role.id)}
-                    onSelect={(event) => event.preventDefault()}
-                    onCheckedChange={() =>
-                      setFilter(
-                        'positions',
-                        toggleInList(filters.positions, role.id),
-                      )
-                    }
-                  >
-                    <span className="flex-1">{role.name}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {positionCounts.get(role.id) ?? 0}
-                    </span>
-                  </DropdownMenuCheckboxItem>
+                  <SelectItem key={role.id} value={role.id}>
+                    {role.name}
+                  </SelectItem>
                 ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <SelectSeparator />
+                <SelectItem
+                  value={CLEAR_FILTER}
+                  disabled={filters.positions.length === 0}
+                >
+                  Clear
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
             <Select
               value={effectiveSort}
@@ -823,8 +811,13 @@ export function MasterListPage() {
             never needs a permanently visible column of controls. The three
             chips share the row equally; Clear only ever takes its own edge. */}
         <div className="flex items-center gap-2 md:hidden">
-          <div className="grid flex-1 grid-cols-3 gap-2">
-            {MOBILE_FILTER_SECTIONS.map((section) => {
+          <div
+            className={cn(
+              'grid flex-1 gap-2',
+              isPnk ? 'grid-cols-2' : 'grid-cols-3',
+            )}
+          >
+            {mobileFilterSections.map((section) => {
               const value = filterChipValue(section, filters)
               return (
                 <button
@@ -1002,6 +995,7 @@ export function MasterListPage() {
                       number={mobilePageResult.firstItem + index}
                       reference={references.get(member.id)}
                       voices={voiceMap}
+                      showVoice={!isPnk}
                       sort={sort}
                       onOpenMenu={setActionTarget}
                       hasActions={canEditMembers || canAssignMembers || canManageHistory || canDeleteMembers}
@@ -1045,7 +1039,7 @@ export function MasterListPage() {
       {/* Mobile filter sheet */}
       <MobileFilterSheet
         open={filterSheetSection !== null}
-        section={filterSheetSection ?? 'voices'}
+        section={filterSheetSection ?? mobileFilterSections[0]}
         onOpenChange={(open) => {
           if (!open) setFilterSheetSection(null)
         }}
@@ -1054,6 +1048,7 @@ export function MasterListPage() {
         voices={voices}
         dutyRoles={dutyRoles}
         stats={stats}
+        sections={mobileFilterSections}
         previewCount={previewCount}
       />
 
@@ -1091,12 +1086,14 @@ export function MasterListPage() {
           open={formOpen}
           onOpenChange={setFormOpen}
           member={editingMember}
+          choir={choir}
         />
       ) : (
         <MemberFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
           member={editingMember}
+          choir={choir}
         />
       )}
 
@@ -1119,6 +1116,7 @@ export function MasterListPage() {
         <MasterListAttendanceDialog
           open={attendanceSetupOpen}
           onOpenChange={setAttendanceSetupOpen}
+          choir={choir}
           members={directoryMembers}
           trainees={trainees}
           voices={voices}

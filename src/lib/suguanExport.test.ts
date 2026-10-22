@@ -330,6 +330,32 @@ test('body font size carries the same fit-page clamp for both renderers', () => 
   assert.ok(layout.bodyFontSizePt >= 6)
 })
 
+test('Extra Occasion keeps the selected name font size and paginates instead of shrinking it', () => {
+  const members = makeMembers(60)
+  const makeExtraOccasion = (fontSize: SuguanDocFormat['fontSize']) => {
+    const suguan = makeSuguan(60, {
+      ...PRESETS[fontSize === 'large' ? 2 : 1],
+      scaling: 'fit-page',
+    })
+    suguan.extraOccasion = { name: 'Kasal' } as NonNullable<Suguan['extraOccasion']>
+    return suguan
+  }
+  const normal = computeSuguanLayout(makeExtraOccasion('normal'), members, {
+    ...PRESETS[1],
+    scaling: 'fit-page',
+  })
+  const large = computeSuguanLayout(makeExtraOccasion('large'), members, {
+    ...PRESETS[2],
+    scaling: 'fit-page',
+  })
+
+  assert.equal(normal.scale, 1)
+  assert.equal(large.scale, 1)
+  assert.equal(large.bodyFontSizePt, large.nameFontSize)
+  assert.ok(large.bodyFontSizePt > normal.bodyFontSizePt)
+  assert.ok(large.pages.length > 1, 'oversized rosters should paginate')
+})
+
 test('fitFontSizePt shrinks only as far as needed and never below the floor', () => {
   const wide = () => 0.5 * 100
   const narrow = () => 0.5 * 10

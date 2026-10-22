@@ -4,6 +4,7 @@ import type { Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import {
   buildMasterListAttendanceRows,
+  formatAttendanceDateSummary,
   paginateMasterListAttendanceRows,
 } from './masterListAttendance.ts'
 
@@ -88,6 +89,43 @@ test('flat mode separates women before men without voice section labels', () => 
     ['m2', 'm1', 'm3', 'm4'],
   )
   assert.ok(rows.every((row) => row.kind === 'member'))
+})
+
+test('PNK attendance groups members and selected trainees under Babae and Lalaki', () => {
+  const rows = buildMasterListAttendanceRows(
+    [
+      member('pnk-f', 'Ana', 'Zulu', 'female', 'soprano-2'),
+      member('pnk-m', 'Ben', 'Bravo', 'male', 'soprano-2'),
+      member('pnk-f2', 'Amy', 'Alpha', 'female', 'soprano-2'),
+    ],
+    voices,
+    [],
+    [
+      trainee('trainee-f', 'Alma', 'Cruz', 'female'),
+      trainee('trainee-m', 'Mario', 'Alpha', 'male'),
+    ],
+    true,
+    true,
+    false,
+    'pnk',
+  )
+
+  assert.deepEqual(
+    rows.map((row) =>
+      row.kind === 'section'
+        ? `section:${row.label}`
+        : `${row.kind}:${row.name}`,
+    ),
+    [
+      'section:Babae',
+      'member:Amy Alpha',
+      'trainee:Alma Cruz',
+      'member:Ana Zulu',
+      'section:Lalaki',
+      'trainee:Mario Alpha',
+      'member:Ben Bravo',
+    ],
+  )
 })
 
 test('inactive members are excluded from voice sections and the all-members list', () => {
@@ -242,5 +280,25 @@ test('uses regular-page space and reserves signatory room only on the final page
       (height, row) => height + (row.kind === 'section' ? 22 : 26),
       0,
     ) <= 586,
+  )
+})
+
+test('formats attendance dates in a single summary line', () => {
+  assert.equal(
+    formatAttendanceDateSummary(['2026-10-17']),
+    'October 17, 2026',
+  )
+  assert.equal(
+    formatAttendanceDateSummary([
+      '2026-10-20',
+      '2026-10-17',
+      '2026-10-19',
+      '2026-10-17',
+    ]),
+    'October 17, 19, 20, 2026',
+  )
+  assert.equal(
+    formatAttendanceDateSummary(['2026-10-17', '2026-11-02']),
+    'October 17, 2026; November 2, 2026',
   )
 })

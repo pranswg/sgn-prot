@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import { ACCOUNT_ROLES } from '@/lib/rbac'
 import { useMemberStore } from '@/store/memberStore'
 import { useAdminStore } from '@/store/adminStore'
+import { choirOf } from '@/lib/choirs'
 
 /**
  * Bottom card identifying the workspace and who is signed in.
@@ -20,7 +21,11 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
   const customRoles = useAdminStore((s) => s.customRoles)
 
   const account = accounts.find((candidate) => candidate.id === currentAccountId)
-  const activeCount = members.filter((member) => member.isActive).length
+  // The card names one pool; PNK is a separate list, so keep AWS for the
+  // workspace line rather than a combined number that matches neither page.
+  const activeCount = members.filter(
+    (member) => member.isActive && choirOf(member) === 'aws',
+  ).length
 
   if (collapsed) {
     // Nothing legible fits in 72px, so the rail shows the monogram alone.
@@ -61,7 +66,7 @@ export function OrganizationCard({ collapsed }: { collapsed: boolean }) {
           </div>
         </div>
         <p className="mt-2 text-[11px] text-sidebar-secondary">
-          {activeCount} active {activeCount === 1 ? 'member' : 'members'}
+          {activeCount} active AWS {activeCount === 1 ? 'member' : 'members'}
         </p>
       </div>
     </div>

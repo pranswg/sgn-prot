@@ -5,12 +5,13 @@ import {
   getVoiceName,
   UNASSIGNED_VOICE_ID,
 } from '@/core/constants/voicePositions'
-import type { Member, Trainee } from '@/core/types/member'
+import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import {
   groupMasterListPdfSections,
   masterListPdfName,
   masterListPdfPosition,
+  masterListPdfVoice,
   sortMasterListPdfMembers,
   splitMasterListPdfSections,
   summarizeMasterList,
@@ -65,6 +66,7 @@ export async function exportMasterListPdf(
   localeName: string,
   paperSize: MasterListPaperSize,
   filename?: string,
+  choir: Choir = 'aws',
 ): Promise<void> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     import('jspdf'),
@@ -105,6 +107,7 @@ export async function exportMasterListPdf(
     trainees,
     localeName,
     dutyRoles,
+    choir,
   )
   const { contentSections, hierarchySections } =
     splitMasterListPdfSections(sections)
@@ -117,7 +120,7 @@ export async function exportMasterListPdf(
               (member, index) => [
                 `${index + 1}.`,
                 masterListPdfName(member),
-                getVoiceName(member.voicePosition, voices),
+                masterListPdfVoice(member, voices, choir),
                 member.isActive ? 'Active' : 'Inactive',
                 masterListPdfPosition(member, dutyRoles),
               ],
@@ -207,6 +210,9 @@ export async function exportMasterListPdf(
                 ? [22, 101, 52]
                 : [185, 28, 28]
           }
+          if (data.section === 'body' && data.column.index === 1) {
+            data.cell.styles.fontSize = 12
+          }
         },
         didDrawPage: (data) => {
           if (data.cursor) tableFinalY = data.cursor.y
@@ -217,20 +223,22 @@ export async function exportMasterListPdf(
   }
 
   renderSections(contentSections)
-  doc.addPage()
-  doc.setFont('SegoeScript', 'normal')
-  doc.setFontSize(20)
-  doc.text('PANGULUHAN', pageWidth / 2, 49, { align: 'center' })
-  nextY = 70
-  if (hierarchySections.length > 0) {
-    renderSections(hierarchySections)
-  } else {
-    doc.setFont('BookAntiqua', 'normal')
-    doc.setFontSize(11)
-    doc.text('No assigned rankings', PAGE_MARGIN, nextY)
+  if (choir === 'aws') {
+    doc.addPage()
+    doc.setFont('SegoeScript', 'normal')
+    doc.setFontSize(20)
+    doc.text('PANGULUHAN', pageWidth / 2, 49, { align: 'center' })
+    nextY = 70
+    if (hierarchySections.length > 0) {
+      renderSections(hierarchySections)
+    } else {
+      doc.setFont('BookAntiqua', 'normal')
+      doc.setFontSize(11)
+      doc.text('No assigned rankings', PAGE_MARGIN, nextY)
+    }
   }
 
-  const summaryDetails = summarizeMasterList(members, trainees, voices, dutyRoles)
+  const summaryDetails = summarizeMasterList(members, trainees)
   const summaryRows = summaryDetails.map(
     (row) => [row.category, row.kind === 'item' ? String(row.count) : ''],
   )

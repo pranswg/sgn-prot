@@ -22,6 +22,7 @@ import { fullName } from '@/lib/format'
 import { exportFileName } from '@/lib/exportNaming'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { useMemberStore } from '@/store/memberStore'
+import { membersOf } from '@/lib/choirs'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
@@ -354,7 +355,8 @@ export function OrganistaSuguanMakerPage() {
     })
   })
   const createRecord = useOrganistaSuguanStore((state) => state.createRecord)
-  const members = useMemberStore((state) => state.members)
+  const allMembers = useMemberStore((state) => state.members)
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const dutyRoles = useSettingsStore((state) => state.dutyRoles)
   const pmRole = resolvePmDutyRole(dutyRoles)
   const pmMember = members.find(

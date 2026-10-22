@@ -293,18 +293,18 @@ test('Master List spreadsheet export includes PDF-order sections and imports the
   )
   assert.deepEqual(rows[0], ['MASTER LIST'])
   assert.equal(
-    rows.some((row) => row[0] === 'STA. MONICA CHOIR - Men'),
+    rows.some((row) => row[0] === 'AWS STA. MONICA CHOIR - Men'),
     true,
   )
   assert.equal(
     rows.some(
-      (row) => row[0] === 'STA. MONICA CHOIR - Pangulong Mang-aawit',
+      (row) =>       row[0] === 'AWS STA. MONICA CHOIR - Pangulong Mang-aawit',
     ),
     true,
   )
   assert.equal(
     rows.some(
-      (row) => row[0] === 'STA. MONICA CHOIR - Nagsasanay Women',
+      (row) =>       row[0] === 'AWS STA. MONICA CHOIR - Nagsasanay Women',
     ),
     true,
   )
@@ -321,6 +321,35 @@ test('Master List spreadsheet export includes PDF-order sections and imports the
   assert.ok(importedTrainee)
   assert.deepEqual(importedLeader.assignedDutyRoleIds, ['custom-pangulong'])
   assert.equal(importedTrainee.isTrainee, true)
+})
+
+test('PNK spreadsheet exports use the PNK choir name and Soprano 2 without Panguluhan', () => {
+  const rows = masterListToSpreadsheetRows(
+    [
+      {
+        ...EXISTING[0],
+        id: 'pnk-member',
+        firstName: 'Ana',
+        gender: 'female',
+        voicePosition: 'soprano-1',
+        choir: 'pnk',
+        assignedDutyRoleIds: ['custom-pangulong'],
+      },
+    ],
+    [],
+    VOICES,
+    [{ id: 'custom-pangulong', name: 'Pangulong Mang-aawit', abbreviation: 'PM' }],
+    'Sta. Monica',
+    'pnk',
+  )
+
+  assert.ok(rows.some((row) => row[0] === 'PNK STA. MONICA CHOIR - Babae'))
+  assert.equal(
+    rows.some((row) => row[0].includes('Panguluhan')),
+    false,
+  )
+  const memberRow = rows.find((row) => row[1] === 'Ana')
+  assert.equal(memberRow?.[6], 'Soprano 2')
 })
 
 test('Master List Word export matches PDF sections, styling, page breaks, and paper size', async () => {
@@ -360,9 +389,9 @@ test('Master List Word export matches PDF sections, styling, page breaks, and pa
   const footer = entries.get('word/footer1.xml')?.toString('utf8') ?? ''
 
   assert.match(document, /MASTER LIST/)
-  assert.match(document, /STA\. MONICA CHOIR - Women/)
+  assert.match(document, /AWS STA\. MONICA CHOIR - Women/)
   assert.match(document, /PANGULUHAN/)
-  assert.match(document, /STA\. MONICA CHOIR - Pangulong Mang-aawit/)
+  assert.match(document, /AWS STA\. MONICA CHOIR - Pangulong Mang-aawit/)
   assert.match(document, /MASTER LIST SUMMARY/)
   assert.match(document, /Pangalan/)
   assert.match(document, /Position/)
@@ -377,6 +406,40 @@ test('Master List Word export matches PDF sections, styling, page breaks, and pa
   assert.match(footer, /PAGE/)
   assert.match(footer, /NUMPAGES/)
   assert.doesNotMatch(footer, /w:pgNum/)
+})
+
+test('PNK Word export omits Panguluhan and prints Soprano 2 with the PNK title', async () => {
+  const member: Member = {
+    ...EXISTING[0],
+    id: 'pnk-member',
+    firstName: 'Ana',
+    gender: 'female',
+    voicePosition: 'soprano-1',
+    choir: 'pnk',
+    assignedDutyRoleIds: ['panguluhan'],
+  }
+  const blob = await createMasterListWordBlob(
+    [member],
+    [],
+    VOICES,
+    [{ id: 'panguluhan', name: 'Pangulong Mang-aawit', abbreviation: 'PM' }],
+    'Sta. Monica',
+    'legal',
+    'pnk',
+  )
+  const entries = unzipEntries(new Uint8Array(await blob.arrayBuffer()))
+  const document = entries.get('word/document.xml')?.toString('utf8') ?? ''
+
+  assert.match(document, /PNK STA\. MONICA CHOIR - Babae/)
+  assert.match(document, /Soprano 2/)
+  assert.doesNotMatch(document, /PANGULUHAN/)
+  assert.doesNotMatch(
+    document,
+    /PNK STA\. MONICA CHOIR - Pangulong Mang-aawit/,
+  )
+  assert.match(document, /Total Choir Members/)
+  assert.match(document, /Trainees \/ Nagsasanay/)
+  assert.doesNotMatch(document, /Sopranos|Organists|Active Trainees/)
 })
 
 test('a trainee export is detected as trainees even though it has no membership column', () => {

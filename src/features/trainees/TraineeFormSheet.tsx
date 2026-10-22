@@ -21,7 +21,7 @@ import {
   voicePositionsForGender,
   UNASSIGNED_VOICE_ID,
 } from '@/core/constants/voicePositions'
-import type { Trainee, TraineeInput } from '@/core/types/member'
+import type { Choir, Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { cn } from '@/lib/utils'
@@ -32,6 +32,8 @@ interface TraineeFormSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   trainee?: Trainee | null
+  /** Choir the new trainee joins. */
+  choir?: Choir
 }
 
 interface FormState {
@@ -75,6 +77,7 @@ export function TraineeFormSheet({
   open,
   onOpenChange,
   trainee,
+  choir = 'aws',
 }: TraineeFormSheetProps) {
   const addTrainee = useMemberStore((s) => s.addTrainee)
   const updateTrainee = useMemberStore((s) => s.updateTrainee)
@@ -140,6 +143,7 @@ export function TraineeFormSheet({
       voicePosition: form.voicePosition,
       status: form.status,
       dateAdded: form.trainingStartDate,
+      choir,
       ...(trainee?.notes ? { notes: trainee.notes } : {}),
     }
     if (trainee) {

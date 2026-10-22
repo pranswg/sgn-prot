@@ -133,6 +133,12 @@ export function canAccessPage(
     'master-list': 'view-master-list',
     'members-history': 'view-master-list',
     trainees: 'manage-trainees',
+    // PNK shares the AWS permissions on purpose: a separate PNK permission set
+    // would need a Supabase migration, and the two pools are separated by data,
+    // not by role.
+    'pnk-master-list': 'view-master-list',
+    'pnk-members-history': 'view-master-list',
+    'pnk-trainees': 'manage-trainees',
     'organista-suguan-maker': 'create-suguan',
 
     'suguan-history': 'view-suguan',

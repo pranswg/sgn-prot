@@ -18,12 +18,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Member, MemberInput, MembershipType } from '@/core/types/member'
+import type {
+  Choir,
+  Member,
+  MemberInput,
+  MembershipType,
+} from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
+import { CHOIR_LABELS, membersOf, pnkVoicePositionId } from '@/lib/choirs'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { phtInstantISO } from '@/lib/phDate'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
+import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { DuplicateMemberPanel } from './DuplicateMemberPanel'
@@ -33,6 +40,8 @@ interface MemberFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   member?: Member | null
+  /** Choir the new member joins, and the only pool duplicates are checked in. */
+  choir?: Choir
   onSaved?: () => void
 }
 
@@ -48,13 +57,13 @@ interface MemberFormState {
   assignedDutyRoleIds: string[]
 }
 
-const emptyForm = (): MemberFormState => ({
+const emptyForm = (voicePosition = 'soprano-1'): MemberFormState => ({
   firstName: '',
   middleName: '',
   suffix: '',
   lastName: '',
   gender: 'female',
-  voicePosition: 'soprano-1',
+  voicePosition,
   membershipType: 'regular',
   isActive: true,
   assignedDutyRoleIds: [],
@@ -64,6 +73,7 @@ export function MemberFormDialog({
   open,
   onOpenChange,
   member,
+  choir = 'aws',
   onSaved,
 }: MemberFormDialogProps) {
   const members = useMemberStore((s) => s.members)
@@ -71,6 +81,10 @@ export function MemberFormDialog({
   const updateMember = useMemberStore((s) => s.updateMember)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
+  // PNK is a single-voice choir: every member is a Soprano 2, so the form hides
+  // the voice picker and saves that configured position instead.
+  const isPnk = choir === 'pnk'
+  const sopranoVoiceId = pnkVoicePositionId(allVoices())
 
   const [form, setForm] = useState<MemberFormState>(emptyForm)
   const [duplicateCandidates, setDuplicateCandidates] = useState<Member[]>([])
@@ -91,15 +105,15 @@ export function MemberFormDialog({
               suffix: member.suffix ?? '',
               lastName: member.lastName,
               gender: member.gender,
-              voicePosition: member.voicePosition,
+              voicePosition: isPnk ? sopranoVoiceId : member.voicePosition,
               membershipType: member.membershipType,
               isActive: member.isActive,
               assignedDutyRoleIds: member.assignedDutyRoleIds ?? [],
             }
-          : emptyForm(),
+          : emptyForm(isPnk ? sopranoVoiceId : undefined),
       )
     }
-  }, [open, member])
+  }, [open, member, isPnk, sopranoVoiceId])
 
   const set = <K extends keyof MemberFormState>(
     field: K,
@@ -115,7 +129,9 @@ export function MemberFormDialog({
     setForm((f) => ({
       ...f,
       gender,
-      voicePosition: voices.find((v) => v.id === f.voicePosition)?.id ?? fallback,
+      voicePosition: isPnk
+        ? sopranoVoiceId
+        : (voices.find((v) => v.id === f.voicePosition)?.id ?? fallback),
     }))
   }
 
@@ -133,7 +149,7 @@ export function MemberFormDialog({
         suffix: form.suffix.trim() || undefined,
         lastName,
         gender: form.gender,
-        voicePosition: form.voicePosition,
+        voicePosition: isPnk ? sopranoVoiceId : form.voicePosition,
         membershipType: form.membershipType,
         assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: form.isActive,
@@ -146,10 +162,13 @@ export function MemberFormDialog({
       return
     }
 
-    const duplicates = findPossibleDuplicateMembers(members, {
-      firstName,
-      lastName,
-    })
+    const duplicates = findPossibleDuplicateMembers(
+      membersOf(members, choir),
+      {
+        firstName,
+        lastName,
+      },
+    )
     if (duplicates.length > 0 && !skipDuplicateCheck) {
       setDuplicateCandidates(duplicates)
       return
@@ -160,11 +179,12 @@ export function MemberFormDialog({
       suffix: form.suffix.trim() || undefined,
       lastName,
       gender: form.gender,
-      voicePosition: form.voicePosition,
+      voicePosition: isPnk ? sopranoVoiceId : form.voicePosition,
       membershipType: form.membershipType,
       assignedDutyRoleIds: form.assignedDutyRoleIds,
       isActive: form.isActive,
       dateAdded: phtInstantISO(),
+      choir,
     }
     addMember(input)
     toast.success('Member added.')
@@ -192,7 +212,7 @@ export function MemberFormDialog({
               ? 'A member with this name already exists in the Master List.'
               : member
                 ? `Update the information for ${member.firstName} ${member.lastName}.`
-                : 'Add a new choir member to the Master List.'}
+                : `Add a new member to the ${CHOIR_LABELS[choir]} Master List.`}
           </DialogDescription>
         </DialogHeader>
         {duplicateFocused ? (
@@ -264,7 +284,7 @@ export function MemberFormDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn('grid gap-3', !isPnk && 'grid-cols-2')}>
             <div className="grid gap-2">
               <Label>Gender</Label>
               <Select
@@ -280,24 +300,26 @@ export function MemberFormDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label>Voice Position</Label>
-              <Select
-                value={form.voicePosition}
-                onValueChange={(v) => set('voicePosition', v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {voicePositionsForGender(form.gender, allVoices()).map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!isPnk && (
+              <div className="grid gap-2">
+                <Label>Voice Position</Label>
+                <Select
+                  value={form.voicePosition}
+                  onValueChange={(v) => set('voicePosition', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {voicePositionsForGender(form.gender, allVoices()).map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-2">

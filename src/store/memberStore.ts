@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
 import { deleteAllRows, deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
+import { choirOf } from '@/lib/choirs'
 import { isDateKey, toDateKeyFromInstant } from '@/lib/phDate'
 import {
   memberLifecycleStatus,
@@ -98,8 +99,15 @@ function normalizeMemberHistory(member: Member): MemberHistoryEvent[] {
 function normalizeMemberList(members: Member[]): Member[] {
   return members.map((member) => ({
     ...member,
+    // Version 8: anything saved before the choir field is AWS.
+    choir: choirOf(member),
     history: normalizeMemberHistory(member),
   }))
+}
+
+/** Restored/hydrated trainees get the same choir stamp as members. */
+function normalizeTraineeList(trainees: Trainee[]): Trainee[] {
+  return trainees.map((trainee) => ({ ...trainee, choir: choirOf(trainee) }))
 }
 
 /** The signed-in account, when the actor is currently active. */
@@ -252,6 +260,7 @@ export const useMemberStore = create<MemberState>()(
         const previous = get().members
         const member: Member = {
           ...input,
+          choir: choirOf(input),
           positions: input.positions ?? [],
           history: [joinedEventFor(input.dateAdded, input.voicePosition)],
           id: nanoid(),
@@ -488,7 +497,11 @@ export const useMemberStore = create<MemberState>()(
 
       addTrainee: (input) => {
         const previous = get().trainees
-        const trainee: Trainee = { ...input, id: nanoid() }
+        const trainee: Trainee = {
+          ...input,
+          choir: choirOf(input),
+          id: nanoid(),
+        }
         set((s) => ({
           trainees: [...s.trainees, trainee],
           lastUpdatedAt: updatedAt(),
@@ -525,6 +538,8 @@ export const useMemberStore = create<MemberState>()(
           membershipType: 'regular',
           isActive: true,
           dateAdded: trainee.dateAdded,
+          // A PNK trainee grows up into the PNK Master List, never into AWS.
+          choir: choirOf(trainee),
           positions: [],
           notes: trainee.notes,
           history: [joinedEventFor(trainee.dateAdded, trainee.voicePosition)],
@@ -637,7 +652,7 @@ export const useMemberStore = create<MemberState>()(
       importData: (members, trainees) => {
         set({
           members: normalizeMemberList(members),
-          trainees,
+          trainees: normalizeTraineeList(trainees),
           lastUpdatedAt: updatedAt(),
         })
       },
@@ -646,14 +661,15 @@ export const useMemberStore = create<MemberState>()(
         const previousMembers = get().members
         const previousTrainees = get().trainees
         const nextMembers = normalizeMemberList(members)
+        const nextTrainees = normalizeTraineeList(trainees)
         set({
           members: nextMembers,
-          trainees,
+          trainees: nextTrainees,
           lastUpdatedAt: updatedAt(),
         })
 
         const nextMemberIds = new Set(nextMembers.map((member) => member.id))
-        const nextTraineeIds = new Set(trainees.map((trainee) => trainee.id))
+        const nextTraineeIds = new Set(nextTrainees.map((trainee) => trainee.id))
         const removedMemberIds = previousMembers
           .filter((member) => !nextMemberIds.has(member.id))
           .map((member) => member.id)
@@ -664,7 +680,7 @@ export const useMemberStore = create<MemberState>()(
         persistWrite({
           write: [
             ...nextMembers.map((member) => upsertRow('members', member.id, member)),
-            ...trainees.map((trainee) => upsertRow('trainees', trainee.id, trainee)),
+            ...nextTrainees.map((trainee) => upsertRow('trainees', trainee.id, trainee)),
             ...removedMemberIds.map((id) => deleteRow('members', id)),
             ...removedTraineeIds.map((id) => deleteRow('trainees', id)),
           ],
@@ -697,6 +713,7 @@ export const useMemberStore = create<MemberState>()(
         const previousTrainees = get().trainees
         const newMembers: Member[] = members.map((input) => ({
           ...input,
+          choir: choirOf(input),
           positions: input.positions ?? [],
           history: [
             joinedEventFor(
@@ -709,6 +726,7 @@ export const useMemberStore = create<MemberState>()(
         }))
         const newTrainees: Trainee[] = trainees.map((input) => ({
           ...input,
+          choir: choirOf(input),
           id: nanoid(),
         }))
 
@@ -757,7 +775,7 @@ export const useMemberStore = create<MemberState>()(
     }),
     {
       name: 'choir-members',
-      version: 7,
+      version: 8,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as {
           members?: Member[]
@@ -776,8 +794,14 @@ export const useMemberStore = create<MemberState>()(
             positions: m.positions ?? [],
             // Version 6 back-fills membership history for older profiles.
             history: normalizeMemberHistory(m),
+            // Version 8 stamps every existing record as AWS, so the PNK lists
+            // start empty and nothing moves between choirs by migration.
+            choir: choirOf(m),
           })),
-          trainees: state.trainees ?? [],
+          trainees: (state.trainees ?? []).map((t) => ({
+            ...t,
+            choir: choirOf(t),
+          })),
         }
       },
     },

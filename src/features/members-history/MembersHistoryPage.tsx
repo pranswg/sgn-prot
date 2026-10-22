@@ -47,7 +47,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useMemberStore } from '@/store/memberStore'
 import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
-import type { Member } from '@/core/types/member'
+import type { Choir, Member } from '@/core/types/member'
+import { CHOIR_LABELS, membersOf } from '@/lib/choirs'
 import {
   EMPTY_HISTORY_FILTERS,
   filterMemberHistory,
@@ -158,8 +159,14 @@ function HistoryCard({
 
 const COLUMN_HEAD = 'text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
 
-export function MembersHistoryPage() {
-  const members = useMemberStore((s) => s.members)
+export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
+  const allMembers = useMemberStore((s) => s.members)
+  // The archive is per choir: a PNK member transferred out never appears in the
+  // AWS archive, and restoring here restores them into the same choir.
+  const members = useMemo(
+    () => membersOf(allMembers, choir),
+    [allMembers, choir],
+  )
   const removeMember = useMemberStore((s) => s.removeMember)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
   const isMobile = useIsMobile()
@@ -351,15 +358,15 @@ export function MembersHistoryPage() {
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
       <MobileDirectoryHeader
-        title="Members History"
+        title={`${CHOIR_LABELS[choir]} Members History`}
         description="Membership changes"
         onOpenMenu={() => setMobileDrawerOpen(true)}
       />
 
       <PageHeader
-        eyebrow="Choir Archive"
-        title="Members History"
-        description="Track membership changes: joined dates, transfers, returns, and gaps."
+        eyebrow={choir === 'pnk' ? 'Pagsamba ng Kabataan Archive' : 'Choir Archive'}
+        title={`${CHOIR_LABELS[choir]} Members History`}
+        description={`Track ${CHOIR_LABELS[choir]} membership changes: joined dates, transfers, returns, and gaps.`}
         className="hidden md:flex"
       />
 

@@ -43,6 +43,14 @@ in this repo.
   (`auth.uid() = owner_id`). `roles` seeds the builtin `admin` role with all
   twenty-one permissions from `src/lib/rbac.ts`; the seeded login is `admin` /
   `admin1234` (published backstop, must change).
+- Choir scoping (Phase 8, `0017_choir_scoping.sql`): the PNK split needed no new
+  tables and no client write change, because a PNK member or trainee already
+  round-trips as a whole-document row carrying `choir` in `data`. The migration
+  adds a generated `choir` column to `members` and `trainees` (only `'pnk'` is
+  PNK, everything else is AWS, mirroring `choirOf()`) plus an index on each, so
+  server-side reads and reports can name a choir instead of parsing JSONB. The
+  column is generated, so client upserts must never send it. Permissions stay
+  shared: per-choir access would be a new permission, not a policy change.
 - Write-through (Phase 4): `src/api/db.ts` is the only domain-write path
   (`upsertRow`/`deleteRow`/`deleteAllRows`/`upsertOwnedRow`/`upsertSettingsRow`);
   it no-ops when Supabase is unconfigured, so tests and offline dev stay
@@ -293,7 +301,7 @@ migration function. **UI-only changes must not change a persisted shape.**
 
 | Store | localStorage key | version |
 | --- | --- | --- |
-| `memberStore.ts` | `choir-members` | 4 |
+| `memberStore.ts` | `choir-members` | 8 |
 | `suguanStore.ts` | `choir-suguan` | 8 |
 | `settingsStore.ts` | `choir-settings` | 3 |
 | `assignmentPresetStore.ts` | `choir-assignment-presets` | 1 |
@@ -358,6 +366,71 @@ instead: `memberStore.restoreData` / `suguanStore.restoreData`,
 accounts live in Supabase and are never written to the backup file, because
 restoring a JSON file should never install someone else's accounts. Do not add an
 import path to it later without asking.
+
+### Two choirs, two sealed Master Lists
+
+The app serves **AWS** (Adult Worship Service) and **PNK** (Pagsamba ng
+Kabataan). They are two separate Master Lists: **no member, trainee, Suguan or
+Koro crosses between them**, and there is deliberately no "move to AWS" action.
+A member in one list is simply absent from the other, so duplicate detection,
+counts, pickers and the Members History archive all read one pool at a time.
+
+- `src/lib/choirs.ts` is the only scoping layer: `Choir` (`'aws' | 'pnk'`),
+  `CHOIR_LABELS`, `CHOIRS`, `choirOf`, `membersOf`, `traineesOf`. `choir` is
+  **optional** on `Member`/`Trainee`/`MemberInput`/`TraineeInput` and
+  `choirOf(record)` reads a missing value as **AWS**, which is why every record
+  saved before store version 8 (and every test fixture) still works. The store
+  stamps `choir` on every write and migration, so read the field through
+  `choirOf`, never with a truthiness check.
+- One store, one `choir` field — not a second store. Write-through, backup,
+  restore, import and permissions stay one path. Store version 8 migrates
+  existing rows to `aws`.
+- **Pages take a `choir` prop**, not a fork: `MasterListPage`,
+  `TraineePage`, and `MembersHistoryPage` are mounted twice by
+  `src/app/Layout.tsx`. `Page` gained `pnk-master-list`, `pnk-trainees`,
+  `pnk-members-history`; `CHOIR_PAGES` in `src/lib/sidebarNav.ts` maps each
+  feature to its per-choir page, so use it instead of a literal page id.
+- **Each list numbers from M-001.** `buildMemberReferences` is positional, so
+  each page hands it its own choir's roster; PNK starts at M-001 rather than
+  continuing AWS's sequence.
+- **AWS-only pickers.** Every Choir Suguan, Organista Suguan, Extra Occasion,
+  and Koro surface reads `membersOf(members, 'aws')`; a PNK member must never
+  appear in an AWS assignment picker. PNK has no Suguan sheet yet — it waits on
+  a reference layout, so do not invent one.
+- **PNK sings one voice.** Every PNK member is a soprano, so the PNK Master List
+  drops the Voice Positions filter (desktop dropdown and mobile chip), the voice
+  column/badge in the directory, and the voice picker in the member forms;
+  `pnkVoicePositionId` resolves the configured Soprano (by name, with a
+  `soprano-1` fallback) and the form saves that id. The AWS directory keeps both
+  its Voice Positions filter and its voice column.
+- **The membership filter is gone for both choirs.** The directory's second
+  filter is Choir Positions only — no Membership heading, no Recently Added, no
+  membership categories, on desktop and in the mobile Roles sheet. `quick` still
+  exists in `MemberDirectoryFilters` (sorting by recently added and the pure
+  filter logic use it), but no UI sets it any more; do not read that as an
+  invitation to re-add the rows without asking.
+- The desktop directory's filters are **single-choice Selects**, matching the
+  Sort control: Voice Positions (AWS only) and Choir Positions each show the
+  chosen name in the trigger, close when an entry is picked, and carry a
+  disabled-when-empty `Clear` row that resets the filter. Picking a second entry
+  replaces the first; the mobile filter sheets still stage the edit and need
+  "Apply Filters". Keep that difference.
+- Duplicate detection is scoped to the choir being edited, and the roster
+  import dialog asks which list the file lands in (switching pools clears the
+  parsed names, because the duplicate flags were computed against the other
+  list).
+- The dashboard stays one page: AWS stats first, then a PNK row, and the
+  sidebar's `OrganizationCard` counts AWS only. Memberships, duty roles, OIC,
+  signatories, settings and permissions are shared. The backend scopes **rows,
+  not tables**: migration `0017` derives a generated `choir` column on `members`
+  and `trainees` (anything but `'pnk'` is AWS, mirroring `choirOf()`) and indexes
+  it, while the add/edit/delete-members and manage-trainees policies stay shared
+  across both lists. No separate PNK table, and no per-choir permission yet;
+  `src/lib/choirScoping.test.ts` keeps the SQL derivation in step with
+  `choirOf()`.
+- `src/lib/choirs.test.ts` pins the default-AWS rule and the split;
+  `memberStore.test.ts` pins that a PNK member never joins the AWS list and a
+  promoted PNK trainee stays PNK.
 
 ### Membership model
 

@@ -33,12 +33,17 @@ function ref(overrides: Partial<OccasionRef> = {}): OccasionRef {
 }
 
 /** A saved Extra Occasion record with one enabled Pagsasanay column. */
-function savedOccasion(id: string, date: string, time = '19:00'): Suguan {
+function savedOccasion(
+  id: string,
+  date: string,
+  time = '19:00',
+  memberIds: string[] = [],
+): Suguan {
   return {
     id,
     date,
     time,
-    assignments: [],
+    assignments: memberIds.map((memberId) => ({ memberId })),
     schedules: [],
     extraOccasion: {
       name: id,
@@ -194,6 +199,24 @@ test('comparisonRefs drops an occasion that has already been fulfilled', () => {
   )
 })
 
+test('saved upcoming occasions reserve their members until fulfilled or deleted', () => {
+  const target = ref({
+    key: 'draft',
+    dates: ['2026-10-24'],
+    memberIds: [],
+  })
+  const upcoming = savedOccasion('kasal', '2026-10-30', '19:00', ['m1', 'm2'])
+  const beforePerformance = new Date('2026-10-20T12:00:00+08:00')
+  const activeRefs = comparisonRefs(target, [], [upcoming], beforePerformance)
+
+  assert.deepEqual([...conflictingMemberIds(target, activeRefs)].sort(), ['m1', 'm2'])
+  assert.deepEqual(conflictingMemberIds(target, []), new Set())
+
+  const afterPerformance = new Date('2026-10-30T19:01:00+08:00')
+  const fulfilledRefs = comparisonRefs(target, [], [upcoming], afterPerformance)
+  assert.deepEqual([...conflictingMemberIds(target, fulfilledRefs)], [])
+})
+
 test('isOccasionDone uses the last column date and the time of day', () => {
   const evening = new Date('2026-10-30T15:30:00+08:00')
   assert.equal(
@@ -250,6 +273,17 @@ test('conflictingMemberIds ignores a different date and the target itself', () =
   const otherDay = ref({ key: 'o', dates: ['2026-11-05'], memberIds: ['m2'] })
   const self = { ...target }
   assert.equal(conflictingMemberIds(target, [otherDay, self]).size, 0)
+})
+
+test('saved occasions reserve members even when the dates differ', () => {
+  const target = ref({ key: 't', dates: ['2026-10-30'], memberIds: [] })
+  const savedOther = ref({
+    key: 'saved',
+    savedId: 'saved',
+    dates: ['2026-11-05'],
+    memberIds: ['m2'],
+  })
+  assert.deepEqual([...conflictingMemberIds(target, [savedOther])], ['m2'])
 })
 
 test('conflictingMemberIds warns on two undated occasions', () => {

@@ -267,8 +267,9 @@ export function detectMemberConflicts(
 /**
  * Every member serving one of `others` that overlaps the target. This is the
  * yellow warning in the member list: it covers members the user has not added
- * yet, which `detectMemberConflicts` cannot see, so a member booked in a live
- * Extra Occasion still shows up as available — just marked.
+ * yet, which `detectMemberConflicts` cannot see. Saved, unfulfilled occasions
+ * reserve their members regardless of the target's date; live drafts are marked
+ * only when their dates conflict.
  */
 export function conflictingMemberIds(
   target: OccasionRef,
@@ -278,7 +279,12 @@ export function conflictingMemberIds(
   const ids = new Set<string>()
   for (const other of others) {
     if (other.key === target.key) continue
-    if (!pairConflict(target, other, thresholdMin)) continue
+    // A saved future occasion reserves its members until it is fulfilled or
+    // deleted, even when the draft being edited has a different date. The
+    // add-member confirmation remains limited to actual date conflicts below.
+    if (other.savedId === null && !pairConflict(target, other, thresholdMin)) {
+      continue
+    }
     for (const memberId of other.memberIds) ids.add(memberId)
   }
   return ids

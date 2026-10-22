@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/PageHeader'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useMemberStore } from '@/store/memberStore'
+import { membersOf } from '@/lib/choirs'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
@@ -54,7 +55,8 @@ export function ExtraOccasionSingleMaker() {
   const createSuguan = useSuguanStore((state) => state.createSuguan)
   const updateSuguan = useSuguanStore((state) => state.updateSuguan)
   const suguan = useSuguanStore((state) => state.suguan)
-  const members = useMemberStore((state) => state.members)
+  const allMembers = useMemberStore((state) => state.members)
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const allVoices = useSettingsStore((state) => state.allVoices)
   const allServiceTypes = useSettingsStore((state) => state.allServiceTypes)
   const canAssignMembers = can('assign-members')

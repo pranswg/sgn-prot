@@ -16,8 +16,9 @@ export const MOBILE_FILTER_LABEL: Record<MobileFilterSection, string> = {
  * The chip order, which is also the order the sheet stacks sections in when it
  * is opened without a particular chip. Both read this so the two can never
  * disagree about which filter comes first. Gender is deliberately absent: the
- * All/Women/Men choir segment owns that filter now. Membership is absent for
- * the same reason: the membership categories live inside the Roles section.
+ * All/Women/Men choir segment owns that filter now. Membership is absent too:
+ * it was removed from the directory, so the Roles sheet lists only the
+ * configured choir positions (and PNK drops the Voice chip entirely).
  */
 export const MOBILE_FILTER_SECTIONS: MobileFilterSection[] = [
   'voices',

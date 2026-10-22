@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import type { Member, Trainee } from '@/core/types/member'
+import type { Choir, Member, Trainee } from '@/core/types/member'
 import {
   getVoiceName,
   UNASSIGNED_VOICE_ID,
@@ -17,6 +17,7 @@ import {
   groupMasterListPdfSections,
   masterListPdfName,
   masterListPdfPosition,
+  masterListPdfVoice,
   sortMasterListPdfMembers,
   splitMasterListPdfSections,
   summarizeMasterList,
@@ -49,6 +50,7 @@ function memberSpreadsheetRow(
   index: number,
   voices: VoicePosition[],
   dutyRoles: DutyRole[],
+  choir: Choir,
 ): string[] {
   const roles = (member.assignedDutyRoleIds ?? [])
     .map((id) => dutyRoles.find((role) => role.id === id)?.name)
@@ -60,7 +62,7 @@ function memberSpreadsheetRow(
     member.lastName,
     member.suffix ?? '',
     member.gender === 'female' ? 'Female' : 'Male',
-    getVoiceName(member.voicePosition, voices),
+    masterListPdfVoice(member, voices, choir),
     masterListPdfPosition(member, dutyRoles),
     roles.join(', '),
     MEMBERSHIP_LABELS[member.membershipType],
@@ -77,12 +79,14 @@ export function masterListToSpreadsheetRows(
   voices: VoicePosition[],
   dutyRoles: DutyRole[],
   localeName: string,
+  choir: Choir = 'aws',
 ): MasterListSpreadsheetRow[] {
   const sections = groupMasterListPdfSections(
     members,
     trainees,
     localeName,
     dutyRoles,
+    choir,
   )
   const rows: MasterListSpreadsheetRow[] = [['MASTER LIST']]
 
@@ -95,7 +99,7 @@ export function masterListToSpreadsheetRows(
     if (section.kind === 'members') {
       sortMasterListPdfMembers(section.members, voices, section.order).forEach(
         (member, index) =>
-          rows.push(memberSpreadsheetRow(member, index, voices, dutyRoles)),
+          rows.push(memberSpreadsheetRow(member, index, voices, dutyRoles, choir)),
       )
     } else {
       section.trainees.forEach((trainee, index) => {
@@ -237,6 +241,12 @@ export async function exportMasterListExcel(
       worksheetRow.height = 22
     } else {
       worksheetRow.font = { name: 'Book Antiqua', size: 10 }
+      for (const column of [2, 3, 4, 5]) {
+        worksheetRow.getCell(column).font = {
+          name: 'Book Antiqua',
+          size: 12,
+        }
+      }
     }
   })
 
@@ -278,6 +288,7 @@ export async function exportMasterListWord(
   localeName: string,
   paperSize: MasterListPaperSize,
   filename: string,
+  choir: Choir = 'aws',
 ): Promise<void> {
   const blob = await createMasterListWordBlob(
     members,
@@ -286,6 +297,7 @@ export async function exportMasterListWord(
     dutyRoles,
     localeName,
     paperSize,
+    choir,
   )
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -304,6 +316,7 @@ export async function createMasterListWordBlob(
   dutyRoles: DutyRole[],
   localeName: string,
   paperSize: MasterListPaperSize = DEFAULT_MASTER_LIST_PAPER_SIZE,
+  choir: Choir = 'aws',
 ): Promise<Blob> {
   const {
     AlignmentType,
@@ -353,10 +366,11 @@ export async function createMasterListWordBlob(
     trainees,
     localeName,
     dutyRoles,
+    choir,
   )
   const { contentSections, hierarchySections } =
     splitMasterListPdfSections(sections)
-  const summaryDetails = summarizeMasterList(members, trainees, voices, dutyRoles)
+  const summaryDetails = summarizeMasterList(members, trainees)
   const children = []
 
   const makeParagraph = (
@@ -468,6 +482,7 @@ export async function createMasterListWordBlob(
                         : '000000'
                     : '000000'
                 return makeCell(value, columnWidths[index], {
+                  size: index === 1 ? 24 : 20,
                   color,
                   align:
                     index === 1 ? AlignmentType.LEFT : AlignmentType.CENTER,
@@ -484,7 +499,7 @@ export async function createMasterListWordBlob(
           (member, index) => [
             `${index + 1}.`,
             masterListPdfName(member),
-            getVoiceName(member.voicePosition, voices),
+            masterListPdfVoice(member, voices, choir),
             member.isActive ? 'Active' : 'Inactive',
             masterListPdfPosition(member, dutyRoles),
           ],
@@ -512,35 +527,37 @@ export async function createMasterListWordBlob(
     children.push(new Paragraph({ text: '', spacing: { after: 360 } }))
   }
 
-  children.push(
-    new Paragraph({
-      pageBreakBefore: true,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 140 },
-      children: [
-        new TextRun({
-          text: 'PANGULUHAN',
-          font: 'Segoe Script',
-          size: 40,
-        }),
-      ],
-    }),
-  )
-  if (hierarchySections.length > 0) {
-    for (const section of hierarchySections) {
-      const body = sortMasterListPdfMembers(
-        section.members,
-        voices,
-        section.order,
-      ).map((member, index) => [
-        `${index + 1}.`,
-        masterListPdfName(member),
-        getVoiceName(member.voicePosition, voices),
-        member.isActive ? 'Active' : 'Inactive',
-        masterListPdfPosition(member, dutyRoles),
-      ])
-      children.push(makeRosterTable(section.title, body))
-      children.push(new Paragraph({ text: '', spacing: { after: 360 } }))
+  if (choir === 'aws') {
+    children.push(
+      new Paragraph({
+        pageBreakBefore: true,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 140 },
+        children: [
+          new TextRun({
+            text: 'PANGULUHAN',
+            font: 'Segoe Script',
+            size: 40,
+          }),
+        ],
+      }),
+    )
+    if (hierarchySections.length > 0) {
+      for (const section of hierarchySections) {
+        const body = sortMasterListPdfMembers(
+          section.members,
+          voices,
+          section.order,
+        ).map((member, index) => [
+          `${index + 1}.`,
+          masterListPdfName(member),
+          masterListPdfVoice(member, voices, choir),
+          member.isActive ? 'Active' : 'Inactive',
+          masterListPdfPosition(member, dutyRoles),
+        ])
+        children.push(makeRosterTable(section.title, body))
+        children.push(new Paragraph({ text: '', spacing: { after: 360 } }))
+      }
     }
   }
 

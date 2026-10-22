@@ -7,6 +7,7 @@ import {
   groupMasterListPdfSections,
   masterListPdfName,
   masterListPdfPosition,
+  masterListPdfVoice,
   sortMasterListPdfMembers,
   splitMasterListPdfSections,
   summarizeMasterList,
@@ -98,14 +99,14 @@ test('master list PDF groups regular singers, special positions, and current tra
   )
 
   const sectionByTitle = new Map(sections.map((section) => [section.title, section]))
-  const womenSection = sectionByTitle.get('SAN JOSE CHOIR - Women')
+  const womenSection = sectionByTitle.get('AWS SAN JOSE CHOIR - Women')
   assert.equal(womenSection?.kind, 'members')
   if (womenSection?.kind === 'members') {
     assert.deepEqual(womenSection.members.map((member) => member.id), [
       'Women singer',
     ])
   }
-  const menSection = sectionByTitle.get('SAN JOSE CHOIR - Men')
+  const menSection = sectionByTitle.get('AWS SAN JOSE CHOIR - Men')
   assert.equal(menSection?.kind, 'members')
   if (menSection?.kind === 'members') {
     assert.deepEqual(menSection.members.map((member) => member.id), [
@@ -114,7 +115,7 @@ test('master list PDF groups regular singers, special positions, and current tra
   }
   // The organist-family memberships count as the configured Organista rank, so
   // the section is titled after the role the administrator named.
-  const organistaSection = sectionByTitle.get('SAN JOSE CHOIR - Organista')
+  const organistaSection = sectionByTitle.get('AWS SAN JOSE CHOIR - Organista')
   assert.equal(organistaSection?.kind, 'members')
   if (organistaSection?.kind === 'members') {
     assert.deepEqual(organistaSection.members.map((member) => member.id), [
@@ -123,9 +124,9 @@ test('master list PDF groups regular singers, special positions, and current tra
       'Officer',
     ])
   }
-  assert.equal(sectionByTitle.has('SAN JOSE CHOIR - OIC'), true)
+  assert.equal(sectionByTitle.has('AWS SAN JOSE CHOIR - OIC'), true)
   const traineeSection = sectionByTitle.get(
-    'SAN JOSE CHOIR - Nagsasanay Women',
+    'AWS SAN JOSE CHOIR - Nagsasanay Women',
   )
   assert.equal(traineeSection?.kind, 'trainees')
   if (traineeSection?.kind === 'trainees') {
@@ -136,7 +137,7 @@ test('master list PDF groups regular singers, special positions, and current tra
   }
 })
 
-test('ranking tables follow the configured duty-role order and include future configured roles', () => {
+test('AWS ranking tables follow the configured duty-role order and include future configured roles', () => {
   const members = [
     makeMember('President', {
       positions: ['pangulong-mang-aawit'],
@@ -165,20 +166,44 @@ test('ranking tables follow the configured duty-role order and include future co
   assert.deepEqual(
     contentSections.map((section) => section.title),
     [
-      'STA. MONICA CHOIR - Women',
-      'STA. MONICA CHOIR - Men',
+      'AWS STA. MONICA CHOIR - Women',
+      'AWS STA. MONICA CHOIR - Men',
     ],
   )
   // One section per configured role, in the order Settings holds them, and a
   // role nobody holds is skipped. The ids are not the old fixed ones, so the
   // legacy stored positions only match their role by name.
   assert.deepEqual(rankingTitles, [
-    'STA. MONICA CHOIR - OIC',
-    'STA. MONICA CHOIR - Pangulong Mang-aawit',
-    'STA. MONICA CHOIR - Kalihim ng Mang-aawit',
-    'STA. MONICA CHOIR - Organista',
-    'STA. MONICA CHOIR - Choir Coordinator',
+    'AWS STA. MONICA CHOIR - OIC',
+    'AWS STA. MONICA CHOIR - Pangulong Mang-aawit',
+    'AWS STA. MONICA CHOIR - Kalihim ng Mang-aawit',
+    'AWS STA. MONICA CHOIR - Organista',
+    'AWS STA. MONICA CHOIR - Choir Coordinator',
   ])
+})
+
+test('PNK sections use the choir prefix, omit rankings, and export members as Soprano 2', () => {
+  const member = makeMember('PNK singer', {
+    voicePosition: 'soprano-1',
+    assignedDutyRoleIds: ['pangulong-mang-aawit'],
+    choir: 'pnk',
+  })
+  const sections = groupMasterListPdfSections(
+    [member],
+    [],
+    'Sta. Monica',
+    DUTY_ROLES,
+    'pnk',
+  )
+
+  assert.deepEqual(
+    sections.map((section) => section.title),
+    ['PNK STA. MONICA CHOIR - Babae', 'PNK STA. MONICA CHOIR - Lalaki'],
+  )
+  assert.equal(
+    masterListPdfVoice(member, TEST_VOICES, 'pnk'),
+    'Soprano 2',
+  )
 })
 
 test('singer tables are ordered by voice section and then by surname', () => {
@@ -204,7 +229,7 @@ test('singer tables are ordered by voice section and then by surname', () => {
   )
 })
 
-test('PDF summary uses stored gender, voice family, ranks, and active status', () => {
+test('Master List summary contains only the requested total and status counts', () => {
   const members = [
     makeMember('Soprano', { voicePosition: 'soprano-2' }),
     makeMember('Alto', { voicePosition: 'alto', isActive: false }),
@@ -223,39 +248,29 @@ test('PDF summary uses stored gender, voice family, ranks, and active status', (
     }),
   ]
   const rows = new Map(
-    summarizeMasterList(
-      members,
-      [
-        makeTrainee('Active trainee'),
-        makeTrainee('Inactive trainee', { gender: 'male', status: 'inactive' }),
-        makeTrainee('Promoted trainee', { status: 'promoted' }),
-      ],
-      TEST_VOICES,
-      DUTY_ROLES,
-    )
+    summarizeMasterList(members, [
+      makeTrainee('Active trainee'),
+      makeTrainee('Inactive trainee', { gender: 'male', status: 'inactive' }),
+      makeTrainee('Promoted trainee', { status: 'promoted' }),
+    ])
       .filter((row) => row.kind === 'item')
       .map(({ category, count }) => [category, count]),
   )
 
+  assert.deepEqual([...rows.keys()], [
+    'Total Choir Members',
+    'Female Members',
+    'Male Members',
+    'Active Members',
+    'Inactive Members',
+    'Trainees / Nagsasanay',
+  ])
   assert.equal(rows.get('Total Choir Members'), 5)
   assert.equal(rows.get('Female Members'), 2)
   assert.equal(rows.get('Male Members'), 3)
-  assert.equal(rows.get('Sopranos'), 1)
-  assert.equal(rows.get('Altos'), 1)
-  assert.equal(rows.get('Tenors'), 1)
-  assert.equal(rows.get('Basses'), 1)
-  assert.equal(rows.get('Organists'), 1)
-  // One row per configured rank, so the summary names them as Settings does.
-  assert.equal(rows.get('OIC'), 1)
-  assert.equal(rows.get('Organista'), 1)
-  assert.equal(rows.get('Pangulong Mang-aawit'), 0)
   assert.equal(rows.get('Active Members'), 4)
   assert.equal(rows.get('Inactive Members'), 1)
-  assert.equal(rows.get('Total Trainees'), 2)
-  assert.equal(rows.get('Female Trainees'), 1)
-  assert.equal(rows.get('Male Trainees'), 1)
-  assert.equal(rows.get('Active Trainees'), 1)
-  assert.equal(rows.get('Inactive Trainees'), 1)
+  assert.equal(rows.get('Trainees / Nagsasanay'), 2)
 })
 
 test('PDF rows preserve full member names and show configured ranks', () => {

@@ -15,6 +15,7 @@ import { exportSuguanExcel } from '@/lib/suguanExport'
 import { cn } from '@/lib/utils'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { membersOf } from '@/lib/choirs'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
@@ -34,7 +35,8 @@ export function PreviewStep({
   onSave,
   isExisting,
 }: PreviewStepProps) {
-  const members = useMemberStore((s) => s.members)
+  const allMembers = useMemberStore((s) => s.members)
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const allVoices = useSettingsStore((s) => s.allVoices)
   const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
   const voices = allVoices()

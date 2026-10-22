@@ -44,7 +44,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useMemberStore } from '@/store/memberStore'
-import type { Trainee } from '@/core/types/member'
+import type { Choir, Trainee } from '@/core/types/member'
+import { CHOIR_LABELS, membersOf, traineesOf } from '@/lib/choirs'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { formatAddedDate } from '@/lib/format'
@@ -79,14 +80,23 @@ const CHOIR_SEGMENTS = [
   { value: 'male', label: 'Men' },
 ] as const
 
-export function TraineePage() {
+export function TraineePage({ choir = 'aws' }: { choir?: Choir }) {
   const isMobile = useIsMobile()
   const { can } = usePermissions()
-  const trainees = useMemberStore((s) => s.trainees)
+  // Separate list, separate pool: everything below reads this choir only.
+  const allTrainees = useMemberStore((s) => s.trainees)
+  const allMembers = useMemberStore((s) => s.members)
+  const trainees = useMemo(
+    () => traineesOf(allTrainees, choir),
+    [allTrainees, choir],
+  )
+  const masterListMembers = useMemo(
+    () => membersOf(allMembers, choir),
+    [allMembers, choir],
+  )
   const promoteTrainee = useMemberStore((s) => s.promoteTrainee)
   const removeTrainee = useMemberStore((s) => s.removeTrainee)
   const restoreTrainee = useMemberStore((s) => s.restoreTrainee)
-  const masterListMembers = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const localeName = useSettingsStore((s) => s.localeName)
   const dutyRoles = useSettingsStore((s) => s.allDutyRoles())
@@ -174,8 +184,8 @@ export function TraineePage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Nagsasanay / Trainees"
-        description="Manage prospective choir members. Active trainees are not eligible for Suguan assignments."
+        title={`${CHOIR_LABELS[choir]} Nagsasanay (Trainees)`}
+        description={`Manage ${CHOIR_LABELS[choir]} prospective members. Active trainees are not eligible for Suguan assignments.`}
       />
 
       <div className="flex flex-col gap-5">
@@ -575,12 +585,14 @@ export function TraineePage() {
           open={formOpen}
           onOpenChange={setFormOpen}
           trainee={editing}
+          choir={choir}
         />
       ) : (
         <TraineeFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
           trainee={editing}
+          choir={choir}
         />
       )}
 

@@ -19,6 +19,7 @@ import { useNavStore } from '@/store/navStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useMemberStore } from '@/store/memberStore'
+import { membersOf } from '@/lib/choirs'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
@@ -58,7 +59,10 @@ export function SuguanBuilderPage() {
   const updateSuguan = useSuguanStore((s) => s.updateSuguan)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
-  const members = useMemberStore((s) => s.members)
+  const allMembers = useMemberStore((s) => s.members)
+  // The builder only ever books AWS members; PNK has its own (sealed) list and
+  // no AWS Suguan may pick from it.
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const scheduleCategories = useWorshipScheduleCategories()
 
   // `editingId` is what we will write back to. It starts as the store's target so

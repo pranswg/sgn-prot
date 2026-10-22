@@ -3,6 +3,7 @@ import test from 'node:test'
 import type { Account } from '@/core/types/auth'
 import { useAuthStore } from './authStore.ts'
 import { useMemberStore } from './memberStore.ts'
+import { membersOf } from '@/lib/choirs.ts'
 
 const memberInput = {
   firstName: 'Maria',
@@ -102,5 +103,72 @@ test('Master List mutations refresh the last-updated timestamp', () => {
     useMemberStore.getState().lastUpdatedAt,
     '2000-01-01T00:00:00.000Z',
   )
+  useMemberStore.getState().clear()
+})
+
+test('the two choirs are separate lists: a PNK member never joins AWS', () => {
+  useMemberStore.getState().clear()
+
+  const aws = useMemberStore.getState().addMember(memberInput)
+  const pnk = useMemberStore.getState().addMember({
+    ...memberInput,
+    firstName: 'Bituin',
+    choir: 'pnk',
+  })
+
+  // A member added without a choir is AWS, so the existing screens keep working.
+  assert.equal(aws.choir, 'aws')
+  assert.equal(pnk.choir, 'pnk')
+  assert.deepEqual(
+    membersOf(useMemberStore.getState().members, 'aws').map((m) => m.id),
+    [aws.id],
+  )
+  assert.deepEqual(
+    membersOf(useMemberStore.getState().members, 'pnk').map((m) => m.id),
+    [pnk.id],
+  )
+
+  useMemberStore.getState().clear()
+})
+
+test('promoting a PNK trainee keeps them in the PNK list', () => {
+  useMemberStore.getState().clear()
+
+  const trainee = useMemberStore.getState().addTrainee({
+    firstName: 'Liwayway',
+    lastName: 'Cruz',
+    gender: 'female',
+    voicePosition: 'alto',
+    status: 'active',
+    dateAdded: '2026-10-01',
+    choir: 'pnk',
+  })
+  const promoted = useMemberStore.getState().promoteTrainee(trainee.id)
+
+  assert.equal(promoted?.choir, 'pnk')
+  assert.equal(
+    membersOf(useMemberStore.getState().members, 'aws').length,
+    0,
+    'promotion must not add anyone to the AWS roster',
+  )
+  assert.equal(membersOf(useMemberStore.getState().members, 'pnk').length, 1)
+
+  useMemberStore.getState().clear()
+})
+
+test('restoring a backup stamps legacy rows as AWS', () => {
+  useMemberStore.getState().clear()
+
+  useMemberStore
+    .getState()
+    .restoreData(
+      [{ id: 'm_legacy', ...memberInput, positions: [], history: [] }] as never,
+      [{ id: 't_legacy', firstName: 'Ana', lastName: 'Reyes' }] as never,
+    )
+
+  const restored = useMemberStore.getState()
+  assert.equal(restored.members[0]?.choir, 'aws')
+  assert.equal(restored.trainees[0]?.choir, 'aws')
+
   useMemberStore.getState().clear()
 })

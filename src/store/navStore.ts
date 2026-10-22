@@ -13,6 +13,9 @@ export type Page =
   | 'extra-occasion-suguan'
   | 'suguan-history'
   | 'suguan-detail'
+  | 'pnk-master-list'
+  | 'pnk-trainees'
+  | 'pnk-members-history'
   | 'settings'
   | 'administration'
 

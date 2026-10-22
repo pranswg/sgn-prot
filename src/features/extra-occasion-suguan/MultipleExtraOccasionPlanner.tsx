@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/PageHeader'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useMemberStore } from '@/store/memberStore'
+import { membersOf } from '@/lib/choirs'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
@@ -101,7 +102,8 @@ export function MultipleExtraOccasionPlanner() {
   const createSuguan = useSuguanStore((s) => s.createSuguan)
   const updateSuguan = useSuguanStore((s) => s.updateSuguan)
   const deleteSuguan = useSuguanStore((s) => s.deleteSuguan)
-  const members = useMemberStore((s) => s.members)
+  const allMembers = useMemberStore((s) => s.members)
+  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const allVoices = useSettingsStore((s) => s.allVoices)
   const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
   const localeName = useSettingsStore((s) => s.localeName)

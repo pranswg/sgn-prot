@@ -17,7 +17,14 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
-import type { MemberInput, TraineeInput } from '@/core/types/member'
+import type { Choir, MemberInput, TraineeInput } from '@/core/types/member'
+import {
+  CHOIRS,
+  CHOIR_LABELS,
+  membersOf,
+  pnkVoicePositionId,
+  traineesOf,
+} from '@/lib/choirs'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
 import { extractRosterFromPdf, type RosterCandidate } from '@/lib/rosterImport'
@@ -26,6 +33,7 @@ import {
   isSpreadsheetFile,
 } from '@/lib/spreadsheetImport'
 import { todayPHT } from '@/lib/phDate'
+import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 interface ImportRosterDialogProps {
@@ -69,6 +77,20 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
 
   const voices = allVoices()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Which pool the file lands in. Roster import is the one entry point that
+  // writes into either list, so it asks explicitly instead of assuming AWS.
+  const [choir, setChoir] = useState<Choir>('aws')
+  // Duplicate detection is per choir: a name already in PNK is not a duplicate
+  // in AWS, because the two lists are separate.
+  const scopedMembers = useMemo(
+    () => membersOf(members, choir),
+    [members, choir],
+  )
+  const scopedTrainees = useMemo(
+    () => traineesOf(trainees, choir),
+    [trainees, choir],
+  )
 
   const [candidates, setCandidates] = useState<RosterCandidate[] | null>(null)
   const [parsing, setParsing] = useState(false)
@@ -117,6 +139,14 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  // Switching pools invalidates the duplicate flags and any parsed names, so
+  // the file has to be chosen again.
+  const changeChoir = (next: Choir) => {
+    if (next === choir) return
+    setChoir(next)
+    reset()
+  }
+
   const handleFile = async (file: File | undefined) => {
     if (!file) return
     if (!canImport) {
@@ -133,11 +163,11 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
         ? await extractRosterFromSpreadsheet(
             file,
             allVoices(),
-            members,
-            trainees,
+            scopedMembers,
+            scopedTrainees,
             allDutyRoles(),
           )
-        : await extractRosterFromPdf(file, allVoices(), members, trainees)
+        : await extractRosterFromPdf(file, allVoices(), scopedMembers, scopedTrainees)
       setCandidates(result.candidates)
       if (result.candidates.length === 0) {
         setCandidates(null)
@@ -227,6 +257,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           voicePosition,
           status: candidate.isActive ? 'active' : 'inactive',
           dateAdded,
+          choir,
           notes: candidate.notes.trim() || undefined,
         })
       } else {
@@ -236,10 +267,12 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           suffix: candidate.suffix,
           lastName,
           gender: candidate.gender,
-          voicePosition,
+          voicePosition:
+            choir === 'pnk' ? pnkVoicePositionId(voices) : voicePosition,
           membershipType: candidate.membershipType ?? 'regular',
           isActive: candidate.isActive,
           dateAdded,
+          choir,
           positions: candidate.positions,
           assignedDutyRoleIds: candidate.assignedDutyRoleIds,
           notes: candidate.notes.trim() || undefined,
@@ -262,7 +295,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       actorUsername: account.username,
       action: 'Imported Master List',
       module: 'Data Management',
-      details: `Imported ${result.importedMembers} members and ${result.importedTrainees} trainees from ${fileName ?? 'roster file'}.`,
+      details: `Imported ${result.importedMembers} members and ${result.importedTrainees} trainees into the ${CHOIR_LABELS[choir]} list from ${fileName ?? 'roster file'}.`,
     })
     const { importedMembers: memberCount, importedTrainees: traineeCount } =
       result
@@ -292,12 +325,37 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     >
       <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Import Master List</DialogTitle>
+          <DialogTitle>Import {CHOIR_LABELS[choir]} Master List</DialogTitle>
         <DialogDescription>
-          Upload the choir roster PDF, or a CSV or Excel file exported from the
-          Master List. Review the detected names before importing them.
+          Upload the roster PDF, or a CSV or Excel file exported from the Master
+          List. Names are checked only against the {CHOIR_LABELS[choir]} list,
+          and everything you import joins it. Review the detected names before
+          importing them.
         </DialogDescription>
         </DialogHeader>
+
+        <div
+          role="group"
+          aria-label="Import into choir"
+          className="grid grid-cols-2 gap-0.5 rounded-lg border border-input bg-background p-0.5"
+        >
+          {CHOIRS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={choir === option}
+              onClick={() => changeChoir(option)}
+              className={cn(
+                'h-9 rounded-md text-xs font-medium transition-colors',
+                choir === option
+                  ? 'bg-brand-navy text-white'
+                  : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {CHOIR_LABELS[option]} Master List
+            </button>
+          ))}
+        </div>
 
         {!candidates && !parsing && (
           <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed p-10 text-center">

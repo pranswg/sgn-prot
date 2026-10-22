@@ -528,7 +528,9 @@ export function computeSuguanLayout(
   const usableTableH =
     Math.max(0, dims.height - margins.top - margins.bottom - topBlockH)
 
-  const fitToPage = fmt.scaling !== 'fit-width'
+  // Extra Occasion font-size controls must remain legible for the names. Let
+  // its shared paginator add pages instead of shrinking those names back down.
+  const fitToPage = !suguan.extraOccasion && fmt.scaling !== 'fit-width'
   let scale = 1
   let bodyFontSizePt = nameLayout.nameFontSize
 
@@ -560,7 +562,7 @@ export function computeSuguanLayout(
   })
 
   const pageCount = pages.length
-  const rowsPerPage = fmt.scaling === 'fit-page'
+  const rowsPerPage = fmt.scaling === 'fit-page' && !suguan.extraOccasion
     ? rowCount || 1
     : Math.max(1, Math.floor((usableTableH - sig.totalMm) / bodyRowH))
 
@@ -632,7 +634,8 @@ export async function createSuguanExcelBlob(
     footer: 0.2,
   }
   sheet.pageSetup.horizontalCentered = true
-  const fitPage = fmt.scaling === 'fit-page'
+  const isExtraOccasion = Boolean(suguan.extraOccasion)
+  const fitPage = fmt.scaling === 'fit-page' && !isExtraOccasion
   sheet.pageSetup.fitToPage = true
   sheet.pageSetup.fitToWidth = 1
   sheet.pageSetup.fitToHeight = fitPage ? 1 : 0
@@ -648,7 +651,6 @@ export async function createSuguanExcelBlob(
     key: `c_${i + 1}`,
   }))
 
-  const isExtraOccasion = Boolean(suguan.extraOccasion)
   const firstTableHeaderRow = isExtraOccasion ? 4 : 2
   const secondTableHeaderRow = firstTableHeaderRow + 1
   const headerRow1 = firstTableHeaderRow
@@ -849,7 +851,9 @@ export async function createSuguanExcelBlob(
           bottom: thinBorder(),
         }
       }
-      sheet.getRow(rn).height = fs.rowHeight + tableSpacingPt
+      sheet.getRow(rn).height = isExtraOccasion
+        ? layout.bodyRowH / PT_TO_MM
+        : fs.rowHeight + tableSpacingPt
       rn++
     }
   }

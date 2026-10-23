@@ -229,7 +229,7 @@ test('singer tables are ordered by voice section and then by surname', () => {
   )
 })
 
-test('Master List summary contains only the requested total and status counts', () => {
+test('PNK Master List summary keeps only the requested total and status counts', () => {
   const members = [
     makeMember('Soprano', { voicePosition: 'soprano-2' }),
     makeMember('Alto', { voicePosition: 'alto', isActive: false }),
@@ -248,11 +248,16 @@ test('Master List summary contains only the requested total and status counts', 
     }),
   ]
   const rows = new Map(
-    summarizeMasterList(members, [
-      makeTrainee('Active trainee'),
-      makeTrainee('Inactive trainee', { gender: 'male', status: 'inactive' }),
-      makeTrainee('Promoted trainee', { status: 'promoted' }),
-    ])
+    summarizeMasterList(
+      members,
+      [
+        makeTrainee('Active trainee'),
+        makeTrainee('Inactive trainee', { gender: 'male', status: 'inactive' }),
+        makeTrainee('Promoted trainee', { status: 'promoted' }),
+      ],
+      [],
+      'pnk',
+    )
       .filter((row) => row.kind === 'item')
       .map(({ category, count }) => [category, count]),
   )
@@ -273,7 +278,7 @@ test('Master List summary contains only the requested total and status counts', 
   assert.equal(rows.get('Trainees / Nagsasanay'), 2)
 })
 
-test('AWS Master List summary includes voice counts while PNK keeps its summary compact', () => {
+test('AWS Master List summary includes voice, organist, position, and trainee breakdowns', () => {
   const members = [
     makeMember('Soprano 1', { voicePosition: 'soprano-1' }),
     makeMember('Soprano 2', { voicePosition: 'soprano-2' }),
@@ -281,21 +286,49 @@ test('AWS Master List summary includes voice counts while PNK keeps its summary 
     makeMember('Tenor', { gender: 'male', voicePosition: 'tenor' }),
     makeMember('Bass', { gender: 'male', voicePosition: 'bass' }),
     makeMember('Unknown voice', { voicePosition: 'legacy-voice' }),
+    makeMember('Organist', {
+      membershipType: 'organista',
+      assignedDutyRoleIds: ['organista', 'oic'],
+    }),
   ]
-  const awsRows = summarizeMasterList(members, [], TEST_VOICES)
+  const trainees = [
+    makeTrainee('Active woman'),
+    makeTrainee('Inactive man', { gender: 'male', status: 'inactive' }),
+    makeTrainee('Promoted trainee', { status: 'promoted' }),
+  ]
+  const awsRows = summarizeMasterList(
+    members,
+    trainees,
+    TEST_VOICES,
+    'aws',
+    DUTY_ROLES,
+  )
 
-  assert.deepEqual(awsRows.slice(6), [
-    { kind: 'section', category: 'Voice Positions' },
-    { kind: 'item', category: 'Soprano 1', count: 1 },
+  assert.deepEqual(awsRows, [
+    { kind: 'section', category: 'CHOIR MEMBERS' },
+    { kind: 'item', category: 'Total Choir Members', count: 7 },
+    { kind: 'item', category: 'Female Members', count: 5 },
+    { kind: 'item', category: 'Male Members', count: 2 },
+    { kind: 'item', category: 'Soprano 1', count: 2 },
     { kind: 'item', category: 'Soprano 2', count: 1 },
     { kind: 'item', category: 'Alto', count: 1 },
     { kind: 'item', category: 'Tenor', count: 1 },
     { kind: 'item', category: 'Bass', count: 1 },
+    { kind: 'item', category: 'Organists', count: 1 },
+    { kind: 'item', category: 'OIC / Other Positions', count: 1 },
+    { kind: 'item', category: 'Active Members', count: 7 },
+    { kind: 'item', category: 'Inactive Members', count: 0 },
+    { kind: 'section', category: 'TRAINEES/NAGSASANAY' },
+    { kind: 'item', category: 'Total Trainees', count: 2 },
+    { kind: 'item', category: 'Female Trainees', count: 1 },
+    { kind: 'item', category: 'Male Trainees', count: 1 },
+    { kind: 'item', category: 'Active Trainees', count: 1 },
+    { kind: 'item', category: 'Inactive Trainees', count: 1 },
   ])
-  assert.equal(
-    summarizeMasterList(members, [], TEST_VOICES, 'pnk').length,
-    6,
-  )
+
+  const pnkRows = summarizeMasterList(members, trainees, TEST_VOICES, 'pnk')
+  assert.equal(pnkRows.length, 6)
+  assert.equal(pnkRows.some((row) => row.category === 'Organists'), false)
 })
 
 test('PDF rows preserve full member names and show configured ranks', () => {

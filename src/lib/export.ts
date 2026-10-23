@@ -370,7 +370,13 @@ export async function createMasterListWordBlob(
   )
   const { contentSections, hierarchySections } =
     splitMasterListPdfSections(sections)
-  const summaryDetails = summarizeMasterList(members, trainees, voices, choir)
+  const summaryDetails = summarizeMasterList(
+    members,
+    trainees,
+    voices,
+    choir,
+    dutyRoles,
+  )
   const children = []
 
   const makeParagraph = (

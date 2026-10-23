@@ -1,4 +1,7 @@
-import { MEMBERSHIP_LABELS } from '@/core/constants/memberMembership'
+import {
+  MEMBERSHIP_LABELS,
+  memberIsOrganist,
+} from '@/core/constants/memberMembership'
 import { memberRankIds, memberRankNames } from '@/lib/memberRanks'
 import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
@@ -133,8 +136,14 @@ export function summarizeMasterList(
   trainees: Trainee[],
   voices: VoicePosition[] = [],
   choir: Choir = 'aws',
+  dutyRoles: DutyRole[] = [],
 ): MasterListSummaryRow[] {
-  const rows: MasterListSummaryRow[] = [
+  const currentTrainees = trainees.filter(
+    (trainee) =>
+      trainee.status === 'active' || trainee.status === 'inactive',
+  )
+  const choirRows: MasterListSummaryRow[] = [
+    { kind: 'section', category: 'CHOIR MEMBERS' },
     { kind: 'item', category: 'Total Choir Members', count: members.length },
     {
       kind: 'item',
@@ -146,6 +155,47 @@ export function summarizeMasterList(
       category: 'Male Members',
       count: members.filter((member) => member.gender === 'male').length,
     },
+  ]
+
+  if (choir === 'aws') {
+    const otherPositionRoleIds = new Set(
+      dutyRoles
+        .filter((role) => {
+          const normalizedName = role.name
+            .trim()
+            .toLocaleLowerCase()
+            .replace(/[^a-z0-9]/g, '')
+          return normalizedName !== 'mangaawit' && normalizedName !== 'organista'
+        })
+        .map((role) => role.id),
+    )
+    choirRows.push(
+      ...voices.map((voice) => ({
+        kind: 'item' as const,
+        category: voice.name,
+        count: members.filter((member) => member.voicePosition === voice.id)
+          .length,
+      })),
+      {
+        kind: 'item',
+        category: 'Organists',
+        count: members.filter((member) =>
+          memberIsOrganist(member, dutyRoles),
+        ).length,
+      },
+      {
+        kind: 'item',
+        category: 'OIC / Other Positions',
+        count: members.filter((member) =>
+          memberRankIds(member, dutyRoles).some((id) =>
+            otherPositionRoleIds.has(id),
+          ),
+        ).length,
+      },
+    )
+  }
+
+  choirRows.push(
     {
       kind: 'item',
       category: 'Active Members',
@@ -156,29 +206,68 @@ export function summarizeMasterList(
       category: 'Inactive Members',
       count: members.filter((member) => !member.isActive).length,
     },
-    {
-      kind: 'item',
-      category: 'Trainees / Nagsasanay',
-      count: trainees.filter(
-        (trainee) =>
-          trainee.status === 'active' || trainee.status === 'inactive',
-      ).length,
-    },
-  ]
+  )
 
-  if (choir === 'aws' && voices.length > 0) {
-    rows.push({ kind: 'section', category: 'Voice Positions' })
-    rows.push(
-      ...voices.map((voice) => ({
-        kind: 'item' as const,
-        category: voice.name,
-        count: members.filter((member) => member.voicePosition === voice.id)
-          .length,
-      })),
-    )
+  if (choir !== 'aws') {
+    return [
+      { kind: 'item', category: 'Total Choir Members', count: members.length },
+      {
+        kind: 'item',
+        category: 'Female Members',
+        count: members.filter((member) => member.gender === 'female').length,
+      },
+      {
+        kind: 'item',
+        category: 'Male Members',
+        count: members.filter((member) => member.gender === 'male').length,
+      },
+      {
+        kind: 'item',
+        category: 'Active Members',
+        count: members.filter((member) => member.isActive).length,
+      },
+      {
+        kind: 'item',
+        category: 'Inactive Members',
+        count: members.filter((member) => !member.isActive).length,
+      },
+      {
+        kind: 'item',
+        category: 'Trainees / Nagsasanay',
+        count: currentTrainees.length,
+      },
+    ]
   }
 
-  return rows
+  return [
+    ...choirRows,
+    { kind: 'section', category: 'TRAINEES/NAGSASANAY' },
+    { kind: 'item', category: 'Total Trainees', count: currentTrainees.length },
+    {
+      kind: 'item',
+      category: 'Female Trainees',
+      count: currentTrainees.filter((trainee) => trainee.gender === 'female')
+        .length,
+    },
+    {
+      kind: 'item',
+      category: 'Male Trainees',
+      count: currentTrainees.filter((trainee) => trainee.gender === 'male')
+        .length,
+    },
+    {
+      kind: 'item',
+      category: 'Active Trainees',
+      count: currentTrainees.filter((trainee) => trainee.status === 'active')
+        .length,
+    },
+    {
+      kind: 'item',
+      category: 'Inactive Trainees',
+      count: currentTrainees.filter((trainee) => trainee.status === 'inactive')
+        .length,
+    },
+  ]
 }
 
 export function masterListPdfVoice(

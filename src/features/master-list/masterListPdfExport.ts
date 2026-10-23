@@ -238,7 +238,13 @@ export async function exportMasterListPdf(
     }
   }
 
-  const summaryDetails = summarizeMasterList(members, trainees, voices, choir)
+  const summaryDetails = summarizeMasterList(
+    members,
+    trainees,
+    voices,
+    choir,
+    dutyRoles,
+  )
   const summaryRows = summaryDetails.map(
     (row) => [row.category, row.kind === 'item' ? String(row.count) : ''],
   )

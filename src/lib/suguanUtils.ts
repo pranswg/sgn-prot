@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid'
+import { formatTime } from '@/lib/format'
 import type {
   Suguan,
   SuguanEvent,
@@ -580,11 +581,23 @@ export function weekendPhrase(serviceTypeId: string): string {
 }
 
 export function serviceTypeLabel(suguan: Suguan): string {
+  const typedId = (suguan.serviceTypeId ?? '').trim()
   const typeName = useSettingsStore
     .getState()
     .allServiceTypes()
-    .find((t) => t.id === suguan.serviceTypeId)?.name
-  return typeName ?? suguan.serviceTypeId
+    .find((t) => t.id === typedId)?.name
+  if (typeName) return typeName
+  if (!typedId || typedId.toLocaleLowerCase() === 'pagsamba') {
+    return 'Pagsamba'
+  }
+  return typedId
+}
+
+export function isPagsambaSuguan(suguan: Suguan): boolean {
+  return (
+    !suguan.extraOccasion &&
+    serviceTypeLabel(suguan).trim().toLocaleLowerCase() === 'pagsamba'
+  )
 }
 
 export function suguanTitle(suguan: Suguan): string {
@@ -620,32 +633,30 @@ export function extraOccasionSheetHeading(
   suguan: Suguan,
 ): ExtraOccasionSheetHeading {
   const occasion = suguan.extraOccasion
-  const serviceType = serviceTypeLabel(suguan).trim()
   const schedule = suguan.schedules[0]
-  const scheduleLabel = schedule?.scheduleLabel.trim() ?? ''
   const scheduleTime = schedule?.scheduleTime.trim() ?? ''
-  const scheduleText =
-    scheduleLabel &&
-    scheduleTime &&
-    !scheduleLabel.toLowerCase().includes(scheduleTime.toLowerCase())
-      ? `${scheduleLabel} · ${scheduleTime}`
-      : scheduleLabel || scheduleTime
   const eventDate = occasion?.pagtupad.enabled
     ? occasion.pagtupad.date
     : occasion?.pagsasanay.date
   const date = isDateKey(eventDate) ? formatDateKeyLongDate(eventDate) : ''
-  const subtitle = [date, scheduleText ? `(${scheduleText})` : '']
+  const rawTime = suguan.time.trim() || scheduleTime
+  const time = /(?:AM|PM)$/i.test(rawTime) ? rawTime : formatTime(rawTime)
+  const subtitle = [date, time]
     .filter(Boolean)
-    .join(' ')
+    .join(' - ')
 
   const localeName = occasion?.localeName.trim()
   return {
     locale: localeName ? `Lokal ng ${localeName}` : '',
     title: `LISTAHAN NG MGA TUTUPAD SA ${
-      occasion?.name?.trim() || serviceType || 'EXTRA OCCASION'
+      occasion?.name?.trim() || 'EXTRA OCCASION'
     }`.toLocaleUpperCase(),
     subtitle,
   }
+}
+
+export function extraOccasionNameHeader(suguan: Suguan): string {
+  return `PANGALAN\n${serviceTypeLabel(suguan)}`
 }
 
 export function formatEventDate(event: SuguanEvent): string {

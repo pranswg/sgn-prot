@@ -233,12 +233,13 @@ test('Extra Occasion adapts custom events and voice sections to the shared sheet
   const layout = computeSuguanLayout(adapted, members, DEFAULT_DOC_FORMAT)
 
   assert.deepEqual(
-    adapted.schedules.map((schedule) => schedule.scheduleLabel),
-    ['Friday 3:00 PM', 'SOPRANO', 'ALTO'],
-  )
-  assert.deepEqual(
-    adapted.schedules.map((schedule) => schedule.headingType),
-    ['schedule', 'voice', 'voice'],
+    adapted.schedules.map((schedule) => [schedule.scheduleLabel, schedule.headingType]),
+    [
+      ['Friday 3:00 PM', 'schedule'],
+      ['PAGSAMBA', 'service'],
+      ['SOPRANO', 'voice'],
+      ['ALTO', 'voice'],
+    ],
   )
   assert.deepEqual(
     layout.events.map((event) => [event.label, event.date]),
@@ -246,7 +247,7 @@ test('Extra Occasion adapts custom events and voice sections to the shared sheet
   )
   assert.deepEqual(
     layout.sections.map((section) => section.rows.map((row) => row.name)),
-    [[], ['Andao, Kimberly'], ['Bautista, Sarah']],
+    [[], [], ['Andao, Kimberly'], ['Bautista, Sarah']],
   )
   assert.equal(
     layout.pages.flat().some((block) => block.kind === 'sig-name'),

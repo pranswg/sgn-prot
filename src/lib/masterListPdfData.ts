@@ -131,8 +131,10 @@ export function sortMasterListPdfMembers(
 export function summarizeMasterList(
   members: Member[],
   trainees: Trainee[],
+  voices: VoicePosition[] = [],
+  choir: Choir = 'aws',
 ): MasterListSummaryRow[] {
-  return [
+  const rows: MasterListSummaryRow[] = [
     { kind: 'item', category: 'Total Choir Members', count: members.length },
     {
       kind: 'item',
@@ -163,6 +165,20 @@ export function summarizeMasterList(
       ).length,
     },
   ]
+
+  if (choir === 'aws' && voices.length > 0) {
+    rows.push({ kind: 'section', category: 'Voice Positions' })
+    rows.push(
+      ...voices.map((voice) => ({
+        kind: 'item' as const,
+        category: voice.name,
+        count: members.filter((member) => member.voicePosition === voice.id)
+          .length,
+      })),
+    )
+  }
+
+  return rows
 }
 
 export function masterListPdfVoice(

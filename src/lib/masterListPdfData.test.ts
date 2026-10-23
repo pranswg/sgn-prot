@@ -273,6 +273,31 @@ test('Master List summary contains only the requested total and status counts', 
   assert.equal(rows.get('Trainees / Nagsasanay'), 2)
 })
 
+test('AWS Master List summary includes voice counts while PNK keeps its summary compact', () => {
+  const members = [
+    makeMember('Soprano 1', { voicePosition: 'soprano-1' }),
+    makeMember('Soprano 2', { voicePosition: 'soprano-2' }),
+    makeMember('Alto', { voicePosition: 'alto' }),
+    makeMember('Tenor', { gender: 'male', voicePosition: 'tenor' }),
+    makeMember('Bass', { gender: 'male', voicePosition: 'bass' }),
+    makeMember('Unknown voice', { voicePosition: 'legacy-voice' }),
+  ]
+  const awsRows = summarizeMasterList(members, [], TEST_VOICES)
+
+  assert.deepEqual(awsRows.slice(6), [
+    { kind: 'section', category: 'Voice Positions' },
+    { kind: 'item', category: 'Soprano 1', count: 1 },
+    { kind: 'item', category: 'Soprano 2', count: 1 },
+    { kind: 'item', category: 'Alto', count: 1 },
+    { kind: 'item', category: 'Tenor', count: 1 },
+    { kind: 'item', category: 'Bass', count: 1 },
+  ])
+  assert.equal(
+    summarizeMasterList(members, [], TEST_VOICES, 'pnk').length,
+    6,
+  )
+})
+
 test('PDF rows preserve full member names and show configured ranks', () => {
   const member = makeMember('Ana', {
     firstName: 'Ana',

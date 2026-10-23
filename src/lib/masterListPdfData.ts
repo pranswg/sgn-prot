@@ -55,6 +55,12 @@ export function groupMasterListPdfSections(
   // member appears under every rank they hold, and a rank with no members is
   // skipped.
   for (const role of choir === 'aws' ? dutyRoles : []) {
+    if (
+      role.name.trim().toLocaleLowerCase().replace(/[^a-z0-9]/g, '') ===
+      'mangaawit'
+    ) {
+      continue
+    }
     const assigned = members.filter((member) =>
       memberRankIds(member, dutyRoles).includes(role.id),
     )

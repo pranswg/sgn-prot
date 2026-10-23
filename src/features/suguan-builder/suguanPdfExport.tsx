@@ -242,12 +242,12 @@ export async function exportSuguanPdf(
         centerText(
           eventTypeLabel(e.type, e.label),
           cx,
-          headerTopY + headerSz * PT_TO_MM,
+          headerTopY + layout.headerRowH / 2,
         )
         centerText(
           formatEventDate(e),
           cx,
-          headerTopY + layout.headerRowH * 2 - headerSz * PT_TO_MM,
+          headerTopY + layout.headerRowH * 1.5,
         )
       } else {
         centerText(

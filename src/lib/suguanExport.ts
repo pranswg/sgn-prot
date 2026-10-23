@@ -9,6 +9,7 @@ import {
   assignmentDisplayName,
   docMarginsMm,
   docPaperDimensionsMm,
+  extraOccasionNameHeader,
   extraOccasionSheetHeading,
   eventTypeLabel,
   formatEventDate,
@@ -21,15 +22,14 @@ import {
   type FontSizePreset,
 } from '@/lib/suguanUtils'
 
-const PAGSASANAY_FILL = 'FFF2CC'
+export const EXTRA_OCCASION_FILL = '#FFF2CC'
+const PAGSASANAY_FILL = EXTRA_OCCASION_FILL.slice(1)
 const HEADER_FILL = 'F2F2F2'
 const WRITE_IN_ROWS_PER_SCHEDULE = 2
 
 /**
- * The exported sheet's accent fills depend on the choir: green for the Women's
- * choir, blue for the Men's choir, gold for Mixed. Every renderer (preview,
- * PDF, and Excel) picks its fills through `suguanSheetAccent`, so the exported
- * file's palette can never drift between the three.
+ * Choir sheets use group-specific accents; Extra Occasion sheets use the
+ * Pagsasanay fill throughout. Preview, PDF, and Excel share these values.
  */
 export interface SuguanSheetAccent {
   scheduleFill: string
@@ -103,7 +103,7 @@ export interface SheetMembers {
 export interface SuguanSheetSection {
   sectionId: string
   label: string
-  headingType: 'schedule' | 'voice'
+  headingType: 'schedule' | 'service' | 'voice'
   rows: { no: number; name: string }[]
 }
 
@@ -720,7 +720,11 @@ export async function createSuguanExcelBlob(
       type: 'pattern',
       pattern: 'solid',
       fgColor: {
-        argb: `FF${eventFill(event.type, accent.pagtupadFill.slice(1))}`,
+        argb: `FF${
+          isExtraOccasion
+            ? PAGSASANAY_FILL
+            : eventFill(event.type, accent.pagtupadFill.slice(1))
+        }`,
       },
     }
     labelCell.font = font(
@@ -754,7 +758,9 @@ export async function createSuguanExcelBlob(
     cell.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: `FF${HEADER_FILL}` },
+      fgColor: {
+        argb: `FF${isExtraOccasion ? PAGSASANAY_FILL : HEADER_FILL}`,
+      },
     }
     cell.border = fullBorder()
     sheet.mergeCells(headerRow1, col, headerRow2, col)
@@ -766,7 +772,9 @@ export async function createSuguanExcelBlob(
   sheet.getRow(headerRow1).height = isExtraOccasion ? 15 : fs.headerRowHeight
   sheet.getRow(headerRow2).height = isExtraOccasion ? 15 : fs.headerRowHeight
   sheet.getCell(headerRow1, 1).value = isExtraOccasion ? 'Blg.' : 'No.'
-  sheet.getCell(headerRow1, 2).value = isExtraOccasion ? 'PANGALAN' : 'Pangalan'
+  sheet.getCell(headerRow1, 2).value = isExtraOccasion
+    ? extraOccasionNameHeader(suguan)
+    : 'Pangalan'
 
   let rn = secondTableHeaderRow + 1
   const sections = layout.sections
@@ -775,7 +783,8 @@ export async function createSuguanExcelBlob(
 
     const labelCell = sheet.getCell(rn, 2)
     labelCell.value =
-      isExtraOccasion && section.headingType === 'schedule'
+      isExtraOccasion &&
+      (section.headingType === 'schedule' || section.headingType === 'service')
         ? section.label.toLocaleUpperCase()
         : section.label
     labelCell.font = isExtraOccasion
@@ -793,12 +802,15 @@ export async function createSuguanExcelBlob(
           : 'center',
       vertical: 'middle',
     }
-    if (isExtraOccasion && section.headingType === 'schedule') {
+    if (
+      isExtraOccasion &&
+      (section.headingType === 'schedule' || section.headingType === 'service')
+    ) {
       for (let col = 1; col <= lastCol; col++) {
         sheet.getCell(rn, col).fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: `FF${accent.scheduleFill.slice(1)}` },
+          fgColor: { argb: `FF${PAGSASANAY_FILL}` },
         }
       }
     } else if (!isExtraOccasion) {

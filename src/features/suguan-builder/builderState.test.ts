@@ -10,7 +10,14 @@ import {
   DEFAULT_SCHEDULE_CATEGORIES,
   type WorshipScheduleCategories,
 } from '@/core/constants/worshipSchedules'
-import { createCopyDraft, createDraftFromSuguan, saveBlockers, weekScheduleSections } from './builderState.ts'
+import {
+  createCopyDraft,
+  createDraftFromSuguan,
+  pagsambaServiceTypeId,
+  saveBlockers,
+  weekScheduleSections,
+} from './builderState.ts'
+import { isPagsambaSuguan } from '@/lib/suguanUtils'
 
 const customCategories: WorshipScheduleCategories = {
   midweek: [
@@ -33,6 +40,33 @@ const voices: VoicePosition[] = [
   { id: 'alto', name: 'Alto', shortName: 'A', gender: 'female' },
   { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
 ]
+
+test('AWS Suguan always defaults to the configured Pagsamba service type', () => {
+  assert.equal(
+    pagsambaServiceTypeId([
+      { id: 'pamamahayag', name: 'Pamamahayag' },
+      { id: 'configured-pagsamba', name: 'Pagsamba' },
+    ]),
+    'configured-pagsamba',
+  )
+  assert.equal(pagsambaServiceTypeId([]), 'pagsamba')
+})
+
+test('only non-Extra Occasion Pagsamba records are copyable from AWS history', () => {
+  assert.equal(isPagsambaSuguan({ ...source, serviceTypeId: 'Pagsamba' }), true)
+  assert.equal(
+    isPagsambaSuguan({ ...source, serviceTypeId: 'Pamamahayag' }),
+    false,
+  )
+  assert.equal(
+    isPagsambaSuguan({
+      ...source,
+      serviceTypeId: 'Pagsamba',
+      extraOccasion: {} as NonNullable<Suguan['extraOccasion']>,
+    }),
+    false,
+  )
+})
 
 function assignment(memberId: string, voicePosition: string): SuguanAssignment {
   return {

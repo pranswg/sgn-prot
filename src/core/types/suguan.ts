@@ -62,7 +62,7 @@ export interface SuguanScheduleSection {
    */
   scheduleDate?: string
   description?: string
-  headingType?: 'schedule' | 'voice'
+  headingType?: 'schedule' | 'service' | 'voice'
   assignments: SuguanAssignment[]
 }
 

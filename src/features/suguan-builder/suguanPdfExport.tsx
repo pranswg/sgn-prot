@@ -2,6 +2,7 @@ import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
 import {
   computeSuguanLayout,
   EXTRA_OCCASION_HEADER_FONT_SIZE_PT,
+  EXTRA_OCCASION_FILL,
   EXTRA_OCCASION_LOCALE_FONT_SIZE_PT,
   EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
   EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
@@ -31,7 +32,6 @@ import bookAntiquaBoldUrl from '@/assets/fonts/BookAntiqua-Bold.ttf?url'
 
 const BORDER = { r: 0, g: 0, b: 0 }
 const HEADER_FILL = { r: 242, g: 242, b: 242 }
-const PAGSASANAY_FILL = { r: 255, g: 242, b: 204 }
 
 const hexRgb = (hex: string): { r: number; g: number; b: number } => ({
   r: parseInt(hex.slice(1, 3), 16),
@@ -87,7 +87,7 @@ export async function exportSuguanPdf(
     ? extraOccasionSheetHeading(suguan)
     : null
   const sheetFont = isExtraOccasion ? 'ExtraOccasionSheet' : 'SuguanSheet'
-  const pagtupadRgb = hexRgb(accent.pagtupadFill)
+  const extraOccasionRgb = hexRgb(EXTRA_OCCASION_FILL)
   const scheduleRgb = hexRgb(accent.scheduleFill)
 
   const titleSz = fs.titleFontSize * scale
@@ -185,12 +185,17 @@ export async function exportSuguanPdf(
       }
     }
 
-    doc.setFillColor(HEADER_FILL.r, HEADER_FILL.g, HEADER_FILL.b)
+    const headerFill = isExtraOccasion ? extraOccasionRgb : HEADER_FILL
+    doc.setFillColor(headerFill.r, headerFill.g, headerFill.b)
     doc.rect(x0, headerTopY, layout.noColWidthMm, layout.headerRowH * 2, 'F')
     doc.rect(xName, headerTopY, layout.nameColWidthMm, layout.headerRowH * 2, 'F')
 
     layout.events.forEach((e, i) => {
-      const fill = e.type === 'pagsasanay' ? PAGSASANAY_FILL : pagtupadRgb
+      const fill = isExtraOccasion
+        ? extraOccasionRgb
+        : e.type === 'pagsasanay'
+          ? extraOccasionRgb
+          : hexRgb(accent.pagtupadFill)
       doc.setFillColor(fill.r, fill.g, fill.b)
       doc.rect(
         eventXs[i],
@@ -231,10 +236,11 @@ export async function exportSuguanPdf(
       headerTopY + layout.headerRowH,
     )
     centerText(
-      'PANGALAN',
+      isExtraOccasion ? 'PANGALAN' : 'Pangalan',
       xName + layout.nameColWidthMm / 2,
       headerTopY + layout.headerRowH,
     )
+    applyFont('bold', headerSz)
     layout.events.forEach((e, i) => {
       const cx = eventXs[i] + layout.eventColWidthMm / 2
       if (isExtraOccasion) {
@@ -285,8 +291,12 @@ export async function exportSuguanPdf(
       switch (block.kind) {
         case 'section-label': {
           const section = layout.sections[block.sectionIndex]
-          if (!isExtraOccasion || section.headingType === 'schedule') {
-            doc.setFillColor(scheduleRgb.r, scheduleRgb.g, scheduleRgb.b)
+          const isBandHeading =
+            section.headingType === 'schedule' ||
+            section.headingType === 'service'
+          if (!isExtraOccasion || isBandHeading) {
+            const sectionFill = isExtraOccasion ? extraOccasionRgb : scheduleRgb
+            doc.setFillColor(sectionFill.r, sectionFill.g, sectionFill.b)
             if (isExtraOccasion) {
               doc.rect(x0, y, tableW, layout.sectionLabelRowH, 'F')
             } else {
@@ -311,7 +321,7 @@ export async function exportSuguanPdf(
               : EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
           )
           centerText(
-            isExtraOccasion && section.headingType === 'schedule'
+            isExtraOccasion && isBandHeading
               ? section.label.toLocaleUpperCase()
               : section.label,
             section.headingType === 'voice'

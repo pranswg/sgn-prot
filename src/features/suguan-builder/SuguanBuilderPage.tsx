@@ -38,6 +38,7 @@ import {
   createEmptyDraft,
   isStepComplete,
   maxReachableStep,
+  pagsambaServiceTypeId,
   saveBlockers,
   type SuguanDraft,
 } from './builderState'
@@ -59,11 +60,18 @@ export function SuguanBuilderPage() {
   const updateSuguan = useSuguanStore((s) => s.updateSuguan)
   const allVoices = useSettingsStore((s) => s.allVoices)
   const voices = allVoices()
+  const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
+  const pagsambaId = pagsambaServiceTypeId(allServiceTypes())
   const allMembers = useMemberStore((s) => s.members)
   // The builder only ever books AWS members; PNK has its own (sealed) list and
   // no AWS Suguan may pick from it.
   const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const scheduleCategories = useWorshipScheduleCategories()
+  const draftFromSuguan = (suguan: Suguan) => {
+    const draft = createDraftFromSuguan(suguan, voices, scheduleCategories)
+    if (!suguan.extraOccasion) draft.serviceTypeId = pagsambaId
+    return draft
+  }
 
   // `editingId` is what we will write back to. It starts as the store's target so
   // deep links still work, but choosing "start new" or copying detaches it so a
@@ -84,8 +92,8 @@ export function SuguanBuilderPage() {
   )
   const [draft, setDraft] = useState<SuguanDraft>(() =>
     existing
-      ? createDraftFromSuguan(existing, voices, scheduleCategories)
-      : createEmptyDraft(voices, scheduleCategories),
+      ? draftFromSuguan(existing)
+      : createEmptyDraft(voices, scheduleCategories, pagsambaId),
   )
   const [startOpen, setStartOpen] = useState(!existing)
 
@@ -93,8 +101,8 @@ export function SuguanBuilderPage() {
     setLoadedKey(initialKey)
     setDraft(
       existing
-        ? createDraftFromSuguan(existing, voices, scheduleCategories)
-        : createEmptyDraft(voices, scheduleCategories),
+        ? draftFromSuguan(existing)
+        : createEmptyDraft(voices, scheduleCategories, pagsambaId),
     )
     setStep(existing ? BUILDER_STEPS.length - 1 : 0)
     setStartOpen(!existing)
@@ -470,7 +478,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
         onStartNew={() => {
           setEditingId(null)
           setLoadedKey('__new__')
-          setDraft(createEmptyDraft(voices, scheduleCategories))
+          setDraft(createEmptyDraft(voices, scheduleCategories, pagsambaId))
           setStep(0)
           setStartOpen(false)
           clearBuilderReturnPage()

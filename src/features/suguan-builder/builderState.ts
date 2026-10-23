@@ -8,6 +8,7 @@ import type {
   SuguanEvent,
   SuguanGroup,
   SuguanScheduleSection,
+  ServiceType,
   VoicePosition,
 } from '@/core/types/suguan'
 import { defaultCapacities } from '@/core/constants/serviceTypes'
@@ -107,26 +108,32 @@ export function groupGendersFor(group: SuguanGroup): ('female' | 'male')[] {
   return ['female', 'male']
 }
 
-/**
- * The service type a brand-new Suguan starts with: the configured default when
- * it still exists in the list, falling back to the first service type (which is
- * what a pre-default install used to start with) and then none.
- */
+/** The service type a shared blank draft starts with (including Extra Occasion). */
 export function preferredServiceTypeId(): string {
   const state = useSettingsStore.getState()
   const services = state.allServiceTypes()
   if (
     state.defaultServiceTypeId &&
-    services.some((t) => t.id === state.defaultServiceTypeId)
+    services.some((service) => service.id === state.defaultServiceTypeId)
   ) {
     return state.defaultServiceTypeId
   }
   return services[0]?.id ?? ''
 }
 
+export function pagsambaServiceTypeId(
+  services: Pick<ServiceType, 'id' | 'name'>[],
+): string {
+  return (
+    services.find((service) => service.name.trim().toLocaleLowerCase() === 'pagsamba')
+      ?.id ?? 'pagsamba'
+  )
+}
+
 export function createEmptyDraft(
   voices: VoicePosition[],
   categories: WorshipScheduleCategories = DEFAULT_SCHEDULE_CATEGORIES,
+  serviceTypeId: string = preferredServiceTypeId(),
 ): SuguanDraft {
   const coverage = defaultCoverage()
   return {
@@ -134,7 +141,7 @@ export function createEmptyDraft(
     coverage,
     date: coverage.startDate,
     time: '19:00',
-    serviceTypeId: preferredServiceTypeId(),
+    serviceTypeId,
     pagsasanayDate: '',
     pagtupadDate: '',
     group: 'babae',

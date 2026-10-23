@@ -26,6 +26,7 @@ import { planEventsFromCoverage } from '@/lib/suguanDates'
 import {
   coverageLabel,
   groupLabel,
+  isPagsambaSuguan,
   serviceTypeLabel,
   totalAssignedCount,
 } from '@/lib/suguanUtils'
@@ -55,6 +56,7 @@ export function StartModeDialog({
     const consumed = new Set<string>()
     for (const s of suguan) if (s.copiedFromId) consumed.add(s.copiedFromId)
     return [...suguan]
+      .filter(isPagsambaSuguan)
       .filter((s) => !consumed.has(s.id))
       .sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`))
       .slice(0, 40)

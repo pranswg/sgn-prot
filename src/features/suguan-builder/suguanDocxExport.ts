@@ -2,6 +2,7 @@ import type { Suguan, SuguanDocFormat } from '@/core/types/suguan'
 import {
   computeSuguanLayout,
   EXTRA_OCCASION_HEADER_FONT_SIZE_PT,
+  EXTRA_OCCASION_FILL,
   EXTRA_OCCASION_LOCALE_FONT_SIZE_PT,
   EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
   EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
@@ -138,16 +139,20 @@ export async function createSuguanDocxBlob(
     children: [
       makeCell(isExtraOccasion ? 'Blg.' : 'No.', columnWidths[0], {
         bold: true,
-        fill: 'F2F2F2',
+        fill: isExtraOccasion ? EXTRA_OCCASION_FILL.slice(1) : 'F2F2F2',
         size: isExtraOccasion ? EXTRA_OCCASION_HEADER_FONT_SIZE_PT * 2 : 18,
         compact: isExtraOccasion,
       }),
-      makeCell('PANGALAN', columnWidths[1], {
+      makeCell(
+        isExtraOccasion ? 'PANGALAN' : 'Pangalan',
+        columnWidths[1],
+        {
         bold: true,
-        fill: 'F2F2F2',
+        fill: isExtraOccasion ? EXTRA_OCCASION_FILL.slice(1) : 'F2F2F2',
         size: isExtraOccasion ? EXTRA_OCCASION_HEADER_FONT_SIZE_PT * 2 : 18,
         compact: isExtraOccasion,
-      }),
+        },
+      ),
       ...layout.events.map((event, index) =>
         makeCell(
           `${eventTypeLabel(event.type, event.label)}\n${formatEventDate(event)}`,
@@ -158,8 +163,10 @@ export async function createSuguanDocxBlob(
             compact: isExtraOccasion,
             fill:
               event.type === 'pagsasanay'
-                ? 'FFF2CC'
-                : accent.pagtupadFill.slice(1),
+                ? EXTRA_OCCASION_FILL.slice(1)
+                  : isExtraOccasion
+                    ? EXTRA_OCCASION_FILL.slice(1)
+                    : accent.pagtupadFill.slice(1),
           },
         ),
       ),
@@ -175,12 +182,18 @@ export async function createSuguanDocxBlob(
           makeCell('', columnWidths[0], {
             compact: isExtraOccasion,
             fill:
-              !isExtraOccasion || section.headingType === 'schedule'
-                ? accent.scheduleFill.slice(1)
+              !isExtraOccasion ||
+              section.headingType === 'schedule' ||
+              section.headingType === 'service'
+                ? isExtraOccasion
+                  ? EXTRA_OCCASION_FILL.slice(1)
+                  : accent.scheduleFill.slice(1)
                 : undefined,
           }),
           makeCell(
-            isExtraOccasion && section.headingType === 'schedule'
+            isExtraOccasion &&
+            (section.headingType === 'schedule' ||
+              section.headingType === 'service')
               ? section.label.toLocaleUpperCase()
               : section.label,
             columnWidths[1],
@@ -193,8 +206,12 @@ export async function createSuguanDocxBlob(
                 : 18,
               compact: isExtraOccasion,
               fill:
-                !isExtraOccasion || section.headingType === 'schedule'
-                  ? accent.scheduleFill.slice(1)
+                !isExtraOccasion ||
+                section.headingType === 'schedule' ||
+                section.headingType === 'service'
+                  ? isExtraOccasion
+                    ? EXTRA_OCCASION_FILL.slice(1)
+                    : accent.scheduleFill.slice(1)
                   : undefined,
               align: voiceHeading ? AlignmentType.LEFT : AlignmentType.CENTER,
             },
@@ -203,8 +220,12 @@ export async function createSuguanDocxBlob(
             makeCell('', columnWidths[index + 2], {
               compact: isExtraOccasion,
               fill:
-                !isExtraOccasion || section.headingType === 'schedule'
-                  ? accent.scheduleFill.slice(1)
+                !isExtraOccasion ||
+                section.headingType === 'schedule' ||
+                section.headingType === 'service'
+                  ? isExtraOccasion
+                    ? EXTRA_OCCASION_FILL.slice(1)
+                    : accent.scheduleFill.slice(1)
                   : undefined,
             }),
           ),

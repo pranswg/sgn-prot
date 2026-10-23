@@ -10,6 +10,7 @@ import {
 import {
   computeSuguanLayout,
   EXTRA_OCCASION_HEADER_FONT_SIZE_PT,
+  EXTRA_OCCASION_FILL,
   EXTRA_OCCASION_LOCALE_FONT_SIZE_PT,
   EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
   EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
@@ -173,7 +174,7 @@ export function SuguanSheetPage({
               height: px(layout.sectionLabelRowH),
               background:
                 !isVoiceHeading && isExtraOccasion
-                  ? accent.scheduleFill
+                  ? EXTRA_OCCASION_FILL
                   : undefined,
               border: `0.5px solid ${BORDER}`,
             }}
@@ -189,7 +190,11 @@ export function SuguanSheetPage({
                 : isExtraOccasion
                   ? EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT * PT_TO_PX
                   : headerPx,
-              background: isVoiceHeading ? undefined : accent.scheduleFill,
+              background: isVoiceHeading
+                ? undefined
+                : isExtraOccasion
+                  ? EXTRA_OCCASION_FILL
+                  : accent.scheduleFill,
               border: `0.5px solid ${BORDER}`,
               textAlign: isVoiceHeading ? 'left' : 'center',
               verticalAlign: 'middle',
@@ -207,7 +212,7 @@ export function SuguanSheetPage({
                 height: px(layout.sectionLabelRowH),
                 background:
                   !isVoiceHeading && isExtraOccasion
-                    ? accent.scheduleFill
+                    ? EXTRA_OCCASION_FILL
                     : undefined,
                 border: `0.5px solid ${BORDER}`,
               }}
@@ -378,7 +383,9 @@ export function SuguanSheetPage({
                   width: px(layout.noColWidthMm),
                   height: px(layout.headerRowH * 2),
                   fontSize: isExtraOccasion ? extraHeaderPx : headerPx,
-                  background: '#F2F2F2',
+                  background: isExtraOccasion
+                    ? EXTRA_OCCASION_FILL
+                    : '#F2F2F2',
                   border: `0.5px solid ${BORDER}`,
                 }}
               >
@@ -391,14 +398,20 @@ export function SuguanSheetPage({
                   width: px(layout.nameColWidthMm),
                   height: px(layout.headerRowH * 2),
                   fontSize: isExtraOccasion ? extraHeaderPx : headerPx,
-                  background: '#F2F2F2',
+                  background: isExtraOccasion
+                    ? EXTRA_OCCASION_FILL
+                    : '#F2F2F2',
                   border: `0.5px solid ${BORDER}`,
                 }}
               >
-                PANGALAN
+                {isExtraOccasion ? 'PANGALAN' : 'Pangalan'}
               </th>
               {events.map((e, i) => {
-                const bg = e.type === 'pagsasanay' ? '#FFF2CC' : accent.pagtupadFill
+                const bg = isExtraOccasion
+                  ? EXTRA_OCCASION_FILL
+                  : e.type === 'pagsasanay'
+                    ? EXTRA_OCCASION_FILL
+                    : accent.pagtupadFill
                 return (
                   <th
                     key={i}
@@ -430,7 +443,9 @@ export function SuguanSheetPage({
               <tr>
                 {events.map((e, i) => {
                   const bg =
-                    e.type === 'pagsasanay' ? '#FFF2CC' : accent.pagtupadFill
+                    e.type === 'pagsasanay'
+                      ? EXTRA_OCCASION_FILL
+                      : accent.pagtupadFill
                   return (
                     <th
                       key={`d${i}`}

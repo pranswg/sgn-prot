@@ -5,20 +5,12 @@ import {
   Check,
   FileText,
   Music,
-  Settings2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DisclosureSection } from '@/components/DisclosureSection'
 import { FieldCard, FieldCardGroup } from '@/components/FieldCard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import {
   allSchedulesOf,
@@ -38,7 +30,6 @@ import {
   isDateKey,
   laterDateKey,
 } from '@/lib/phDate'
-import { useSettingsStore } from '@/store/settingsStore'
 import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import type {
   SuguanCoverage,
@@ -118,7 +109,6 @@ function ChoiceButton({
  * Pagsasanay/Pagtupad columns appear as chips under the dates they come from.
  */
 export function CoverageStep({ draft, patch }: CoverageStepProps) {
-  const allServiceTypes = useSettingsStore((s) => s.allServiceTypes)
   const fallbackCoverage = useMemo<SuguanCoverage>(
     () => ({ template: 'midweek-2w', startDate: '' }),
     [],
@@ -310,31 +300,6 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
       pagtupadDate: nextEvents.find((e) => e.type === 'pagtupad')?.date ?? '',
     })
   }
-
-  const serviceTypeField = (
-    <FieldCard icon={Settings2} label="Service type" required tone="sky">
-      <Select
-        value={draft.serviceTypeId}
-        onValueChange={(v) => patch({ serviceTypeId: v })}
-      >
-        <SelectTrigger id="serviceType" className="w-full sm:max-w-md">
-          <SelectValue placeholder="Select a service" />
-        </SelectTrigger>
-        <SelectContent>
-          {allServiceTypes().map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {allServiceTypes().length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          No service types are configured. Add one in Settings to continue.
-        </p>
-      )}
-    </FieldCard>
-  )
 
   const coverageField = (
     <FieldCard icon={CalendarRange} label="Coverage" tone="violet">
@@ -552,7 +517,6 @@ export function CoverageStep({ draft, patch }: CoverageStepProps) {
   return (
     <div className="flex flex-col gap-4">
       <FieldCardGroup>
-        {serviceTypeField}
         {coverageField}
         {datesField}
         {choirField}

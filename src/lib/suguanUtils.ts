@@ -629,6 +629,7 @@ export function suguanSheetTitle(suguan: Suguan): string {
 
 export interface ExtraOccasionSheetHeading {
   locale: string
+  title: string
   subtitle: string
 }
 
@@ -651,6 +652,8 @@ export function extraOccasionSheetHeading(
   const localeName = occasion?.localeName.trim()
   return {
     locale: localeName ? `Lokal ng ${localeName}` : '',
+    title:
+      occasion?.name?.trim() || schedule?.scheduleLabel.trim() || 'Extra Occasion',
     subtitle,
   }
 }

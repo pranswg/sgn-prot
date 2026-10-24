@@ -143,6 +143,7 @@ test('an Extra Occasion uses the reference heading and voice-section table styli
 
   assert.deepEqual(extraOccasionSheetHeading(occasionSheet), {
     locale: 'Lokal ng Sta. Monica',
+    title: 'Kasal',
     subtitle: 'October 12, 2026 - 3:00 PM',
   })
   assert.equal(
@@ -160,7 +161,7 @@ test('an Extra Occasion uses the reference heading and voice-section table styli
     }).locale,
     '',
   )
-  assert.ok(occasionLayout.titleRowH < choirLayout.titleRowH)
+  assert.ok(occasionLayout.titleRowH > choirLayout.titleRowH)
   assert.match(suguanFileName(record, 'pdf'), / - Kasal Suguan\.pdf$/)
   assert.deepEqual(
     occasionLayout.sections.map(({ label, headingType }) => [
@@ -214,23 +215,24 @@ test('the shared Excel builder uses the reference occasion font and headings', a
 
   const sheet = workbook.worksheets[0]
   assert.equal(sheet.getCell('A1').value, 'Lokal ng Sta. Monica')
-  assert.equal(sheet.getCell('A2').value, 'October 12, 2026 - 3:00 PM')
-  assert.equal(sheet.getCell('A3').value, 'Blg.')
-  assert.equal(sheet.getCell('B3').value, 'PANGALAN\nPagsamba')
-  assert.equal(sheet.getCell('B3').alignment?.horizontal, 'center')
-  assert.equal(sheet.getCell('C3').value, 'Pagsasanay\n10/11/2026')
-  assert.match(JSON.stringify(sheet.getCell('B3').fill), /FFFFF2CC/)
-  assert.match(JSON.stringify(sheet.getCell('C3').fill), /FFFFF2CC/)
-  assert.match(JSON.stringify(sheet.getCell('D3').fill), /FFFFF2CC/)
-  assert.equal(sheet.getRow(3).height, 15)
-  assert.equal(sheet.getCell('B6').value, 'SOPRANO')
-  assert.equal(sheet.getCell('B5').value, 'FRIDAY 3:00 PM')
-  assert.match(JSON.stringify(sheet.getCell('B5').fill), /FFFFF2CC/)
-  assert.equal(sheet.getCell('B6').font?.size, 12)
-  assert.equal(sheet.getCell('B6').font?.name, 'Book Antiqua')
-  assert.equal(sheet.getCell('B7').value, 'Andao, Kimberly')
-  assert.equal(sheet.getCell('A7').font?.size, 9)
-  assert.ok(Number(sheet.getCell('B7').font?.size) > 9)
-  assert.equal(sheet.getCell('B7').font?.size, 11)
+  assert.equal(sheet.getCell('A2').value, 'Kasal')
+  assert.equal(sheet.getCell('A3').value, 'October 12, 2026 - 3:00 PM')
+  assert.equal(sheet.getCell('A4').value, 'Blg.')
+  assert.equal(sheet.getCell('B4').value, 'PANGALAN\nPagsamba')
+  assert.equal(sheet.getCell('B4').alignment?.horizontal, 'center')
+  assert.equal(sheet.getCell('C4').value, 'Pagsasanay\n10/11/2026')
+  assert.match(JSON.stringify(sheet.getCell('B4').fill), /FFFFF2CC/)
+  assert.match(JSON.stringify(sheet.getCell('C4').fill), /FFFFF2CC/)
+  assert.match(JSON.stringify(sheet.getCell('D4').fill), /FFFFF2CC/)
+  assert.equal(sheet.getRow(4).height, 15)
+  assert.equal(sheet.getCell('B7').value, 'SOPRANO')
+  assert.equal(sheet.getCell('B6').value, 'FRIDAY 3:00 PM')
+  assert.match(JSON.stringify(sheet.getCell('B6').fill), /FFFFF2CC/)
+  assert.equal(sheet.getCell('B7').font?.size, 12)
   assert.equal(sheet.getCell('B7').font?.name, 'Book Antiqua')
+  assert.equal(sheet.getCell('B8').value, 'Andao, Kimberly')
+  assert.equal(sheet.getCell('A8').font?.size, 9)
+  assert.ok(Number(sheet.getCell('B8').font?.size) > 9)
+  assert.equal(sheet.getCell('B8').font?.size, 11)
+  assert.equal(sheet.getCell('B8').font?.name, 'Book Antiqua')
 })

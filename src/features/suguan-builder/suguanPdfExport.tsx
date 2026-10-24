@@ -7,6 +7,7 @@ import {
   EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
   EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
   EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT,
+  EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
   EXTRA_OCCASION_VOICE_FONT_SIZE_PT,
   fitFontSizePt,
   PT_TO_MM,
@@ -145,17 +146,22 @@ export async function exportSuguanPdf(
     if (extraHeading && firstPage) {
       const centerX = x0 + tableW / 2
       const localeSize = EXTRA_OCCASION_LOCALE_FONT_SIZE_PT
+      const occasionTitleSize = EXTRA_OCCASION_TITLE_FONT_SIZE_PT
       const subtitleSize = EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT
       const localeH = localeSize * 1.2 * PT_TO_MM
+      const titleH = occasionTitleSize * 1.2 * PT_TO_MM
       const subtitleH = subtitleSize * 1.2 * PT_TO_MM
       const gap = EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 0.6 * PT_TO_MM
-      const textH = localeH + subtitleH + gap
+      const textH = localeH + titleH + subtitleH + gap * 2
       let textY = m.top + Math.max(0, (layout.titleRowH - textH) / 2)
       if (extraHeading.locale) {
         applyFont('normal', localeSize)
         centerText(extraHeading.locale, centerX, textY + localeH / 2)
       }
       textY += localeH + gap
+      applyFont('bold', occasionTitleSize)
+      centerText(extraHeading.title, centerX, textY + titleH / 2)
+      textY += titleH + gap
       applyFont('normal', subtitleSize)
       centerText(extraHeading.subtitle, centerX, textY + subtitleH / 2)
     } else if (!extraHeading) {

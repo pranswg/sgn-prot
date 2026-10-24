@@ -9,7 +9,6 @@ import type {
 } from '@/core/types/suguan'
 import { memberIsOrganist } from '@/core/constants/memberMembership'
 import type { VoicePosition } from '@/core/types/suguan'
-import { serviceTypeLabel } from '@/lib/suguanUtils'
 
 export type ExtraOrganistaRole = ExtraOccasionOrganistaRole
 export type ExtraOrganistaAssignment = ExtraOccasionOrganistaAssignment
@@ -185,13 +184,6 @@ export function buildExtraOccasionSheetSuguan(
       headingType: 'schedule',
       assignments: [],
     }
-    const serviceTypeHeading: SuguanScheduleSection = {
-      ...source,
-      id: `${section.id}-service-type`,
-      scheduleLabel: serviceTypeLabel(suguan).toLocaleUpperCase(),
-      headingType: 'service',
-      assignments: [],
-    }
     const voiceSchedules = section.voiceSections.map((voice) => ({
       ...source,
       id: `${section.id}-${voice.id}`,
@@ -225,7 +217,6 @@ export function buildExtraOccasionSheetSuguan(
         : []
     return [
       scheduleHeading,
-      serviceTypeHeading,
       ...voiceSchedules,
       ...organistaSchedule,
     ]

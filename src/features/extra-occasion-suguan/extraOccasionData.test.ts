@@ -236,7 +236,6 @@ test('Extra Occasion adapts custom events and voice sections to the shared sheet
     adapted.schedules.map((schedule) => [schedule.scheduleLabel, schedule.headingType]),
     [
       ['Friday 3:00 PM', 'schedule'],
-      ['PAGSAMBA', 'service'],
       ['SOPRANO', 'voice'],
       ['ALTO', 'voice'],
     ],
@@ -247,7 +246,7 @@ test('Extra Occasion adapts custom events and voice sections to the shared sheet
   )
   assert.deepEqual(
     layout.sections.map((section) => section.rows.map((row) => row.name)),
-    [[], [], ['Andao, Kimberly'], ['Bautista, Sarah']],
+    [[], ['Andao, Kimberly'], ['Bautista, Sarah']],
   )
   assert.equal(
     layout.pages.flat().some((block) => block.kind === 'sig-name'),

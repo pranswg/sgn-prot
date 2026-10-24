@@ -168,12 +168,11 @@ test('an Extra Occasion uses the reference heading and voice-section table styli
     ]),
     [
       ['Friday 3:00 PM', 'schedule'],
-      ['PAGSAMBA', 'service'],
       ['SOPRANO', 'voice'],
     ],
   )
   assert.equal(occasionLayout.sections[0].rows.length, 0)
-  assert.equal(occasionLayout.sections[2].rows[0].name, 'Andao, Kimberly')
+  assert.equal(occasionLayout.sections[1].rows[0].name, 'Andao, Kimberly')
 })
 
 test('the shared Word builder renders the adapted occasion sheet', async () => {
@@ -223,14 +222,14 @@ test('the shared Excel builder uses the reference occasion font and headings', a
   assert.match(JSON.stringify(sheet.getCell('C4').fill), /FFFFF2CC/)
   assert.match(JSON.stringify(sheet.getCell('D4').fill), /FFFFF2CC/)
   assert.equal(sheet.getRow(4).height, 15)
-  assert.equal(sheet.getCell('B7').value, 'PAGSAMBA')
+  assert.equal(sheet.getCell('B7').value, 'SOPRANO')
   assert.equal(sheet.getCell('B6').value, 'FRIDAY 3:00 PM')
   assert.match(JSON.stringify(sheet.getCell('B6').fill), /FFFFF2CC/)
-  assert.equal(sheet.getCell('B7').font?.size, 11)
+  assert.equal(sheet.getCell('B7').font?.size, 12)
   assert.equal(sheet.getCell('B7').font?.name, 'Book Antiqua')
-  assert.equal(sheet.getCell('B8').value, 'SOPRANO')
-  assert.equal(sheet.getCell('A8').font?.size, 11)
+  assert.equal(sheet.getCell('B8').value, 'Andao, Kimberly')
+  assert.equal(sheet.getCell('A8').font?.size, 9)
   assert.ok(Number(sheet.getCell('B8').font?.size) > 9)
-  assert.equal(sheet.getCell('B8').font?.size, 12)
+  assert.equal(sheet.getCell('B8').font?.size, 11)
   assert.equal(sheet.getCell('B8').font?.name, 'Book Antiqua')
 })

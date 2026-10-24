@@ -35,7 +35,10 @@ import { useSuguanStore } from '@/store/suguanStore'
 import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
 import { useNavStore } from '@/store/navStore'
 import { usePermissions } from '@/hooks/usePermissions'
-import { exportFileName } from '@/lib/exportNaming'
+import {
+  exportFileName,
+  extraOccasionExportDocumentName,
+} from '@/lib/exportNaming'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
@@ -381,7 +384,10 @@ export function MultipleExtraOccasionPlanner() {
       return
     }
     const occasionName = plannerOccasionLabel(selected, Math.max(selectedIndex, 0))
-    const filename = exportFileName(`${occasionName} - Extra Occasion Suguan`, kind)
+    const filename = exportFileName(
+      extraOccasionExportDocumentName(occasionName),
+      kind,
+    )
     requestExport({
       filename,
       confirmLabel: `Export ${label}`,
@@ -426,7 +432,9 @@ export function MultipleExtraOccasionPlanner() {
         showPdfPreview(
           previewWindow,
           blob,
-          `${plannerOccasionLabel(selected, Math.max(selectedIndex, 0))} - Extra Occasion Suguan`,
+          extraOccasionExportDocumentName(
+            plannerOccasionLabel(selected, Math.max(selectedIndex, 0)),
+          ),
         )
       } catch (error) {
         previewWindow.close()

@@ -15,7 +15,6 @@ import {
   EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
   EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
   EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT,
-  EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
   EXTRA_OCCASION_VOICE_FONT_SIZE_PT,
   fitFontSizePt,
   PT_TO_MM,
@@ -329,13 +328,6 @@ export function SuguanSheetPage({
                     {extraHeading.locale}
                   </span>
                 )}
-                <strong
-                  style={{
-                    fontSize: EXTRA_OCCASION_TITLE_FONT_SIZE_PT * PT_TO_PX,
-                  }}
-                >
-                  {extraHeading.title}
-                </strong>
                 <span
                   style={{
                     fontSize: EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT * PT_TO_PX,

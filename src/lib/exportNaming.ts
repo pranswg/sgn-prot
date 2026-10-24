@@ -46,6 +46,11 @@ export function exportFileName(
   return `${timestamp} - ${sanitizeExportName(documentName)}.${extension}`
 }
 
+export function extraOccasionExportDocumentName(occasionName: string): string {
+  const name = occasionName.trim()
+  return name ? `${name} Suguan` : 'Extra Occasion Suguan'
+}
+
 /**
  * The gender word used in Suguan document names, e.g. `Women Choir` for the
  * singing sheet's group. Reads the same `babae` / `lalaki` / `mixed` values

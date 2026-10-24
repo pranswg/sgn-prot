@@ -47,7 +47,6 @@ export const EXTRA_OCCASION_VOICE_FONT_SIZE_PT = 12
 export const EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT = 11
 export const EXTRA_OCCASION_NUMBER_FONT_SIZE_PT = 9
 export const EXTRA_OCCASION_LOCALE_FONT_SIZE_PT = 9
-export const EXTRA_OCCASION_TITLE_FONT_SIZE_PT = 13
 export const EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT = 10
 
 export function suguanSheetAccent(group: SuguanGroup): SuguanSheetAccent {
@@ -481,9 +480,8 @@ export function computeSuguanLayout(
   const titleRowH = suguan.extraOccasion
     ? (
         EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 1.2 +
-        EXTRA_OCCASION_TITLE_FONT_SIZE_PT * 1.2 +
         EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT * 1.2 +
-        9 * 0.6 * 2 +
+        9 * 0.6 +
         6
       ) * PT_TO_MM
     : fs.titleRowHeight * PT_TO_MM
@@ -651,7 +649,7 @@ export async function createSuguanExcelBlob(
     key: `c_${i + 1}`,
   }))
 
-  const firstTableHeaderRow = isExtraOccasion ? 4 : 2
+  const firstTableHeaderRow = isExtraOccasion ? 3 : 2
   const secondTableHeaderRow = firstTableHeaderRow + 1
   const headerRow1 = firstTableHeaderRow
   const headerRow2 = secondTableHeaderRow
@@ -671,14 +669,6 @@ export async function createSuguanExcelBlob(
         bold: false,
         height:
           EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 1.2 +
-          EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 0.6,
-      },
-      {
-        text: heading.title,
-        size: EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
-        bold: true,
-        height:
-          EXTRA_OCCASION_TITLE_FONT_SIZE_PT * 1.2 +
           EXTRA_OCCASION_LOCALE_FONT_SIZE_PT * 0.6,
       },
       {

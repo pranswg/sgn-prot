@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   exportFileName,
+  extraOccasionExportDocumentName,
   masterListExportDocumentName,
   masterListExportGroupLabel,
   sanitizeExportName,
@@ -29,6 +30,11 @@ test('exportFileName uppercases and dedots the extension', () => {
 test('exportFileName defaults the timestamp to the PHT stamp', () => {
   const name = exportFileName('Trainees List', 'pdf')
   assert.match(name, /^\d{8}_\d{2}-\d{2}[AP]M - Trainees List\.pdf$/)
+})
+
+test('Extra Occasion export names use the occasion name', () => {
+  assert.equal(extraOccasionExportDocumentName('Kasal'), 'Kasal Suguan')
+  assert.equal(extraOccasionExportDocumentName('  '), 'Extra Occasion Suguan')
 })
 
 test('sanitizeExportName strips characters a file system rejects', () => {

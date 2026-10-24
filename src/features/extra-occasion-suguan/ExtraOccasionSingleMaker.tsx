@@ -11,7 +11,10 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
 import { usePermissions } from '@/hooks/usePermissions'
-import { exportFileName } from '@/lib/exportNaming'
+import {
+  exportFileName,
+  extraOccasionExportDocumentName,
+} from '@/lib/exportNaming'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
@@ -150,7 +153,12 @@ export function ExtraOccasionSingleMaker() {
       toast.error(problem)
       return
     }
-    const filename = exportFileName('Extra Occasion Suguan', kind)
+    const filename = exportFileName(
+      extraOccasionExportDocumentName(
+        state.name || state.draft.schedules[0]?.scheduleLabel || '',
+      ),
+      kind,
+    )
     requestExport({
       filename,
       confirmLabel: `Export ${label}`,

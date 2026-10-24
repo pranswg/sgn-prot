@@ -37,7 +37,11 @@ import {
   planEventsFromCoverage,
   suggestPagtupadBlock,
 } from '@/lib/suguanDates'
-import { exportFileName, suguanExportGroupLabel } from '@/lib/exportNaming'
+import {
+  exportFileName,
+  extraOccasionExportDocumentName,
+  suguanExportGroupLabel,
+} from '@/lib/exportNaming'
 
 /** @deprecated Use `todayPHT` from `@/lib/phDate`. Kept as an alias so existing
  * call sites keep working; both now resolve to the PHT calendar date. */
@@ -625,7 +629,6 @@ export function suguanSheetTitle(suguan: Suguan): string {
 
 export interface ExtraOccasionSheetHeading {
   locale: string
-  title: string
   subtitle: string
 }
 
@@ -648,9 +651,6 @@ export function extraOccasionSheetHeading(
   const localeName = occasion?.localeName.trim()
   return {
     locale: localeName ? `Lokal ng ${localeName}` : '',
-    title: `LISTAHAN NG MGA TUTUPAD SA ${
-      occasion?.name?.trim() || 'EXTRA OCCASION'
-    }`.toLocaleUpperCase(),
     subtitle,
   }
 }
@@ -715,7 +715,11 @@ export function suguanFileName(
   ext: 'xlsx' | 'pdf' | 'docx',
 ): string {
   if (suguan.extraOccasion) {
-    return exportFileName('Extra Occasion Suguan', ext)
+    const occasionName =
+      suguan.extraOccasion.name?.trim() ||
+      suguan.schedules[0]?.scheduleLabel?.trim() ||
+      ''
+    return exportFileName(extraOccasionExportDocumentName(occasionName), ext)
   }
   const base = `${suguanExportGroupLabel(suguan.group)} Choir Suguan`
   const service = serviceTypeLabel(suguan)

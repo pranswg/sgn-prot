@@ -7,7 +7,6 @@ import {
   EXTRA_OCCASION_NUMBER_FONT_SIZE_PT,
   EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
   EXTRA_OCCASION_SUBTITLE_FONT_SIZE_PT,
-  EXTRA_OCCASION_TITLE_FONT_SIZE_PT,
   EXTRA_OCCASION_VOICE_FONT_SIZE_PT,
   suguanSheetAccent,
   type SheetMembers,
@@ -373,18 +372,6 @@ export async function createSuguanDocxBlob(
                       }),
                     ]
                   : []),
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  spacing: { after: 20 },
-                  children: [
-                    new TextRun({
-                      text: occasionHeading.title,
-                      bold: true,
-                      size: EXTRA_OCCASION_TITLE_FONT_SIZE_PT * 2,
-                      font: fontName,
-                    }),
-                  ],
-                }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 60 },

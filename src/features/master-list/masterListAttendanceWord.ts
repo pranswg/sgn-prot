@@ -103,7 +103,7 @@ export async function createMasterListAttendanceWordBlob(
     Math.ceil((title.trim().length * 10) / tableWidthPt),
   )
   const tableTopPt = 34 + titleLines * 23 + 18 + 16 + 16
-  const tableHeaderHeightPt = 38
+  const tableHeaderHeightPt = 42
   const regularPageHeight = pageHeightPt - tableTopPt - tableHeaderHeightPt - 32
   const finalPageHeight =
     pageHeightPt -
@@ -186,7 +186,7 @@ export async function createMasterListAttendanceWordBlob(
         new TableRow({
           tableHeader: true,
           cantSplit: true,
-          height: { value: toTwips(38), rule: 'exact' },
+          height: { value: toTwips(42), rule: 'exact' },
           children: [
             cell('Blg.', columnWidths[0], {
               bold: true,
@@ -199,10 +199,37 @@ export async function createMasterListAttendanceWordBlob(
               fontSize: 11,
             }),
             ...panel.map((date, index) =>
-              cell(formatDateKeyNumeric(date), columnWidths[index + 2], {
-                bold: true,
-                fill: 'EFF2F5',
-                fontSize: 8,
+              new TableCell({
+                width: { size: columnWidths[index + 2], type: WidthType.DXA },
+                verticalAlign: VerticalAlign.CENTER,
+                margins: { top: 45, bottom: 45, left: 65, right: 65 },
+                shading: { fill: 'EFF2F5' },
+                borders,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 0, after: 0 },
+                    children: [
+                      new TextRun({
+                        text: formatDateKeyNumeric(date),
+                        bold: true,
+                        size: 16,
+                        font: 'Book Antiqua',
+                      }),
+                    ],
+                  }),
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 0, after: 0 },
+                    children: [
+                      new TextRun({
+                        text: 'Lagda',
+                        size: 16,
+                        font: 'Book Antiqua',
+                      }),
+                    ],
+                  }),
+                ],
               }),
             ),
           ],

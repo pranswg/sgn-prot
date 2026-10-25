@@ -123,7 +123,7 @@ export async function exportMasterListAttendancePdf(
   const titleTop = 34
   const dateSummaryTop = titleTop + titleLines.length * 23 + 18
   const tableTop = dateSummaryTop + 16 + 16
-  const tableHeaderHeight = 38
+  const tableHeaderHeight = 42
   const memberRowHeight = 26
   const sectionRowHeight = 22
   const regularPageHeight =
@@ -186,11 +186,27 @@ export async function exportMasterListAttendancePdf(
       headers.forEach((header, index) => {
         const cellWidth = widths[index]
         doc.setFontSize(index < 2 ? 11 : 8)
-        doc.text(header, x + cellWidth / 2, headerY + tableHeaderHeight / 2, {
-          align: 'center',
-          baseline: 'middle',
-          maxWidth: cellWidth - 4,
-        })
+        if (index < 2) {
+          doc.text(header, x + cellWidth / 2, headerY + tableHeaderHeight / 2, {
+            align: 'center',
+            baseline: 'middle',
+            maxWidth: cellWidth - 4,
+          })
+        } else {
+          const centerX = x + cellWidth / 2
+          doc.text(header, centerX, headerY + 13, {
+            align: 'center',
+            baseline: 'middle',
+            maxWidth: cellWidth - 4,
+          })
+          doc.setFont('BookAntiqua', 'normal')
+          doc.text('Lagda', centerX, headerY + 31, {
+            align: 'center',
+            baseline: 'middle',
+            maxWidth: cellWidth - 4,
+          })
+          doc.setFont('BookAntiqua', 'bold')
+        }
         x += cellWidth
         if (index < headers.length - 1) {
           doc.line(x, headerY, x, headerY + tableHeaderHeight)

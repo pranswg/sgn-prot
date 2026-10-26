@@ -816,7 +816,9 @@ export async function createSuguanExcelBlob(
       const noCell = sheet.getCell(rn, 1)
       noCell.value = row.no
       noCell.font = font(
-        isExtraOccasion ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT : fs.bodyFontSize,
+        isExtraOccasion
+          ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT
+          : fs.headerFontSize,
       )
       noCell.alignment = { horizontal: 'center', vertical: 'middle' }
       const nameCell = sheet.getCell(rn, 2)

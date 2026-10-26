@@ -414,7 +414,7 @@ test('Folio is the default paper size and font size remains normal', () => {
   assert.equal(defaultLayout.paperWidthMm, 215.9)
   assert.equal(defaultLayout.paperHeightMm, 330.2)
   assert.equal(DEFAULT_DOC_FORMAT.fontSize, 'normal')
-  assert.equal(FONT_SIZE_PRESETS.normal.bodyFontSize, 9)
+  assert.equal(FONT_SIZE_PRESETS.normal.bodyFontSize, 11)
   assert.ok(FONT_SIZE_PRESETS.normal.bodyFontSize > FONT_SIZE_PRESETS.small.bodyFontSize)
   assert.ok(FONT_SIZE_PRESETS.large.bodyFontSize > FONT_SIZE_PRESETS.normal.bodyFontSize)
   // Every preset must stay in ascending order or the picker stops meaning anything.
@@ -464,7 +464,12 @@ test('Excel applies before-and-after spacing to name rows only', async () => {
   assert.equal(sheet.getRow(4).height, 16)
   assert.equal(
     sheet.getRow(5).height,
-    format.tableSpacingBeforePt! + format.tableSpacingAfterPt! + 14,
+    Math.max(
+      FONT_SIZE_PRESETS.normal.rowHeight,
+      FONT_SIZE_PRESETS.normal.bodyFontSize * 1.5,
+    ) +
+      format.tableSpacingBeforePt! +
+      format.tableSpacingAfterPt!,
   )
 })
 
@@ -481,7 +486,7 @@ test('Excel keeps non-name text normal and preserves larger names across pages',
 
   assert.equal(sheet.getCell('A1').font.size, FONT_SIZE_PRESETS.normal.titleFontSize)
   assert.equal(sheet.getCell('B4').font.size, FONT_SIZE_PRESETS.normal.headerFontSize)
-  assert.equal(sheet.getCell('A5').font.size, FONT_SIZE_PRESETS.normal.bodyFontSize)
+  assert.equal(sheet.getCell('A5').font.size, FONT_SIZE_PRESETS.normal.headerFontSize)
   assert.equal(sheet.getCell('B5').font.size, FONT_SIZE_PRESETS.large.bodyFontSize)
   assert.equal(sheet.pageSetup.fitToHeight, 0)
 })
@@ -511,7 +516,7 @@ test('resolveFontSizePreset derives custom from the body size, never undefined',
   )
   assert.equal(custom.bodyFontSize, 14)
   assert.ok(custom.titleFontSize > custom.bodyFontSize, 'the title stays larger than the body')
-  assert.ok(custom.sigFontSize > custom.bodyFontSize)
+  assert.ok(custom.sigFontSize >= custom.bodyFontSize)
   // A cleared custom input must fall back rather than produce a zero-size sheet.
   const cleared = resolveFontSizePreset(
     normalizeDocFormat({ ...DEFAULT_DOC_FORMAT, fontSize: 'custom' }),

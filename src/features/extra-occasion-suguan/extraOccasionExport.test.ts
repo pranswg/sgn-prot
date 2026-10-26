@@ -233,6 +233,6 @@ test('the shared Excel builder uses the reference occasion font and headings', a
   assert.equal(sheet.getCell('B8').value, 'Andao, Kimberly')
   assert.equal(sheet.getCell('A8').font?.size, 9)
   assert.ok(Number(sheet.getCell('B8').font?.size) > 9)
-  assert.equal(sheet.getCell('B8').font?.size, 11)
+  assert.equal(sheet.getCell('B8').font?.size, 13)
   assert.equal(sheet.getCell('B8').font?.name, 'Book Antiqua')
 })

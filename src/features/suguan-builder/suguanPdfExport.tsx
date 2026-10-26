@@ -360,7 +360,7 @@ export async function exportSuguanPdf(
             'normal',
             isExtraOccasion
               ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT
-              : layout.fs.bodyFontSize,
+              : layout.fs.headerFontSize,
           )
           centerText(
             String(row.no),

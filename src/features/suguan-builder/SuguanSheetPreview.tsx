@@ -11,15 +11,16 @@ interface SuguanSheetPreviewProps {
   suguan: Suguan
   members: SheetMembers[]
   docFormat?: SuguanDocFormat | null
-  previewWidth?: number
   className?: string
 }
+
+const REFERENCE_PREVIEW_WIDTH_PX = 900
+const REFERENCE_PAPER_WIDTH_MM = 215.9
 
 export function SuguanSheetPreview({
   suguan,
   members,
   docFormat,
-  previewWidth = 760,
   className,
 }: SuguanSheetPreviewProps) {
   const fmt = normalizeDocFormat(docFormat)
@@ -27,6 +28,9 @@ export function SuguanSheetPreview({
   const { layout } = readout
   const fs = resolveFontSizePreset(fmt)
 
+  const previewWidth =
+    (layout.paperWidthMm / REFERENCE_PAPER_WIDTH_MM) *
+    REFERENCE_PREVIEW_WIDTH_PX
   const mmToPx = previewWidth / layout.paperWidthMm
 
   return (

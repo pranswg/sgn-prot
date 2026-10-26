@@ -35,7 +35,6 @@ export function ExtraOccasionPreview({
       suguan={sheetSuguan}
       members={members}
       docFormat={suguan.docFormat}
-      previewWidth={900}
     />
   )
 }

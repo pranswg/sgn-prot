@@ -324,7 +324,6 @@ const runExcelExport = async (exportFileName: string) => {
           suguan={preview}
           members={members}
           docFormat={draft.docFormat}
-          previewWidth={900}
         />
       </section>
     </div>

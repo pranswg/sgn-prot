@@ -361,7 +361,6 @@ export function SuguanDetailPage() {
             suguan={s}
             members={members}
             docFormat={s.docFormat}
-            previewWidth={900}
           />
         )}
 

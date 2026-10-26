@@ -25,6 +25,7 @@ import type {
 interface DocumentSetupStepProps {
   value: SuguanDocFormat
   onChange: (format: SuguanDocFormat) => void
+  nameOnlyFontSize?: boolean
   /** Render without the outer "Document setup" disclosure trigger. The host
    *  page owns that trigger instead (the Organist Suguan maker), so the
    *  section is not shown twice under two different names. */
@@ -169,6 +170,7 @@ export function DisclosureButton({
 export function DocumentSetupStep({
   value,
   onChange,
+  nameOnlyFontSize = true,
   embedded = false,
 }: DocumentSetupStepProps) {
   const dims = useMemo(() => docPaperDimensionsMm(value), [value])
@@ -183,10 +185,8 @@ export function DocumentSetupStep({
   const [docOpen, setDocOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
 
-  // Read the live preset so the derived sizes shown next to the custom input are
-  // the ones the renderers will actually use, including after a clamp.
+  // Normalize once so the format summary and renderers agree on the selected size.
   const normalized = normalizeDocFormat(value)
-  const fs = resolveFontSizePreset(normalized)
 
   return (
     <div className="flex flex-col gap-6">
@@ -247,7 +247,11 @@ export function DocumentSetupStep({
 
       <CardRow<DocFontSize>
         label="Font size"
-        hint="Applies to the PDF, Excel, and on-screen preview."
+        hint={
+          nameOnlyFontSize
+            ? 'Changes member names only. Titles, headers, and signature text stay at Normal size.'
+            : 'Scales the Organist Suguan text and row dimensions together.'
+        }
         value={value.fontSize}
         onChange={(v) => set({ fontSize: v })}
         options={[
@@ -261,7 +265,7 @@ export function DocumentSetupStep({
       {value.fontSize === 'custom' && (
         <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
           <UnitInput
-            label="Body font size (pt)"
+            label={nameOnlyFontSize ? 'Member-name font size (pt)' : 'Body font size (pt)'}
             value={value.customBodyFontSize}
             onChange={(v) => set({ customBodyFontSize: v })}
             unit="pt"
@@ -271,11 +275,9 @@ export function DocumentSetupStep({
           />
           <div className="grid gap-1 self-end">
             <p className="text-xs text-muted-foreground">
-              Title, header, and signature text scale to match automatically.
-            </p>
-            <p className="text-xs font-medium text-muted-foreground">
-              {fs.titleFontSize} pt title · {fs.headerFontSize} pt header ·{' '}
-              {fs.sigFontSize} pt signature
+              {nameOnlyFontSize
+                ? 'Only member names change size; the rest of the sheet stays at Normal.'
+                : 'Titles, headers, and rows scale to match the selected size.'}
             </p>
           </div>
         </div>
@@ -333,13 +335,13 @@ export function DocumentSetupStep({
 
         <CardRow<DocScaling>
           label="Scaling / fit"
-          hint="Automatically scales to one page when readable; otherwise starts a new page only when needed."
+          hint="Preserves the selected name size; crowded sheets continue onto additional pages."
           value={value.scaling}
           onChange={(v) => set({ scaling: v })}
           options={[
-            { id: 'auto', label: 'Automatic', description: 'Fit when possible' },
+            { id: 'auto', label: 'Automatic', description: 'Fit at the selected size when possible' },
             { id: 'fit-width', label: 'Fit width', description: 'One page wide' },
-            { id: 'fit-page', label: 'Fit page', description: 'One page total' },
+            { id: 'fit-page', label: 'Fit page', description: 'One page when the selected size fits' },
           ]}
         />
 

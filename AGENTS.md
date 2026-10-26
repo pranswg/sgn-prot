@@ -192,17 +192,22 @@ signatures are never scaled under fit-page mode.
 `custom`, which has no static preset, so that index is a lie the type system
 only catches because the record is keyed `Exclude<DocFontSize, 'custom'>`.
 Call `resolveFontSizePreset(fmt)` instead — it returns the static preset or
-derives one from `customBodyFontSize`. `SuguanSheetPage` reads `layout.fs`,
-so preview, PDF, and Excel all share whichever preset that returns; adding a
-fourth renderer must do the same rather than re-reading the preset itself.
+derives one from `customBodyFontSize`. `layout.nameFontSize` and
+`layout.bodyFontSizePt` carry the selected member-name size to preview, PDF,
+Word, and Excel; `layout.fs` supplies normal-size non-name text for Choir
+Suguan. A new renderer must use these shared layout values rather than
+re-reading the preset itself.
 
-`scaleFontSizePreset` scales the whole `normal` preset by one factor instead of
-exposing eight independent inputs, because the preset's font sizes, row heights,
-and column weights only look right in proportion to each other. A custom size
-must keep that coupling or names start clipping their rows. The custom body size
-is clamped to `CUSTOM_BODY_FONT_MIN..MAX` and rounded to a half point in
-`normalizeDocFormat`, so a cleared or garbage input falls back to `normal`
-rather than reaching the layout maths as `NaN`.
+`scaleFontSizePreset` derives custom settings from the `normal` preset rather
+than exposing independent inputs. In the Choir and Extra Occasion Suguan
+renderers, the selected body size controls roster names only; the shared layout
+adjusts name rows and column width as needed while keeping titles, headers,
+schedule labels, and signatures at Normal size. Long rosters paginate instead
+of shrinking the selected name size. The shared `DocumentSetupStep` keeps
+Organist Suguan's existing preset-wide scaling. The custom size is clamped to
+`CUSTOM_BODY_FONT_MIN..MAX` and rounded to a half point in `normalizeDocFormat`,
+so a cleared or garbage input falls back to `normal` rather than reaching the
+layout maths as `NaN`.
 
 `DocumentSetupStep` is shared by the Choir, Organist, and Extra Occasion
 makers. Its `tableSpacingBeforePt` / `tableSpacingAfterPt` settings apply only

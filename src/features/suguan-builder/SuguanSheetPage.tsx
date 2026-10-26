@@ -233,7 +233,7 @@ export function SuguanSheetPage({
               height: px(layout.bodyRowH),
               fontSize: isExtraOccasion
                 ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT * PT_TO_PX
-                : bodyPx,
+                : fs.bodyFontSize * PT_TO_PX,
               border: `0.5px solid ${BORDER}`,
             }}
           >

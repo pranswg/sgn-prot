@@ -759,6 +759,7 @@ export function OrganistaSuguanMakerPage() {
                   value={docFormat}
                   onChange={setDocFormat}
                   embedded
+                  nameOnlyFontSize={false}
                 />
               </div>
             )}

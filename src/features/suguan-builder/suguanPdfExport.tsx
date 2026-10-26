@@ -358,7 +358,9 @@ export async function exportSuguanPdf(
           }
           applyFont(
             'normal',
-            isExtraOccasion ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT : nameSize,
+            isExtraOccasion
+              ? EXTRA_OCCASION_NUMBER_FONT_SIZE_PT
+              : layout.fs.bodyFontSize,
           )
           centerText(
             String(row.no),

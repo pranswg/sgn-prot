@@ -224,7 +224,7 @@ test('each schedule includes exactly two numbered blank write-in rows', () => {
   )
 })
 
-test('automatic scaling fits compact schedules on supported paper sizes when readable', () => {
+test('automatic layout preserves normal name size on supported paper sizes', () => {
   for (const paperSize of ['letter', 'a4', 'legal', 'folio'] as const) {
     const format: SuguanDocFormat = {
       paperSize,
@@ -247,16 +247,17 @@ test('automatic scaling fits compact schedules on supported paper sizes when rea
     }))
     const layout = computeSuguanLayout(suguan, members, format)
 
-    assert.equal(layout.pages.length, 1, `${paperSize} should fit one page`)
-    assert.ok(layout.bodyFontSizePt >= 6)
+    assert.equal(layout.scale, 1)
+    assert.equal(layout.bodyFontSizePt, FONT_SIZE_PRESETS.normal.bodyFontSize)
+    assert.ok(layout.pages.length >= 1, `${paperSize} should render at least one page`)
     assert.deepEqual(
-      layout.pages[0].slice(-3).map((block) => block.kind),
+      layout.pages.at(-1)?.slice(-3).map((block) => block.kind),
       ['sig-gap', 'sig-name', 'sig-title'],
     )
   }
 })
 
-test('automatic scaling paginates only after reaching the readable minimum', () => {
+test('automatic layout paginates large rosters instead of shrinking member names', () => {
   const format: SuguanDocFormat = {
     paperSize: 'letter',
     orientation: 'portrait',
@@ -267,8 +268,8 @@ test('automatic scaling paginates only after reaching the readable minimum', () 
   const members = makeMembers(150)
   const layout = computeSuguanLayout(makeSuguan(150, format), members, format)
 
-  assert.ok(layout.scale < 1)
-  assert.equal(layout.bodyFontSizePt, 6)
+  assert.equal(layout.scale, 1)
+  assert.equal(layout.bodyFontSizePt, FONT_SIZE_PRESETS.normal.bodyFontSize)
   assert.ok(layout.pages.length > 1)
   const lastPage = layout.pages[layout.pages.length - 1]
   assert.ok(lastPage.some((block) => block.kind === 'member'))
@@ -302,9 +303,7 @@ test('name and role text land inside their own rows', () => {
   }
 })
 
-test('signature geometry is identical between fit-width and fit-page scaling', () => {
-  // The signatures are deliberately exempt from fit-page scaling, so shrinking
-  // the table to fit a page cannot move them.
+test('fit-page preserves member-name font size and shared signature geometry', () => {
   const wide = computeSuguanLayout(makeSuguan(60, PRESETS[1], 'fit-width'), makeMembers(60), {
     ...PRESETS[1],
     scaling: 'fit-width',
@@ -314,20 +313,32 @@ test('signature geometry is identical between fit-width and fit-page scaling', (
     scaling: 'fit-page',
   })
   assert.equal(wide.scale, 1, 'fit-width must not scale')
-  assert.ok(fit.scale < 1, 'fixture should trigger fit-page scaling')
+  assert.equal(fit.scale, 1, 'the sheet should paginate instead of shrinking text')
   assert.deepEqual(wide.sig, fit.sig)
-  // The body font may shrink, but the signatures must not.
-  assert.ok(fit.bodyFontSizePt < wide.bodyFontSizePt)})
+  assert.equal(fit.bodyFontSizePt, wide.bodyFontSizePt)
+})
 
-test('body font size carries the same fit-page clamp for both renderers', () => {
+test('large font size only increases names while other Choir Suguan text stays normal', () => {
+  const normal = computeSuguanLayout(makeSuguan(60, PRESETS[1]), makeMembers(60), PRESETS[1])
+  const large = computeSuguanLayout(makeSuguan(60, PRESETS[2]), makeMembers(60), PRESETS[2])
+
+  assert.ok(large.bodyFontSizePt > normal.bodyFontSizePt)
+  assert.ok(large.nameFontSize > normal.nameFontSize)
+  assert.equal(large.fs.titleFontSize, normal.fs.titleFontSize)
+  assert.equal(large.fs.headerFontSize, normal.fs.headerFontSize)
+  assert.equal(large.sig.nameFontSizePt, normal.sig.nameFontSizePt)
+  assert.ok(large.bodyRowH > normal.bodyRowH)
+  assert.equal(large.scale, 1)
+})
+
+test('fit-page leaves the selected member-name size unchanged', () => {
   const members = makeMembers(60)
   const layout = computeSuguanLayout(makeSuguan(60, PRESETS[1], 'fit-page'), members, {
     ...PRESETS[1],
     scaling: 'fit-page',
   })
-  assert.ok(layout.scale < 1)
-  assert.equal(layout.bodyFontSizePt, Math.max(6, layout.nameFontSize * layout.scale))
-  assert.ok(layout.bodyFontSizePt >= 6)
+  assert.equal(layout.scale, 1)
+  assert.equal(layout.bodyFontSizePt, layout.nameFontSize)
 })
 
 test('Extra Occasion keeps the selected name font size and paginates instead of shrinking it', () => {
@@ -457,6 +468,24 @@ test('Excel applies before-and-after spacing to name rows only', async () => {
   )
 })
 
+test('Excel keeps non-name text normal and preserves larger names across pages', async () => {
+  const format: SuguanDocFormat = {
+    ...PRESETS[2],
+    scaling: 'fit-page',
+  }
+  const blob = await createSuguanExcelBlob(makeSuguan(60, format), makeMembers(60), format)
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(await blob.arrayBuffer())
+  const sheet = workbook.worksheets[0]
+
+  assert.equal(sheet.getCell('A1').font.size, FONT_SIZE_PRESETS.normal.titleFontSize)
+  assert.equal(sheet.getCell('B4').font.size, FONT_SIZE_PRESETS.normal.headerFontSize)
+  assert.equal(sheet.getCell('A5').font.size, FONT_SIZE_PRESETS.normal.bodyFontSize)
+  assert.equal(sheet.getCell('B5').font.size, FONT_SIZE_PRESETS.large.bodyFontSize)
+  assert.equal(sheet.pageSetup.fitToHeight, 0)
+})
+
 test('Excel export uses the Folio print paper size', async () => {
   const blob = await createSuguanExcelBlob(makeSuguan(0), [])
   const ExcelJS = (await import('exceljs')).default
@@ -516,7 +545,10 @@ test('a custom font size reaches both renderers through the shared layout', () =
     customBodyFontSize: 16,
   }
   const layout = computeSuguanLayout(makeSuguan(12, custom), makeMembers(12), custom)
-  assert.equal(layout.fs.bodyFontSize, 16)
+  assert.equal(layout.fs.bodyFontSize, FONT_SIZE_PRESETS.normal.bodyFontSize)
+  assert.equal(layout.nameFontSize, 16)
+  assert.equal(layout.bodyFontSizePt, 16)
+  assert.equal(layout.fs.titleFontSize, FONT_SIZE_PRESETS.normal.titleFontSize)
   assert.ok(layout.bodyRowH > 0)
   assert.ok(layout.rowsPerPage > 0)
   assert.ok(layout.usableTableH > 0)

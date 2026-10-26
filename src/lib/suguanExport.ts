@@ -360,7 +360,7 @@ export interface SuguanSheetLayout {
   globalHeaderBlockH: number
   sectionLabelRowH: number
   bodyRowH: number
-  /** Body font size in pt after the fit-page clamp; both renderers use this. */
+  /** Selected member-name font size in pt; shared by every sheet renderer. */
   bodyFontSizePt: number
   /**
    * Signature block geometry, shared by the on-screen preview and the PDF export.
@@ -456,7 +456,10 @@ export function computeSuguanLayout(
   const fmt = normalizeDocFormat(docFormat)
   const dims = docPaperDimensionsMm(fmt)
   const margins = docMarginsMm(fmt)
-  const fs = resolveFontSizePreset(fmt)
+  const selectedFs = resolveFontSizePreset(fmt)
+  const fs = suguan.extraOccasion
+    ? selectedFs
+    : resolveFontSizePreset({ ...fmt, fontSize: 'normal' })
   const signatureFs = suguan.extraOccasion
     ? resolveFontSizePreset({ ...fmt, fontSize: 'normal' })
     : fs
@@ -468,7 +471,10 @@ export function computeSuguanLayout(
   const allNames = sections.flatMap((s) => s.rows.map((r) => r.name))
   const rowCount = allNames.length
   const assignedCount = allNames.filter((name) => name.length > 0).length
-  const nameLayout = computeNameLayout(fs, allNames)
+  const nameLayoutFs = suguan.extraOccasion
+    ? fs
+    : { ...fs, bodyFontSize: selectedFs.bodyFontSize }
+  const nameLayout = computeNameLayout(nameLayoutFs, allNames)
 
   const usableWidthMm = dims.width - margins.left - margins.right
   const totalUnits = fs.noColWidth + nameLayout.nameColWidth + events.length * fs.eventColWidth
@@ -493,9 +499,12 @@ export function computeSuguanLayout(
   const headerRowH = (suguan.extraOccasion ? 15 : fs.headerRowHeight) * PT_TO_MM
   const globalHeaderBlockH = headerRowH * 2
   const sectionLabelRowH = headerRowH
+  const baseBodyFontSizePt = suguan.extraOccasion
+    ? fs.bodyFontSize
+    : nameLayout.nameFontSize
   const baseBodyRowMm = Math.max(
     fs.rowHeight * PT_TO_MM,
-    fs.bodyFontSize * PT_TO_MM * 1.5,
+    baseBodyFontSizePt * PT_TO_MM * 1.5,
   )
   let bodyRowH = baseBodyRowMm + spacingMm
 
@@ -528,28 +537,8 @@ export function computeSuguanLayout(
   const usableTableH =
     Math.max(0, dims.height - margins.top - margins.bottom - topBlockH)
 
-  // Extra Occasion font-size controls must remain legible for the names. Let
-  // its shared paginator add pages instead of shrinking those names back down.
-  const fitToPage = !suguan.extraOccasion && fmt.scaling !== 'fit-width'
-  let scale = 1
-  let bodyFontSizePt = nameLayout.nameFontSize
-
-  if (fitToPage && rowCount > 0) {
-    const totalContentH =
-      sections.length * sectionLabelRowH + rowCount * baseBodyRowMm
-    const needed = totalContentH + sig.totalMm
-    if (needed > usableTableH) {
-      const fixedSectionH = sections.length * sectionLabelRowH
-      const availableBodyH = Math.max(0, usableTableH - sig.totalMm - fixedSectionH)
-      const totalBodyH = rowCount * baseBodyRowMm
-      scale = Math.min(
-        1,
-        Math.max(0.4, (availableBodyH / totalBodyH) * 0.98),
-      )
-      bodyRowH = Math.max(6 * 1.25 * PT_TO_MM, baseBodyRowMm * scale) + spacingMm
-      bodyFontSizePt = Math.max(6, nameLayout.nameFontSize * scale)
-    }
-  }
+  const scale = 1
+  const bodyFontSizePt = nameLayout.nameFontSize
 
   const pages = buildPageFlow({
     usableTableH,
@@ -562,9 +551,10 @@ export function computeSuguanLayout(
   })
 
   const pageCount = pages.length
-  const rowsPerPage = fmt.scaling === 'fit-page' && !suguan.extraOccasion
-    ? rowCount || 1
-    : Math.max(1, Math.floor((usableTableH - sig.totalMm) / bodyRowH))
+  const rowsPerPage = Math.max(
+    1,
+    Math.floor((usableTableH - sig.totalMm) / bodyRowH),
+  )
 
   return {
     fmt,
@@ -612,9 +602,8 @@ export async function createSuguanExcelBlob(
 
   const fmt = normalizeDocFormat(docFormat)
   const marginsMm = docMarginsMm(fmt)
-  const fs = resolveFontSizePreset(fmt)
-
   const layout = computeSuguanLayout(suguan, members, docFormat)
+  const fs = layout.fs
   const events = suguan.events
   const accent = suguanSheetAccent(suguan.group)
   const totalCols = 2 + events.length
@@ -635,10 +624,9 @@ export async function createSuguanExcelBlob(
   }
   sheet.pageSetup.horizontalCentered = true
   const isExtraOccasion = Boolean(suguan.extraOccasion)
-  const fitPage = fmt.scaling === 'fit-page' && !isExtraOccasion
   sheet.pageSetup.fitToPage = true
   sheet.pageSetup.fitToWidth = 1
-  sheet.pageSetup.fitToHeight = fitPage ? 1 : 0
+  sheet.pageSetup.fitToHeight = 0
 
   const mmToExcel = (mm: number) => Math.max(3, Math.round((mm / 25.4) * 96 / 7))
   const widths = [
@@ -767,8 +755,6 @@ export async function createSuguanExcelBlob(
     sheet.getCell(headerRow2, col).border = fullBorder()
   }
 
-  const tableSpacingPt =
-    (fmt.tableSpacingBeforePt ?? 0) + (fmt.tableSpacingAfterPt ?? 0)
   sheet.getRow(headerRow1).height = isExtraOccasion ? 15 : fs.headerRowHeight
   sheet.getRow(headerRow2).height = isExtraOccasion ? 15 : fs.headerRowHeight
   sheet.getCell(headerRow1, 1).value = isExtraOccasion ? 'Blg.' : 'No.'
@@ -863,9 +849,7 @@ export async function createSuguanExcelBlob(
           bottom: thinBorder(),
         }
       }
-      sheet.getRow(rn).height = isExtraOccasion
-        ? layout.bodyRowH / PT_TO_MM
-        : fs.rowHeight + tableSpacingPt
+      sheet.getRow(rn).height = layout.bodyRowH / PT_TO_MM
       rn++
     }
   }

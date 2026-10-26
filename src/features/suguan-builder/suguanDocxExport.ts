@@ -252,9 +252,7 @@ export async function createSuguanDocxBlob(
                   children: [
                     new TextRun({
                       text: row.name,
-                      size: isExtraOccasion
-                        ? Math.round(layout.bodyFontSizePt * 2)
-                        : 18,
+                      size: Math.round(layout.bodyFontSizePt * 2),
                       font: fontName,
                     }),
                   ],

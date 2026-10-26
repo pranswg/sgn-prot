@@ -222,7 +222,7 @@ export const CUSTOM_BODY_FONT_MIN = 6
 export const CUSTOM_BODY_FONT_MAX = 20
 export const TABLE_SPACING_MAX_PT = 72
 
-/** Clamps a user-entered custom body size into the supported range. */
+/** Clamps a user-entered member-name size into the supported range. */
 export function clampCustomBodyFontSize(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return FONT_SIZE_PRESETS.normal.bodyFontSize
@@ -230,7 +230,7 @@ export function clampCustomBodyFontSize(value: unknown): number {
 }
 
 /**
- * Builds a full preset for a custom body size by scaling the `normal` preset.
+ * Builds a derived preset for a custom member-name size by scaling the `normal` preset.
  *
  * Scaling rather than exposing eight separate inputs is deliberate: the preset
  * mixes font sizes, row heights, and column-width weights that only look right

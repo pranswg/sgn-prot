@@ -21,7 +21,7 @@ interface DuplicateMemberPanelProps {
 /**
  * Shown inside the Add Member form when saving would create a profile that
  * matches an existing member's name (after normalising case and accents).
- * `MemberFormDialog` and `MobileMemberFormSheet` swap their body to this panel
+ * `MemberFormDialog` and `MobileMemberFormDialog` swap their body to this panel
  * instead of nesting a second dialog, so the entered data stays in place while
  * the user decides: view the existing timeline, restore the transferred-out
  * profile, or ignore the match and add a new record.

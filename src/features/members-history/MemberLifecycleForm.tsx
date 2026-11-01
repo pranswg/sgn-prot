@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { LogOut, Undo2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +13,6 @@ import { useAuthStore } from '@/store/authStore'
 import { TRANSFER_REASON_OPTIONS } from '@/lib/memberHistory'
 import { todayPHT } from '@/lib/phDate'
 import { formatMemberName } from '@/lib/memberDirectory'
-import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 export type LifecycleFormKind = 'transfer' | 'restore'
@@ -202,90 +200,5 @@ export function MemberLifecycleDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/** Mobile bottom sheet for the same form. */
-export function MemberLifecycleSheet({
-  open,
-  onOpenChange,
-  member,
-  kind,
-  onSuccess,
-}: MemberLifecycleFormProps) {
-  const [form, setForm] = useState<LifecycleFormState>(freshState)
-  const [wasOpen, setWasOpen] = useState(open)
-  const submit = useLifecycleSubmit(kind, onSuccess)
-
-  const [confirmLifecycle, confirmingLifecycle] = useAsyncAction(
-    (target: Member, state: LifecycleFormState) => {
-      const saved = submit(target, state)
-      if (saved) onOpenChange(false)
-    },
-  )
-
-  if (open !== wasOpen) {
-    setWasOpen(open)
-    if (open) setForm(freshState())
-  }
-
-  if (!member) return null
-  const name = formatMemberName(member)
-  const isTransfer = kind === 'transfer'
-
-  const setField = <K extends keyof LifecycleFormState>(
-    key: K,
-    value: LifecycleFormState[K],
-  ) => setForm((f) => ({ ...f, [key]: value }))
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="flex max-h-[88dvh] flex-col gap-0 rounded-t-2xl pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-      >
-        <div className="flex shrink-0 justify-center pt-2.5 pb-1">
-          <div className="h-1.5 w-10 rounded-full bg-border/80" />
-        </div>
-        <div className="flex items-center gap-3 px-5 pt-2 pb-3">
-          <span
-            className={cn(
-              'grid size-10 shrink-0 place-items-center rounded-xl',
-              isTransfer
-                ? 'bg-destructive/10 text-destructive'
-                : 'bg-brand-teal-soft text-brand-teal',
-            )}
-          >
-            {isTransfer ? <LogOut className="size-5" /> : <Undo2 className="size-5" />}
-          </span>
-          <div className="min-w-0 leading-tight">
-            <SheetTitle className="text-lg font-bold">
-              {isTransfer ? 'Transfer Out' : 'Restore Member'}
-            </SheetTitle>
-            <SheetDescription className="truncate text-xs">{name}</SheetDescription>
-          </div>
-        </div>
-        <div className="min-w-0 flex-1 overflow-y-auto px-4 py-4">
-          <LifecycleFields kind={kind} form={form} setField={setField} />
-        </div>
-        <div className="flex shrink-0 gap-3 px-4 pt-2">
-          <Button
-            variant="secondary"
-            className="h-12 flex-1 rounded-xl text-sm font-semibold"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant={isTransfer ? 'destructive' : 'default'}
-            className="h-12 flex-1 rounded-xl text-sm font-semibold"
-            onClick={() => void confirmLifecycle(member, form)}
-            loading={confirmingLifecycle}
-          >
-            {isTransfer ? 'Confirm Transfer' : 'Restore Member'}
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
   )
 }

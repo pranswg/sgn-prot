@@ -3,12 +3,11 @@
  * sheet can stay a pure component and the chip row, the sheet title, and each
  * section heading all read the same labels instead of repeating them.
  */
-export type MobileFilterSection = 'voices' | 'status' | 'roles'
+export type MobileFilterSection = 'voices' | 'roles'
 
 /** Chip labels, sheet titles, and section headings all read from here. */
 export const MOBILE_FILTER_LABEL: Record<MobileFilterSection, string> = {
   voices: 'Voice',
-  status: 'Status',
   roles: 'Roles',
 }
 
@@ -16,12 +15,9 @@ export const MOBILE_FILTER_LABEL: Record<MobileFilterSection, string> = {
  * The chip order, which is also the order the sheet stacks sections in when it
  * is opened without a particular chip. Both read this so the two can never
  * disagree about which filter comes first. Gender is deliberately absent: the
- * All/Women/Men choir segment owns that filter now. Membership is absent too:
- * it was removed from the directory, so the Roles sheet lists only the
- * configured choir positions (and PNK drops the Voice chip entirely).
+ * All/Women/Men choir segment owns that filter now, and status is owned by the
+ * KPI strip above the toolbar. Membership is absent too: it was removed from
+ * the directory, so the Roles sheet lists only the configured choir positions
+ * (and PNK drops the Voice chip entirely).
  */
-export const MOBILE_FILTER_SECTIONS: MobileFilterSection[] = [
-  'voices',
-  'status',
-  'roles',
-]
+export const MOBILE_FILTER_SECTIONS: MobileFilterSection[] = ['voices', 'roles']

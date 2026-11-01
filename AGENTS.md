@@ -418,8 +418,35 @@ counts, pickers and the Members History archive all read one pool at a time.
   Sort control: Voice Positions (AWS only) and Choir Positions each show the
   chosen name in the trigger, close when an entry is picked, and carry a
   disabled-when-empty `Clear` row that resets the filter. Picking a second entry
-  replaces the first; the mobile filter sheets still stage the edit and need
+  replaces the first; the mobile filter dialogs still stage the edit and need
   "Apply Filters". Keep that difference.
+- **Status is the KPI strip, not a control.** The Master List has no Status
+  select and no Status chip; tapping Active or Inactive in the summary strip is
+  the only status filter, so the toolbar does not repeat it. The strip is one
+  bordered row of four tap targets (Members / Active / Inactive / Trainees),
+  and the directory's actions (Add Member, Export) live in the page header
+  rather than a separate row.
+- **The directory is two choir sections, not one table.** Each of Women's and
+  Men's Choir is its own card (desktop) or band plus cards (phones) with its own
+  page cursor and a collapse toggle; there is no Gender column or badge, because
+  the section header already names it. `MemberDirectoryTable` and
+  `MobileChoirSection` both page with `paginate` per section, and a page-size
+  change resets every section to page 1. Row actions sit behind one kebab menu
+  (`MemberRowActions`); do not restore the always-visible pencil/transfer/delete
+  buttons.
+- **Trainees mirrors that shape.** Its Women's/Men's sections are the same tinted
+  band plus cards or table (`TraineeSection`), so the page has no gender segment
+  filter and no Gender column. Attendance Sheet and Add Trainee live in the page
+  header, and every row's Promote/Restore, Edit, Transfer out, and Remove sit
+  behind one kebab (`TraineeRowActions`). The toolbar prints
+  `12 trainees · 2 promoted`. The add/edit dialog mirrors the Master List
+  member form: flat uppercase section labels, sentence-case field labels, and
+  the same segmented Active/Inactive toggle.
+- **Members History is one quiet list.** `MembersHistoryPage` has a single title
+  (no eyebrow), desktop rows pair an eye button with one kebab
+  (`HistoryRowActions`), and phone cards are tappable and carry only the status
+  pill and kebab. Do not bring back the labelled View History/Restore/Delete
+  action strip.
 - Duplicate detection is scoped to the choir being edited, and the roster
   import dialog asks which list the file lands in (switching pools clears the
   parsed names, because the duplicate flags were computed against the other
@@ -552,6 +579,13 @@ a breakpoint: its option cards and scrollable copy list read better centred and
 fully visible than pinned to the bottom edge under the mobile nav bar. Keep the
 mobile branch's padding (the drag handle is gone; the header carries its own close
 button) in step with the desktop one.
+
+**The other form overlays are floating cards too.** The trainee form, trainee
+transfer, member transfer/restore, and the membership timeline all render one
+centred `Dialog` at every width. Their bottom-sheet twins and the `useIsMobile`
+branches that chose between them were removed on purpose; a phone overlay stays
+a card and never becomes a full-page takeover. Do not reintroduce a `Sheet`
+variant of any of these.
 
 **The Extra Occasion form folds on phones.** `ExtraOccasionOccasionForm` renders
 two `DisclosureSection`s under `lg` — "Occasion details" (name, choir, time,
@@ -774,7 +808,7 @@ Rules if you touch it:
 
 ## Feature map
 
-Eight features under `src/features/`. Only the imports below cross feature
+Eleven features under `src/features/`. Only the imports below cross feature
 boundaries, so a change in one feature rarely reaches another.
 
 - **auth** — `AuthPage.tsx`, the pre-shell sign-in screen, plus
@@ -782,10 +816,12 @@ boundaries, so a change in one feature rarely reaches another.
   `Layout`; see the sign-in section above.
 - **dashboard** — `DashboardPage.tsx`, read-only summaries.
 - **master-list** — members and trainees. The largest feature. Directory table
-  and grid, mobile sheets, roster import, CSV/Excel export, and a configurable
+  and mobile cards, roster import, CSV/Excel export, and a configurable
   attendance-sheet PDF with custom dates, title, and voice-position grouping.
   `MasterListPage.tsx` owns the filters; child components receive
   `members`, `references`, and `sort` as props.
+- **members-history** — the per-choir archive: compact rows, the membership
+  timeline dialog, and the shared transfer/restore dialogs.
 - **suguan-builder** — the multi-step Suguan sheet. Steps are defined in
   `builderState.ts` (`BUILDER_STEPS`). The pipeline is
   `CoverageStep` → `DocumentSetupStep` → `SchedulesStep` →
@@ -800,7 +836,8 @@ boundaries, so a change in one feature rarely reaches another.
   `suguanStore` into Suguan History with their custom settings, where they can
   be previewed, re-exported, edited in this maker, and deleted.
 - **suguan-history** — saved Suguan list and detail view.
-- **trainees** — trainee-only forms.
+- **trainees** — the trainee list (choir section cards, row kebabs), the
+  attendance-sheet dialog, and trainee-only add/edit and transfer forms.
 - **settings** — reference list management, backup export/import.
 
 `src/features/suguan-builder/builderState.ts` is the pattern to copy: draft

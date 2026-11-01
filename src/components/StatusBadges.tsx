@@ -41,14 +41,14 @@ const LIFECYCLE_STYLES: Record<MemberLifecycleStatus, string> = {
     'bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300',
   'transferred-out':
     'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  inactive: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  inactive: 'bg-muted text-muted-foreground',
 }
 
 const LIFECYCLE_DOTS: Record<MemberLifecycleStatus, string> = {
   active: 'bg-green-600',
   returned: 'bg-teal-600',
   'transferred-out': 'bg-amber-600',
-  inactive: 'bg-red-600',
+  inactive: 'bg-muted-foreground/60',
 }
 
 /**

@@ -1,10 +1,12 @@
-import { LogOut, Pencil, Trash2 } from 'lucide-react'
+import { LogOut, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
 import type { Member } from '@/core/types/member'
@@ -21,6 +23,11 @@ interface MemberRowActionsProps {
   className?: string
 }
 
+/**
+ * One kebab per row. The individual actions used to be three always-visible
+ * icons; folding them into a menu keeps the last column quiet and matches the
+ * mobile action sheet.
+ */
 export function MemberRowActions({
   member,
   onEdit,
@@ -33,59 +40,48 @@ export function MemberRowActions({
   className,
 }: MemberRowActionsProps) {
   const name = formatMemberName(member, sort)
+  if (!canEdit && !canTransfer && !canDelete) return null
 
   return (
-    <div className={cn('flex items-center justify-end gap-0.5', className)}>
-      {canEdit && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Edit ${name}`}
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() => onEdit(member)}
-            >
+    <div className={cn('flex justify-end', className)}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={`Actions for ${name}`}
+          >
+            <MoreVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          {canEdit && (
+            <DropdownMenuItem onSelect={() => onEdit(member)}>
               <Pencil className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Edit member</TooltipContent>
-        </Tooltip>
-      )}
-
-      {canTransfer && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Transfer out ${name}`}
-              className="text-muted-foreground hover:bg-amber-100 hover:text-amber-700 dark:hover:bg-amber-500/15 dark:hover:text-amber-300"
-              onClick={() => onTransfer(member)}
-            >
+              Edit member
+            </DropdownMenuItem>
+          )}
+          {canTransfer && (
+            <DropdownMenuItem onSelect={() => onTransfer(member)}>
               <LogOut className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Transfer out</TooltipContent>
-        </Tooltip>
-      )}
-
-      {canDelete && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Delete ${name}`}
-              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => onDelete(member)}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Delete member</TooltipContent>
-        </Tooltip>
-      )}
+              Transfer out
+            </DropdownMenuItem>
+          )}
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => onDelete(member)}
+              >
+                <Trash2 className="size-4" />
+                Delete member
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

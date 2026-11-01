@@ -1,17 +1,17 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
+  ArrowRight,
   CalendarClock,
   CalendarPlus,
+  ChevronRight,
   Clock,
-  GraduationCap,
-  Music2,
-  Trophy,
   UserPlus,
-  Users,
+  type LucideIcon,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import type { Suguan } from '@/core/types/suguan'
 import { useMemberStore } from '@/store/memberStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
@@ -22,45 +22,162 @@ import { formatDate, formatTime, isPast } from '@/lib/format'
 import { dayOfMonthKey, monthShortKey } from '@/lib/phDate'
 import { belongsInMasterList } from '@/lib/memberHistory'
 
-interface StatTile {
+interface ChoirStat {
   label: string
   value: number
-  icon: typeof Users
-  color: string
   go: () => void
+  /** Phones show the three primary counts; Women/Men already head the Master List sections. */
+  desktopOnly?: boolean
 }
 
-/** One KPI card. Shared by the AWS grid and the PNK row. */
-function StatCard({ stat }: { stat: StatTile }) {
+/** One choir band of the summary panel: counts inline, one link into its Master List. */
+function ChoirSummary({
+  title,
+  stats,
+  onOpen,
+}: {
+  title: string
+  stats: ChoirStat[]
+  onOpen: () => void
+}) {
   return (
-    <button
-      type="button"
-      onClick={stat.go}
-      aria-label={`${stat.label}: ${stat.value}. Go to ${stat.label}`}
-      className="pressable group min-w-0 cursor-pointer rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
-    >
-      <Card className="h-full transition-colors group-hover:bg-accent/40 group-hover:shadow-md">
-        <CardContent className="flex items-center gap-3 p-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted transition-colors group-hover:bg-card">
-            <stat.icon className={`size-5 ${stat.color}`} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-2xl font-semibold leading-none">{stat.value}</p>
-            <p className="mt-1 truncate text-xs text-muted-foreground">
+    <section>
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-brand-teal-soft/35 px-4 py-2.5 sm:px-5">
+        <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-foreground/75">
+          {title}
+        </h2>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="inline-flex items-center gap-1 rounded text-xs font-medium text-brand-teal transition-colors hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="hidden sm:inline">Open Master List</span>
+          <span className="sm:hidden">Open</span>
+          <ArrowRight className="size-3.5" />
+        </button>
+      </div>
+      <div
+        className={cn(
+          'grid grid-cols-3 divide-x divide-border/60',
+          stats.length > 3 ? 'sm:grid-cols-5' : 'sm:grid-cols-3',
+        )}
+      >
+        {stats.map((stat) => (
+          <button
+            key={stat.label}
+            type="button"
+            onClick={stat.go}
+            className={cn(
+              'pressable flex flex-col items-start gap-1 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transform-none sm:px-5',
+              stat.desktopOnly && 'hidden sm:flex',
+            )}
+          >
+            <span className="text-xl font-semibold leading-none tabular-nums sm:text-2xl">
+              {stat.value}
+            </span>
+            <span className="text-[0.6875rem] text-muted-foreground sm:text-xs">
               {stat.label}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </button>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 
-function StatGroupHeading({ title }: { title: string }) {
+function SuguanDateTile({ date }: { date: string }) {
   return (
-    <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-      {title}
-    </h2>
+    <span className="flex size-11 shrink-0 flex-col items-center justify-center rounded-lg bg-brand-teal-soft/40 leading-none">
+      <span className="text-sm font-semibold tabular-nums">
+        {dayOfMonthKey(date)}
+      </span>
+      <span className="mt-1 text-[0.5625rem] font-medium uppercase tracking-wide text-muted-foreground">
+        {monthShortKey(date)}
+      </span>
+    </span>
+  )
+}
+
+function SuguanRow({
+  item,
+  label,
+  meta,
+  onOpen,
+}: {
+  item: Suguan
+  label: string
+  meta: string
+  onOpen: () => void
+}) {
+  return (
+    <li className="border-b border-border/60 last:border-b-0">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="pressable flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transform-none"
+      >
+        <SuguanDateTile date={item.date} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{label}</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {meta}
+          </span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground/50" />
+      </button>
+    </li>
+  )
+}
+
+function SuguanCard({
+  title,
+  icon: Icon,
+  items,
+  count,
+  empty,
+  metaFor,
+  labelFor,
+  onOpen,
+}: {
+  title: string
+  icon: LucideIcon
+  items: Suguan[]
+  /** Total saved records in this view, not just the rows the card previews. */
+  count: number
+  empty: string
+  metaFor: (item: Suguan) => string
+  labelFor: (item: Suguan) => string
+  onOpen: (id: string) => void
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+      <header className="flex items-center gap-2.5 px-4 py-3">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-teal-soft/50 text-brand-teal">
+          <Icon className="size-4" />
+        </span>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
+          {count}
+        </span>
+      </header>
+      {items.length === 0 ? (
+        <p className="border-t border-border/60 px-4 py-6 text-sm text-muted-foreground">
+          {empty}
+        </p>
+      ) : (
+        <ul className="border-t border-border/60">
+          {items.map((item) => (
+            <SuguanRow
+              key={item.id}
+              item={item}
+              label={labelFor(item)}
+              meta={metaFor(item)}
+              onOpen={() => onOpen(item.id)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -73,6 +190,7 @@ export function DashboardPage() {
   const navigateToDirectory = useNavStore((s) => s.navigateToDirectory)
   const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const openSuguanDetail = useNavStore((s) => s.openSuguanDetail)
+  const [suguanView, setSuguanView] = useState<'upcoming' | 'recent'>('upcoming')
 
   // The two choirs are separate pools, so the cards count their own list. The
   // dashboard keeps one page: AWS rows first, then a PNK row.
@@ -96,7 +214,6 @@ export function DashboardPage() {
     return suguan
       .filter((s) => !isPast(s.date))
       .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
-      .slice(0, 5)
   }, [suguan])
 
   const recent = useMemo(() => {
@@ -105,33 +222,86 @@ export function DashboardPage() {
       .sort(
         (a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`),
       )
-      .slice(0, 4)
   }, [suguan])
 
-  const recordLabel = (s: (typeof suguan)[number]) =>
+  const recordLabel = (s: Suguan) =>
     allServiceTypes().find((t) => t.id === s.serviceTypeId)?.name ??
     s.serviceTypeId
 
-  const stats: StatTile[] = [
-    { label: 'Total Members', value: directoryMembers.length, icon: Users, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('all') },
-    { label: 'Active Members', value: activeMembers.length, icon: Music2, color: 'text-emerald-600 dark:text-emerald-400', go: () => navigateToDirectory('active') },
-    { label: "Women's Choir", value: women.length, icon: Trophy, color: 'text-pink-600 dark:text-pink-400', go: () => navigateToDirectory('female') },
-    { label: "Men's Choir", value: men.length, icon: Trophy, color: 'text-sky-600 dark:text-sky-400', go: () => navigateToDirectory('male') },
-    { label: 'Trainees', value: activeTrainees.length, icon: GraduationCap, color: 'text-violet-600 dark:text-violet-400', go: () => navigate(CHOIR_PAGES.trainees.aws) },
+  const upcomingMeta = (s: Suguan) =>
+    `${formatTime(s.time)} · ${s.assignments.length} assigned`
+  const recentMeta = (s: Suguan) =>
+    `${formatDate(s.date)} · ${s.assignments.length} members`
+
+  const stats: ChoirStat[] = [
+    {
+      label: 'Members',
+      value: directoryMembers.length,
+      go: () => navigateToDirectory('all'),
+    },
+    {
+      label: 'Active',
+      value: activeMembers.length,
+      go: () => navigateToDirectory('active'),
+    },
+    {
+      label: 'Women',
+      value: women.length,
+      go: () => navigateToDirectory('female'),
+      desktopOnly: true,
+    },
+    {
+      label: 'Men',
+      value: men.length,
+      go: () => navigateToDirectory('male'),
+      desktopOnly: true,
+    },
+    {
+      label: 'Trainees',
+      value: activeTrainees.length,
+      go: () => navigate(CHOIR_PAGES.trainees.aws),
+    },
   ]
 
   const pnkDirectoryMembers = pnkMembers.filter(belongsInMasterList)
-  const pnkStats: StatTile[] = [
-    { label: 'PNK Members', value: pnkDirectoryMembers.length, icon: Users, color: 'text-sky-600 dark:text-sky-400', go: () => navigate(CHOIR_PAGES.masterList.pnk) },
-    { label: 'PNK Active', value: pnkDirectoryMembers.filter((m) => m.isActive).length, icon: Music2, color: 'text-emerald-600 dark:text-emerald-400', go: () => navigate(CHOIR_PAGES.masterList.pnk) },
-    { label: 'PNK Trainees', value: pnkTrainees.filter((t) => t.status === 'active').length, icon: GraduationCap, color: 'text-violet-600 dark:text-violet-400', go: () => navigate(CHOIR_PAGES.trainees.pnk) },
+  const pnkStats: ChoirStat[] = [
+    {
+      label: 'Members',
+      value: pnkDirectoryMembers.length,
+      go: () => navigate(CHOIR_PAGES.masterList.pnk),
+    },
+    {
+      label: 'Active',
+      value: pnkDirectoryMembers.filter((m) => m.isActive).length,
+      go: () => navigate(CHOIR_PAGES.masterList.pnk),
+    },
+    {
+      label: 'Trainees',
+      value: pnkTrainees.filter((t) => t.status === 'active').length,
+      go: () => navigate(CHOIR_PAGES.trainees.pnk),
+    },
   ]
+
+  const mobileTab =
+    suguanView === 'upcoming'
+      ? {
+          items: upcoming.slice(0, 3),
+          count: upcoming.length,
+          empty: 'No upcoming Suguan scheduled.',
+          metaFor: upcomingMeta,
+        }
+      : {
+          items: recent.slice(0, 3),
+          count: recent.length,
+          empty: 'No past Suguan yet.',
+          metaFor: recentMeta,
+        }
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
       <PageHeader
         title="Dashboard"
-        description="Overview of the choir's current state."
+        description="AWS and PNK choirs at a glance."
         actions={
           <>
             <Button variant="outline" onClick={() => navigate('master-list')}>
@@ -146,103 +316,110 @@ export function DashboardPage() {
         }
       />
 
-      <div className="flex flex-col gap-2">
-        <StatGroupHeading title="AWS Choir" />
-        <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {stats.map((s) => (
-            <StatCard key={s.label} stat={s} />
-          ))}
-        </div>
+      <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
+        <ChoirSummary
+          title="AWS Choir"
+          stats={stats}
+          onOpen={() => navigateToDirectory('all')}
+        />
+        <ChoirSummary
+          title="PNK Choir"
+          stats={pnkStats}
+          onOpen={() => navigate(CHOIR_PAGES.masterList.pnk)}
+        />
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
-          <StatGroupHeading title="PNK Choir" />
+          <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Suguan
+          </h2>
           <button
             type="button"
-            onClick={() => navigate(CHOIR_PAGES.masterList.pnk)}
-            className="text-xs font-medium text-brand-teal transition-colors hover:text-brand-navy"
+            onClick={() => navigate('suguan-history')}
+            className="inline-flex items-center gap-1 rounded text-xs font-medium text-brand-teal transition-colors hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Open PNK Master List
+            View history
+            <ArrowRight className="size-3.5" />
           </button>
         </div>
-        <div className="grid w-full min-w-0 grid-cols-2 gap-3 md:grid-cols-3">
-          {pnkStats.map((s) => (
-            <StatCard key={s.label} stat={s} />
-          ))}
+
+        <div className="hidden gap-4 lg:grid lg:grid-cols-2">
+          <SuguanCard
+            title="Upcoming Suguan"
+            icon={Clock}
+            items={upcoming.slice(0, 5)}
+            count={upcoming.length}
+            empty="No upcoming Suguan scheduled."
+            metaFor={upcomingMeta}
+            labelFor={recordLabel}
+            onOpen={openSuguanDetail}
+          />
+          <SuguanCard
+            title="Recent Suguan"
+            icon={CalendarClock}
+            items={recent.slice(0, 4)}
+            count={recent.length}
+            empty="No past Suguan yet."
+            metaFor={recentMeta}
+            labelFor={recordLabel}
+            onOpen={openSuguanDetail}
+          />
         </div>
-      </div>
 
-      <div className="grid w-full min-w-0 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle>Upcoming Suguan</CardTitle>
-            <Clock className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {upcoming.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No upcoming Suguan scheduled.
-              </p>
-            )}
-            {upcoming.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => openSuguanDetail(s.id)}
-                className="pressable flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-accent motion-reduce:transform-none"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 flex-col items-center justify-center rounded-md bg-muted">
-                    <span className="text-xs font-semibold leading-none">
-                      {dayOfMonthKey(s.date)}
-                    </span>
-                    <span className="text-[10px] uppercase text-muted-foreground">
-                      {monthShortKey(s.date)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{recordLabel(s)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatTime(s.time)} · {s.assignments.length} assigned
-                    </p>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle>Recent Suguan</CardTitle>
-            <CalendarClock className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {recent.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No past Suguan yet.
-              </p>
-            )}
-            {recent.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => openSuguanDetail(s.id)}
-                className="pressable flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors hover:bg-accent motion-reduce:transform-none"
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    {recordLabel(s)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(s.date)} · {s.assignments.length} members
-                  </p>
-                </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
+        <section className="overflow-hidden rounded-2xl border border-border/70 bg-card lg:hidden">
+          <div className="p-3">
+            <div
+              role="group"
+              aria-label="Suguan view"
+              className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/40 p-1"
+            >
+              {(['upcoming', 'recent'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={suguanView === view}
+                  onClick={() => setSuguanView(view)}
+                  className={cn(
+                    'flex h-9 items-center justify-center gap-2 rounded-lg text-sm font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    suguanView === view
+                      ? 'bg-brand-teal-soft/70 text-brand-navy shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {view}
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 text-[0.625rem] font-semibold tabular-nums',
+                      suguanView === view
+                        ? 'bg-card/80 text-brand-navy'
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {view === 'upcoming' ? upcoming.length : recent.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {mobileTab.items.length === 0 ? (
+            <p className="border-t border-border/60 px-4 py-6 text-sm text-muted-foreground">
+              {mobileTab.empty}
+            </p>
+          ) : (
+            <ul className="border-t border-border/60">
+              {mobileTab.items.map((item) => (
+                <SuguanRow
+                  key={item.id}
+                  item={item}
+                  label={recordLabel(item)}
+                  meta={mobileTab.metaFor(item)}
+                  onOpen={() => openSuguanDetail(item.id)}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   )

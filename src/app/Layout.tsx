@@ -314,16 +314,19 @@ export function Layout() {
       */}
       <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         {/*
-          The Master List, Members History, Settings, and Suguan Detail render
-          their own screen header and stick to the top on their own, so the
-          global bar is hidden there rather than stacking two titles on one
-          screen. The global bar matches the Master List header's light theming
-          (`bg-background`, foreground text) so every mobile header is uniform.
+          The Master List, Members History, Trainees, Settings, and Suguan
+          Detail render their own screen header and stick to the top on their
+          own, so the global bar is hidden there rather than stacking two
+          titles on one screen. The global bar matches the Master List header's
+          light theming (`bg-background`, foreground text) so every mobile
+          header is uniform.
         */}
         {page !== 'master-list' &&
           page !== 'pnk-master-list' &&
           page !== 'members-history' &&
           page !== 'pnk-members-history' &&
+          page !== 'trainees' &&
+          page !== 'pnk-trainees' &&
           page !== 'settings' &&
           page !== 'suguan-detail' && (
           <div className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border/70 bg-background px-3 md:hidden">

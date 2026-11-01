@@ -32,18 +32,9 @@ export function SectionPaginator({
       )}
     >
       <p className="text-[0.6875rem] tabular-nums text-muted-foreground">
-        {page.total > 0 ? (
-          <>
-            Showing{' '}
-            <span className="font-semibold text-foreground/80">
-            {page.firstItem}&ndash;{page.lastItem}
-            </span>{' '}
-            of <span className="font-semibold text-foreground/80">{page.total}</span>{' '}
-            {label}
-          </>
-        ) : (
-          `No ${label.toLowerCase()}`
-        )}
+        {page.total > 0
+          ? `${page.firstItem}–${page.lastItem} of ${page.total}`
+          : `No ${label.toLowerCase()}`}
       </p>
 
       <div className="flex items-center gap-1.5">
@@ -59,9 +50,6 @@ export function SectionPaginator({
         >
           <ChevronLeft className="size-3.5" />
         </button>
-        <span className="px-1 text-[0.6875rem] tabular-nums text-muted-foreground">
-          Page {page.page} of {page.pageCount}
-        </span>
         <button
           type="button"
           onClick={() => onPageChange(page.page + 1)}

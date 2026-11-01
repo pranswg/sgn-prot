@@ -1,25 +1,23 @@
 import { MoreVertical } from 'lucide-react'
 import {
-  GenderBadge,
   MemberLifecycleBadge,
   ReturnedMemberBadge,
-  VoiceBadge,
 } from '@/components/StatusBadges'
 import { Button } from '@/components/ui/button'
 import { memberPositionLabel } from '@/core/constants/memberMembership'
-import { memberIsReturned } from '@/lib/memberHistory'
-import type { VoicePosition } from '@/core/types/suguan'
+import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
 import { formatMemberName, type MemberSort } from '@/lib/memberDirectory'
+import { memberIsReturned } from '@/lib/memberHistory'
+import { memberRankNames } from '@/lib/memberRanks'
 import { MemberInitialsAvatar } from './MemberInitialsAvatar'
 
 interface MobileMemberCardProps {
   member: Member
-  /** Position in the current list, shown as a row-number chip. */
-  number: number
   reference?: string
   voices: VoicePosition[]
-  /** PNK sings one voice, so its cards carry no voice badge. */
+  dutyRoles: DutyRole[]
+  /** PNK sings one voice, so its cards carry no voice name. */
   showVoice?: boolean
   sort: MemberSort
   onOpenMenu: (member: Member) => void
@@ -28,32 +26,38 @@ interface MobileMemberCardProps {
 
 /**
  * Compact directory card. The body and the overflow button both open the
- * member's action sheet; the row number chip sits beside the avatar and the
- * display reference (M-001) under the name.
+ * member's action sheet. The choir section header already names the gender, so
+ * the card spends its one metadata line on the reference, voice, and chosen
+ * Choir Positions instead of a repeated gender badge.
  */
 export function MobileMemberCard({
   member,
-  number,
   reference,
   voices,
+  dutyRoles,
   showVoice = true,
   sort,
   onOpenMenu,
   hasActions,
 }: MobileMemberCardProps) {
   const name = formatMemberName(member, sort)
+  const ranks = memberRankNames(member, dutyRoles).join(', ')
+  const meta = [
+    reference ?? '—',
+    showVoice ? memberPositionLabel(member, voices) : null,
+    ranks || null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <li className="pressable overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm active:bg-brand-teal-soft/40 motion-reduce:transform-none">
-      <div className="flex items-center gap-2 p-3.5">
+      <div className="flex items-center gap-3 p-3.5">
         <button
           type="button"
           onClick={() => onOpenMenu(member)}
-          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
-            {number}
-          </span>
           <MemberInitialsAvatar
             member={member}
             sort={sort}
@@ -63,30 +67,27 @@ export function MobileMemberCard({
             <span className="block truncate text-sm font-semibold text-foreground">
               {name}
             </span>
-            <span className="mt-0.5 block text-[0.6875rem] tabular-nums text-muted-foreground">
-              {reference ?? '—'}
-            </span>
-            <span className="mt-2 flex flex-wrap items-center gap-1.5">
-              <GenderBadge gender={member.gender} />
-              {showVoice && (
-                <VoiceBadge name={memberPositionLabel(member, voices)} />
-              )}
-              <MemberLifecycleBadge member={member} />
-              {memberIsReturned(member) && <ReturnedMemberBadge />}
+            <span className="mt-0.5 block truncate text-[0.6875rem] tabular-nums text-muted-foreground">
+              {meta}
             </span>
           </span>
         </button>
-        {hasActions && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="-mr-1 shrink-0 text-muted-foreground"
-            aria-label={`Actions for ${name}`}
-            onClick={() => onOpenMenu(member)}
-          >
-            <MoreVertical className="size-4" />
-          </Button>
-        )}
+
+        <div className="flex shrink-0 items-center gap-1">
+          {memberIsReturned(member) && <ReturnedMemberBadge />}
+          <MemberLifecycleBadge member={member} />
+          {hasActions && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="-mr-1 text-muted-foreground"
+              aria-label={`Actions for ${name}`}
+              onClick={() => onOpenMenu(member)}
+            >
+              <MoreVertical className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </li>
   )

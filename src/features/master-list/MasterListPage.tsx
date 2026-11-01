@@ -8,8 +8,10 @@ import {
   SlidersHorizontal,
   ArrowDownAZ,
   ChevronDown,
+  Mars,
   Music2,
   ShieldCheck,
+  Venus,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -39,6 +41,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useMemberStore } from '@/store/memberStore'
@@ -65,11 +68,9 @@ import {
   DEFAULT_MEMBER_PAGE_SIZE,
   filterMembers,
   filtersForStartView,
-  formatMemberName,
+  groupMembersByGender,
   hasActiveDirectoryFilters,
   paginate,
-  quickFilterLabel,
-  toggleInList,
   type MemberDirectoryFilters,
   type MemberPageSize,
   type MemberSort,
@@ -82,18 +83,18 @@ import {
   MemberDirectoryTable,
   MemberDirectoryEmptyState,
 } from './MemberDirectoryTable'
-import { PageSizeControl, SectionPaginator } from './SectionPaginator'
+import { PageSizeControl } from './SectionPaginator'
 import { StatCards, type StatAction } from './StatCards'
 import { MobileDirectoryHeader } from '@/components/MobileDirectoryHeader'
-import { MobileMemberCard } from './MobileMemberCard'
-import { MemberActionSheet } from './MemberActionSheet'
-import { MobileFilterSheet } from './MobileFilterSheet'
+import { MobileChoirSection } from './MobileChoirSection'
+import { MemberActionDialog } from './MemberActionDialog'
+import { MobileFilterDialog } from './MobileFilterDialog'
 import {
   MOBILE_FILTER_LABEL,
   MOBILE_FILTER_SECTIONS,
   type MobileFilterSection,
 } from './mobileFilters'
-import { MobileMemberFormSheet } from './MobileMemberFormSheet'
+import { MobileMemberFormDialog } from './MobileMemberFormDialog'
 import {
   MasterListPdfSetupDialog,
 } from './MasterListPdfSetupDialog'
@@ -111,14 +112,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import {
   MemberLifecycleDialog,
-  MemberLifecycleSheet,
   type LifecycleFormKind,
 } from '@/features/members-history/MemberLifecycleForm'
-
-const GENDER_LABEL: Record<string, string> = {
-  female: "Women's Choir",
-  male: "Men's Choir",
-}
 
 /**
  * Sentinel value for the "Clear" row inside the voice/position dropdowns.
@@ -138,19 +133,16 @@ const GENDER_SEGMENTS: {
 ]
 
 /**
- * What a filter chip shows once its selection is narrower than "all": the
- * chosen label for the single-choice filters, a count for the multi-selects,
- * and undefined when the filter is wide open. The undefined case is also what
- * decides the chip's neutral versus active styling.
+ * What a filter chip shows once its selection is narrower than "all": a count
+ * for the multi-selects, and undefined when the filter is wide open. The
+ * undefined case is also what decides the chip's neutral versus active
+ * styling.
  */
 function filterChipValue(
   section: MobileFilterSection,
   filters: MemberDirectoryFilters,
 ): string | undefined {
   switch (section) {
-    case 'status':
-      if (filters.status === 'all') return undefined
-      return filters.status === 'active' ? 'Active' : 'Inactive'
     case 'voices':
       return filters.voices.length > 0
         ? `${filters.voices.length} selected`
@@ -169,8 +161,8 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   // filters, the voice column and the form's voice picker, and hides the
   // membership filter too (its list is one membership pool).
   const isPnk = choir === 'pnk'
-  // One chip row drives the phone filter sheets, so PNK simply drops the Voice
-  // chip rather than opening a sheet with nothing in it.
+  // One chip row drives the phone filter dialogs, so PNK simply drops the Voice
+  // chip rather than opening a dialog with nothing in it.
   const mobileFilterSections: MobileFilterSection[] = isPnk
     ? MOBILE_FILTER_SECTIONS.filter((section) => section !== 'voices')
     : MOBILE_FILTER_SECTIONS
@@ -188,7 +180,6 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
   const localeName = useSettingsStore((s) => s.localeName)
   const setLocaleName = useSettingsStore((s) => s.setLocaleName)
-  const startNewSuguan = useNavStore((s) => s.startNewSuguan)
   const navigate = useNavStore((s) => s.navigate)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
   const isMobile = useIsMobile()
@@ -199,18 +190,15 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   // the lifecycle form records the date, reason, and notes as history events.
   const canManageHistory = can('manage-membership-history')
   const canDeleteMembers = can('delete-members')
-  // Choosing a member and then landing in an AWS Suguan is only meaningful for
-  // AWS. PNK has no Suguan yet, so its directory offers no Assign action.
-  const canAssignMembers = can('assign-members') && choir === 'aws'
   const canExportDocuments = can('export-documents')
   const choirLabel = CHOIR_LABELS[choir]
   const documentName = `${choirLabel} Master List`
   const updatedAt = new Date(lastUpdatedAt)
   const lastUpdatedLabel = `${formatPHTDateTime(updatedAt, {
-    month: 'long',
-    day: '2-digit',
+    month: 'short',
+    day: 'numeric',
     year: 'numeric',
-  })} - ${formatPHTDateTime(updatedAt, {
+  })} · ${formatPHTDateTime(updatedAt, {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -237,9 +225,12 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
     filters.quick === 'recent' ? 'recently-added' : sort
   const [pageSize, setPageSize] =
     useState<MemberPageSize>(DEFAULT_MEMBER_PAGE_SIZE)
-  // The mobile card list is a single flat list rather than two choir sections,
-  // so it keeps one page number of its own instead of borrowing the desktop's.
-  const [mobilePage, setMobilePage] = useState(1)
+  // Each choir section pages independently, mirroring the desktop table, so the
+  // phone keeps a page number per section rather than one for the whole list.
+  const [mobilePages, setMobilePages] = useState<Record<string, number>>({})
+  const [collapsedMobile, setCollapsedMobile] = useState<Record<string, boolean>>(
+    {},
+  )
 
   const [formOpen, setFormOpen] = useState(false)
   const [pdfSetupOpen, setPdfSetupOpen] = useState(false)
@@ -315,9 +306,36 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   const selectableFilterCount =
     activeFilterCount - (filters.query.trim() !== '' ? 1 : 0)
   const filteredCount = filteredMembers.length
-  // Clamped on read, so narrowing the filters mid-page cannot leave the mobile
-  // list stranded on an empty page 4.
-  const mobilePageResult = paginate(filteredMembers, mobilePage, pageSize)
+  // The phone mirrors the desktop's two choir sections, each paged on its own.
+  // `paginate` clamps, so a stale page left over from a wider filter set cannot
+  // blank a section.
+  const mobileSections = useMemo(() => {
+    const { women, men } = groupMembersByGender(filteredMembers)
+    return [
+      {
+        key: 'women',
+        title: "Women's Choir",
+        members: women,
+        icon: Venus,
+        iconClass: 'text-pink-500',
+      },
+      {
+        key: 'men',
+        title: "Men's Choir",
+        members: men,
+        icon: Mars,
+        iconClass: 'text-sky-500',
+      },
+    ]
+      .filter((section) => section.members.length > 0)
+      .map((section) => ({
+        ...section,
+        page: paginate(section.members, mobilePages[section.key] ?? 1, pageSize),
+      }))
+  }, [filteredMembers, mobilePages, pageSize])
+  const anyMobilePaged = mobileSections.some(
+    (section) => section.page.pageCount > 1,
+  )
   const totalCount = directoryMembers.length
 
   const setFilter = <K extends keyof MemberDirectoryFilters>(
@@ -340,7 +358,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         ? EMPTY_DIRECTORY_FILTERS
         : { ...EMPTY_DIRECTORY_FILTERS, status: action },
     )
-    setMobilePage(1)
+    setMobilePages({})
   }
 
   const openAddDialog = () => {
@@ -351,13 +369,6 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   const openEditDialog = (member: Member) => {
     setEditingMember(member)
     setFormOpen(true)
-  }
-
-  const handleAssign = (member: Member) => {
-    startNewSuguan()
-    toast.success(
-      `Choir Suguan ready — assign ${formatMemberName(member, sort)} to a slot.`,
-    )
   }
 
   const handleExport = (format: 'csv' | 'excel') => {
@@ -558,78 +569,70 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {exportPreview}
       <MobileDirectoryHeader
         title={documentName}
-        description={`Manage ${choirLabel} members`}
+        description={`Updated ${lastUpdatedLabel}`}
         onOpenMenu={() => setMobileDrawerOpen(true)}
+        actions={
+          <>
+            {canAddMembers && (
+              <Button
+                size="icon"
+                aria-label="Add member"
+                title="Add member"
+                onClick={openAddDialog}
+              >
+                <Plus className="size-4" />
+              </Button>
+            )}
+            {canExportDocuments && (
+              <ExportMenu
+                compact
+                onCsv={() => handleExport('csv')}
+                onExcel={() => handleExport('excel')}
+                onWord={() => setWordSetupOpen(true)}
+                onPdf={() => setPdfSetupOpen(true)}
+                onAttendance={() => setAttendanceSetupOpen(true)}
+              />
+            )}
+          </>
+        }
       />
 
       <PageHeader
         eyebrow={choir === 'pnk' ? 'Pagsamba ng Kabataan' : 'Adult Worship Service'}
         title={documentName}
-        description="Manage your choir members, trainees, and positions."
+        description={`Updated ${lastUpdatedLabel}`}
         className="hidden md:flex"
+        actions={
+          <>
+            {canAddMembers && (
+              <Button onClick={openAddDialog}>
+                <Plus className="size-4" />
+                Add Member
+              </Button>
+            )}
+            {canExportDocuments && (
+              <ExportMenu
+                onCsv={() => handleExport('csv')}
+                onExcel={() => handleExport('excel')}
+                onWord={() => setWordSetupOpen(true)}
+                onPdf={() => setPdfSetupOpen(true)}
+                onAttendance={() => setAttendanceSetupOpen(true)}
+              />
+            )}
+          </>
+        }
       />
-
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border/70 bg-card px-4 py-3 text-sm">
-        <span className="font-medium text-foreground">
-          {documentName} last updated on
-        </span>
-        <time
-          dateTime={lastUpdatedAt}
-          className="text-muted-foreground"
-        >
-          {lastUpdatedLabel}
-        </time>
-      </div>
 
       <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
 
-      {canExportDocuments && (
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setAttendanceSetupOpen(true)}
-          >
-            <FileDown className="size-4" />
-            Generate Attendance Sheet
-          </Button>
-          <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="size-4" />
-                  Export Data
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Export data</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => handleExport('csv')}>
-                  <Download className="size-4" />
-                  CSV (current view)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport('excel')}>
-                  <Download className="size-4" />
-                  Excel (current view)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setWordSetupOpen(true)}>
-                  <Download className="size-4" />
-                  Word (full Master List)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setPdfSetupOpen(true)}>
-                  <FileDown className="size-4" />
-                  PDF (full Master List)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
-      )}
-
-      {/* Search & filter toolbar. Every directory filter lives here (choir
-          segment, membership, status, voices, positions, sort). Sticky under
-          the screen header so the filters stay with you while the list
-          scrolls, taking over from the removed sticky side panel. */}
+      {/* Search & filter toolbar. The direct filters live here (choir segment,
+          voices, positions, sort); status is owned by the KPI strip above, so
+          it is not repeated as a control. Sticky under the screen header so
+          the filters stay with you while the list scrolls. */}
       <div
         className={cn(
           'sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5',
@@ -682,25 +685,6 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                 </button>
               ))}
             </div>
-
-            <Select
-              value={filters.status}
-              onValueChange={(v) =>
-                setFilter('status', v as MemberDirectoryFilters['status'])
-              }
-            >
-              <SelectTrigger
-                aria-label="Filter by status"
-                className="h-9 w-[9.5rem] bg-background text-[0.8125rem]"
-              >
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
 
             {!isPnk && (
               <Select
@@ -797,24 +781,26 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
 
             <Button
               variant="ghost"
+              size="icon-lg"
+              aria-label="Reset filters"
+              title="Reset filters"
               disabled={!filtersActive}
               onClick={clearFilters}
               className="text-muted-foreground hover:text-foreground"
             >
               <SlidersHorizontal className="size-4" />
-              Reset Filters
             </Button>
           </div>
         </div>
 
         {/* Mobile filter chips: one focused bottom sheet each, so the toolbar
-            never needs a permanently visible column of controls. The three
-            chips share the row equally; Clear only ever takes its own edge. */}
+            never needs a permanently visible column of controls. The chips
+            share the row equally; Clear only ever takes its own edge. */}
         <div className="flex items-center gap-2 md:hidden">
           <div
             className={cn(
               'grid flex-1 gap-2',
-              isPnk ? 'grid-cols-2' : 'grid-cols-3',
+              mobileFilterSections.length > 1 ? 'grid-cols-2' : 'grid-cols-1',
             )}
           >
             {mobileFilterSections.map((section) => {
@@ -875,110 +861,55 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
           ))}
         </div>
 
-        {filtersActive && (
-          <div className="hidden flex-wrap items-center gap-2 border-t border-border/60 pt-3 md:flex">
-            <span className="text-[0.6875rem] font-medium text-muted-foreground">
-              {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''}{' '}
-              active
-            </span>
-            {filters.voices.map((id) => (
-              <FilterChip
-                key={`voice-${id}`}
-                label={voices.find((v) => v.id === id)?.name ?? id}
-                onClear={() =>
-                  setFilter('voices', toggleInList(filters.voices, id))
-                }
-              />
-            ))}
-            {filters.positions.map((id) => (
-              <FilterChip
-                key={`position-${id}`}
-                label={dutyRoles.find((role) => role.id === id)?.name ?? id}
-                onClear={() =>
-                  setFilter('positions', toggleInList(filters.positions, id))
-                }
-              />
-            ))}
-            {filters.quick !== 'all' && (
-              <FilterChip
-                label={quickFilterLabel(filters.quick)}
-                onClear={() => setFilter('quick', 'all')}
-              />
-            )}
-            {filters.gender !== 'all' && (
-              <FilterChip
-                label={GENDER_LABEL[filters.gender]}
-                onClear={() => setFilter('gender', 'all')}
-              />
-            )}
-            {filters.status !== 'all' && (
-              <FilterChip
-                label={filters.status}
-                onClear={() => setFilter('status', 'all')}
-              />
-            )}
-          </div>
-        )}
       </div>
 
       {/* Member directory */}
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold tracking-tight text-foreground">
-                Member Directory
-              </h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Showing{' '}
-                <span className="font-medium tabular-nums text-foreground/80">
-                  {filteredCount}
-                </span>{' '}
-                of {totalCount} members
-              </p>
-            </div>
-            {canAddMembers && (
-              <Button
-                size="default"
-                className="shrink-0"
-                onClick={openAddDialog}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              Member Directory
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Showing{' '}
+              <span className="font-medium tabular-nums text-foreground/80">
+                {filteredCount}
+              </span>{' '}
+              of {totalCount} members
+            </p>
+          </div>
+
+          {/* Sort sits with the heading on phones; desktop keeps it in the
+              toolbar above. */}
+          <div className="shrink-0 md:hidden">
+            <Select
+              value={effectiveSort}
+              onValueChange={(v) => {
+                setSort(v as MemberSort)
+                if (filters.quick === 'recent') setFilter('quick', 'all')
+              }}
+            >
+              <SelectTrigger
+                aria-label="Sort members"
+                className="h-9 w-[9.5rem] bg-background text-[0.8125rem]"
               >
-                <Plus className="size-4" />
-                Add Member
-              </Button>
-            )}
+                <ArrowDownAZ className="size-4 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(MEMBER_SORT_LABEL) as MemberSort[]).map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {MEMBER_SORT_LABEL[key]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        {/* Mobile sort, stacked under the heading. The choir segment lives in
-            the toolbar's scrolling chip row instead. */}
-        <div className="flex flex-col gap-2 md:hidden">
-          <Select
-            value={effectiveSort}
-            onValueChange={(v) => {
-              setSort(v as MemberSort)
-              if (filters.quick === 'recent') setFilter('quick', 'all')
-            }}
-          >
-            <SelectTrigger
-              aria-label="Sort members"
-              className="h-10 w-full bg-background text-[0.8125rem]"
-            >
-              <ArrowDownAZ className="size-4 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(MEMBER_SORT_LABEL) as MemberSort[]).map((key) => (
-                <SelectItem key={key} value={key}>
-                  {MEMBER_SORT_LABEL[key]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="flex flex-col">
-          {/* Mobile card list */}
+          {/* Mobile card list, grouped into the same two choir sections as the
+              desktop table. */}
           <div className="md:hidden">
             {filteredMembers.length === 0 ? (
               <MemberDirectoryEmptyState
@@ -987,46 +918,58 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
               />
             ) : (
               <div className="flex flex-col gap-3">
-                <ul className="flex flex-col gap-2">
-                  {mobilePageResult.items.map((member, index) => (
-                    <MobileMemberCard
-                      key={member.id}
-                      member={member}
-                      number={mobilePageResult.firstItem + index}
-                      reference={references.get(member.id)}
-                      voices={voiceMap}
-                      showVoice={!isPnk}
-                      sort={sort}
-                      onOpenMenu={setActionTarget}
-                      hasActions={canEditMembers || canAssignMembers || canManageHistory || canDeleteMembers}
+                {anyMobilePaged ? (
+                  <div className="flex items-center justify-end">
+                    <PageSizeControl
+                      value={pageSize}
+                      onChange={(size) => {
+                        // A new page size invalidates every section's cursor;
+                        // start each one over at the top.
+                        setMobilePages({})
+                        setPageSize(size)
+                      }}
                     />
-                  ))}
-                </ul>
-                {mobilePageResult.pageCount > 1 ? (
-                  <>
-                    <div className="flex items-center justify-end">
-                      <PageSizeControl
-                        value={pageSize}
-                        onChange={(size) => {
-                          setMobilePage(1)
-                          setPageSize(size)
-                        }}
-                      />
-                    </div>
-                    <div className="rounded-lg border border-border/70 bg-card">
-                      <SectionPaginator
-                        label="members"
-                        page={mobilePageResult}
-                        onPageChange={setMobilePage}
-                      />
-                    </div>
-                  </>
+                  </div>
                 ) : null}
+
+                {mobileSections.map((section) => (
+                  <MobileChoirSection
+                    key={section.key}
+                    title={section.title}
+                    icon={section.icon}
+                    iconClass={section.iconClass}
+                    page={section.page}
+                    collapsed={collapsedMobile[section.key] ?? false}
+                    onToggle={() =>
+                      setCollapsedMobile((current) => ({
+                        ...current,
+                        [section.key]: !current[section.key],
+                      }))
+                    }
+                    voices={voiceMap}
+                    dutyRoles={dutyRoles}
+                    references={references}
+                    sort={sort}
+                    showVoice={!isPnk}
+                    hasActions={
+                      canEditMembers ||
+                      canManageHistory ||
+                      canDeleteMembers
+                    }
+                    onOpenMenu={setActionTarget}
+                    onPageChange={(page) =>
+                      setMobilePages((current) => ({
+                        ...current,
+                        [section.key]: page,
+                      }))
+                    }
+                  />
+                ))}
               </div>
             )}
           </div>
 
-          <div className="hidden min-w-0 overflow-hidden rounded-xl border border-border/70 bg-card md:block">
+          <div className="hidden min-w-0 md:block">
             <MemberDirectoryTable
               {...directoryProps}
               pageSize={pageSize}
@@ -1036,8 +979,8 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         </div>
       </section>
 
-      {/* Mobile filter sheet */}
-      <MobileFilterSheet
+      {/* Mobile filter dialog */}
+      <MobileFilterDialog
         open={filterSheetSection !== null}
         section={filterSheetSection ?? mobileFilterSections[0]}
         onOpenChange={(open) => {
@@ -1052,9 +995,14 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         previewCount={previewCount}
       />
 
-      {/* Mobile three-dot member actions */}
-      <MemberActionSheet
+      {/* Member actions, from a card tap or its kebab */}
+      <MemberActionDialog
         member={actionTarget}
+        reference={
+          actionTarget ? references.get(actionTarget.id) : undefined
+        }
+        voices={voiceMap}
+        dutyRoles={dutyRoles}
         sort={sort}
         onOpenChange={(open) => {
           if (!open) setActionTarget(null)
@@ -1062,10 +1010,6 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         onEdit={(member) => {
           setActionTarget(null)
           openEditDialog(member)
-        }}
-        onAssign={(member) => {
-          setActionTarget(null)
-          handleAssign(member)
         }}
         onTransfer={(member) => {
           setActionTarget(null)
@@ -1076,16 +1020,18 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
           setDeleteTarget(member)
         }}
         canEdit={canEditMembers}
-        canAssign={canAssignMembers}
         canTransfer={canManageHistory}
         canDelete={canDeleteMembers}
       />
 
       {isMobile ? (
-        <MobileMemberFormSheet
+        <MobileMemberFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
           member={editingMember}
+          reference={
+            editingMember ? references.get(editingMember.id) : undefined
+          }
           choir={choir}
         />
       ) : (
@@ -1125,26 +1071,16 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         />
       )}
 
-      {lifecycleTarget &&
-        (isMobile ? (
-          <MemberLifecycleSheet
-            open
-            onOpenChange={(open: boolean) => {
-              if (!open) setLifecycleTarget(null)
-            }}
-            member={lifecycleTarget.member}
-            kind={lifecycleTarget.kind}
-          />
-        ) : (
-          <MemberLifecycleDialog
-            open
-            onOpenChange={(open: boolean) => {
-              if (!open) setLifecycleTarget(null)
-            }}
-            member={lifecycleTarget.member}
-            kind={lifecycleTarget.kind}
-          />
-        ))}
+      {lifecycleTarget && (
+        <MemberLifecycleDialog
+          open
+          onOpenChange={(open: boolean) => {
+            if (!open) setLifecycleTarget(null)
+          }}
+          member={lifecycleTarget.member}
+          kind={lifecycleTarget.kind}
+        />
+      )}
 
       <AlertDialog
         open={!!deleteTarget}
@@ -1183,21 +1119,60 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   )
 }
 
-function FilterChip({
-  label,
-  onClear,
+/**
+ * One export menu for both headers: labelled on desktop, icon-only on phones.
+ * Spreadsheet items export the current filtered view; Word and PDF always
+ * export the full Master List, so the two groups stay visually separate.
+ */
+function ExportMenu({
+  compact = false,
+  onCsv,
+  onExcel,
+  onWord,
+  onPdf,
+  onAttendance,
 }: {
-  label: string
-  onClear: () => void
+  compact?: boolean
+  onCsv: () => void
+  onExcel: () => void
+  onWord: () => void
+  onPdf: () => void
+  onAttendance: () => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClear}
-      className="inline-flex items-center gap-1 rounded-md border border-brand-teal/25 bg-brand-teal-soft py-0.5 pl-2 pr-1.5 text-[0.6875rem] font-medium capitalize text-brand-teal transition-colors hover:border-brand-teal/50"
-    >
-      {label}
-      <X className="size-3" />
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {compact ? (
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Export"
+            title="Export"
+          >
+            <Download className="size-4" />
+          </Button>
+        ) : (
+          <Button variant="outline">
+            <Download className="size-4" />
+            Export
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </Button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel>Current view</DropdownMenuLabel>
+        <DropdownMenuItem onClick={onCsv}>CSV</DropdownMenuItem>
+        <DropdownMenuItem onClick={onExcel}>Excel</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Full Master List</DropdownMenuLabel>
+        <DropdownMenuItem onClick={onWord}>Word</DropdownMenuItem>
+        <DropdownMenuItem onClick={onPdf}>PDF</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onAttendance}>
+          <FileDown className="size-4" />
+          Attendance Sheet
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

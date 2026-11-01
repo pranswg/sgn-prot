@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { Check } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,6 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { phtInstantISO } from '@/lib/phDate'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
 import { cn } from '@/lib/utils'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { DuplicateMemberPanel } from './DuplicateMemberPanel'
 import { useDuplicateActions } from './useDuplicateActions'
@@ -135,6 +135,15 @@ export function MemberFormDialog({
     }))
   }
 
+  const toggleDutyRole = (roleId: string) => {
+    set(
+      'assignedDutyRoleIds',
+      form.assignedDutyRoleIds.includes(roleId)
+        ? form.assignedDutyRoleIds.filter((id) => id !== roleId)
+        : [...new Set([...form.assignedDutyRoleIds, roleId])],
+    )
+  }
+
   const handleSave = () => {
     if (!form.firstName.trim() || !form.lastName.trim()) {
       toast.error("Please provide the member's full name.")
@@ -204,8 +213,8 @@ export function MemberFormDialog({
             {duplicateFocused
               ? 'Possible Duplicate'
               : member
-                ? 'Edit Member'
-                : 'Add Member'}
+                ? 'Edit member'
+                : 'Add member'}
           </DialogTitle>
           <DialogDescription>
             {duplicateFocused
@@ -233,154 +242,179 @@ export function MemberFormDialog({
           </div>
         ) : (
           <>
-            <div className="grid gap-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="firstName">
-                First Name <span className="text-muted-foreground">(Required)</span>
-              </Label>
-              <Input
-                id="firstName"
-                value={form.firstName}
-                onChange={(e) => set('firstName', e.target.value)}
-                placeholder="First name"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lastName">
-                Last Name <span className="text-muted-foreground">(Required)</span>
-              </Label>
-              <Input
-                id="lastName"
-                value={form.lastName}
-                onChange={(e) => set('lastName', e.target.value)}
-                placeholder="Last name"
-              />
-            </div>
-          </div>
+            <div className="flex flex-col gap-5 py-2">
+              <FormSection label="Personal information">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="firstName">First name</Label>
+                    <Input
+                      id="firstName"
+                      value={form.firstName}
+                      onChange={(e) => set('firstName', e.target.value)}
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="lastName">Last name</Label>
+                    <Input
+                      id="lastName"
+                      value={form.lastName}
+                      onChange={(e) => set('lastName', e.target.value)}
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="middleName">
-                Middle Name <span className="text-muted-foreground">(Optional)</span>
-              </Label>
-              <Input
-                id="middleName"
-                value={form.middleName}
-                onChange={(e) => set('middleName', e.target.value)}
-                placeholder="Middle name or initial"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="suffix">
-                Suffix <span className="text-muted-foreground">(Optional)</span>
-              </Label>
-              <Input
-                id="suffix"
-                value={form.suffix}
-                onChange={(e) => set('suffix', e.target.value)}
-                placeholder="e.g. Jr., Sr., III"
-              />
-            </div>
-          </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="middleName">Middle name</Label>
+                    <Input
+                      id="middleName"
+                      value={form.middleName}
+                      onChange={(e) => set('middleName', e.target.value)}
+                      placeholder="Middle name or initial"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="suffix">Suffix</Label>
+                    <Input
+                      id="suffix"
+                      value={form.suffix}
+                      onChange={(e) => set('suffix', e.target.value)}
+                      placeholder="e.g. Jr., Sr., III"
+                    />
+                  </div>
+                </div>
+              </FormSection>
 
-          <div className={cn('grid gap-3', !isPnk && 'grid-cols-2')}>
-            <div className="grid gap-2">
-              <Label>Gender</Label>
-              <Select
-                value={form.gender}
-                onValueChange={(v) => handleGenderChange(v as 'male' | 'female')}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="male">Male</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {!isPnk && (
-              <div className="grid gap-2">
-                <Label>Voice Position</Label>
-                <Select
-                  value={form.voicePosition}
-                  onValueChange={(v) => set('voicePosition', v)}
+              <FormSection label="Choir details">
+                <div className={cn('grid gap-3', !isPnk && 'grid-cols-2')}>
+                  <div className="grid gap-2">
+                    <Label>Gender</Label>
+                    <Select
+                      value={form.gender}
+                      onValueChange={(v) =>
+                        handleGenderChange(v as 'male' | 'female')
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {!isPnk && (
+                    <div className="grid gap-2">
+                      <Label>Voice position</Label>
+                      <Select
+                        value={form.voicePosition}
+                        onValueChange={(v) => set('voicePosition', v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {voicePositionsForGender(
+                            form.gender,
+                            allVoices(),
+                          ).map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              </FormSection>
+
+              <FormSection label="Status">
+                <div
+                  role="group"
+                  aria-label="Member status"
+                  className="grid max-w-xs grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1"
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {voicePositionsForGender(form.gender, allVoices()).map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
+                  {(
+                    [
+                      { value: true, label: 'Active' },
+                      { value: false, label: 'Inactive' },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      aria-pressed={form.isActive === option.value}
+                      onClick={() => set('isActive', option.value)}
+                      className={cn(
+                        'h-9 rounded-md text-sm font-medium transition-colors',
+                        form.isActive === option.value
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-muted',
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </FormSection>
 
-          <div className="grid gap-2">
-            <Label>Status</Label>
-            <Select
-              value={form.isActive ? 'active' : 'inactive'}
-              onValueChange={(v) => set('isActive', v === 'active')}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Inactive keeps the member on the Master List with an Inactive
-              badge; a transfer out moves them to Members History.
-            </p>
-          </div>
-
-          <fieldset className="grid gap-3">
-            <legend className="text-sm font-medium">Choir Rankings</legend>
-            <p className="text-xs text-muted-foreground">
-              Select any configured duty-role rankings held by this member.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {dutyRoles.map((role) => (
-                <label
-                  key={role.id}
-                  className="flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm"
-                >
-                  <Checkbox
-                    checked={form.assignedDutyRoleIds.includes(role.id)}
-                    onCheckedChange={(checked) =>
-                      set(
-                        'assignedDutyRoleIds',
-                        checked
-                          ? [...new Set([...form.assignedDutyRoleIds, role.id])]
-                          : form.assignedDutyRoleIds.filter(
-                              (id) => id !== role.id,
-                            ),
-                      )
-                    }
-                  />
-                  {role.name}
-                </label>
-              ))}
+              <FormSection label="Choir rankings">
+                <div className="flex flex-wrap gap-2">
+                  {dutyRoles.map((role) => {
+                    const checked = form.assignedDutyRoleIds.includes(role.id)
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        aria-pressed={checked}
+                        onClick={() => toggleDutyRole(role.id)}
+                        className={cn(
+                          'inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-sm transition-colors',
+                          checked
+                            ? 'border-primary/40 bg-brand-teal-soft font-medium text-brand-teal'
+                            : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+                        )}
+                      >
+                        {checked && <Check className="size-4 shrink-0" />}
+                        {role.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </FormSection>
             </div>
-          </fieldset>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={saveMember} loading={savingMember}>{member ? 'Save Changes' : 'Add Member'}</Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button onClick={saveMember} loading={savingMember}>
+                {member ? 'Save changes' : 'Add member'}
+              </Button>
+            </DialogFooter>
           </>
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function FormSection({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </h3>
+      {children}
+    </section>
   )
 }

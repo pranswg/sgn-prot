@@ -22,6 +22,8 @@ import type { Choir, Trainee, TraineeInput } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender, UNASSIGNED_VOICE_ID } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
+import { CHOIR_LABELS } from '@/lib/choirs'
+import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { isDateKey, toDateKeyFromInstant, todayPHT } from '@/lib/phDate'
 
@@ -153,112 +155,104 @@ export function TraineeFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{trainee ? 'Edit Trainee' : 'Add Trainee'}</DialogTitle>
+          <DialogTitle>{trainee ? 'Edit trainee' : 'Add trainee'}</DialogTitle>
           <DialogDescription>
             {trainee
               ? `Update the information for ${trainee.firstName} ${trainee.lastName}.`
-              : 'Add a new trainee member for choir training.'}
+              : `Add a new trainee to the ${CHOIR_LABELS[choir]} Nagsasanay list.`}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
-          <p className="text-sm font-medium text-foreground">Basic Information</p>
+        <div className="flex flex-col gap-5 py-2">
+          <FormSection label="Personal information">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="t-firstName">First name</Label>
+                <Input
+                  id="t-firstName"
+                  value={form.firstName}
+                  onChange={(e) => set('firstName', e.target.value)}
+                  placeholder="First name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="t-lastName">Last name</Label>
+                <Input
+                  id="t-lastName"
+                  value={form.lastName}
+                  onChange={(e) => set('lastName', e.target.value)}
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="t-firstName">
-                First Name <span className="text-muted-foreground">(Required)</span>
-              </Label>
-              <Input
-                id="t-firstName"
-                value={form.firstName}
-                onChange={(e) => set('firstName', e.target.value)}
-                placeholder="First name"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="t-middleName">Middle name</Label>
+                <Input
+                  id="t-middleName"
+                  value={form.middleName}
+                  onChange={(e) => set('middleName', e.target.value)}
+                  placeholder="Middle name or initial"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="t-suffix">Suffix</Label>
+                <Input
+                  id="t-suffix"
+                  value={form.suffix}
+                  onChange={(e) => set('suffix', e.target.value)}
+                  placeholder="e.g. Jr., Sr., III"
+                />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="t-lastName">
-                Last Name <span className="text-muted-foreground">(Required)</span>
-              </Label>
-              <Input
-                id="t-lastName"
-                value={form.lastName}
-                onChange={(e) => set('lastName', e.target.value)}
-                placeholder="Last name"
-              />
-            </div>
-          </div>
+          </FormSection>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="t-middleName">
-                Middle Name <span className="text-muted-foreground">(Optional)</span>
-              </Label>
-              <Input
-                id="t-middleName"
-                value={form.middleName}
-                onChange={(e) => set('middleName', e.target.value)}
-                placeholder="Middle name or initial"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="t-suffix">
-                Suffix <span className="text-muted-foreground">(Optional)</span>
-              </Label>
-              <Input
-                id="t-suffix"
-                value={form.suffix}
-                onChange={(e) => set('suffix', e.target.value)}
-                placeholder="e.g. Jr., Sr., III"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Gender</Label>
-              <Select
-                value={form.gender}
-                onValueChange={(v) => handleGenderChange(v as 'male' | 'female')}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="male">Male</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Voice Position</Label>
-              <Select
-                value={form.voicePosition}
-                onValueChange={(v) => set('voicePosition', v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={UNASSIGNED_VOICE_ID}>
-                    No voice assigned yet
-                  </SelectItem>
-                  {voicePositionsForGender(form.gender, allVoices()).map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
+          <FormSection label="Choir details">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Gender</Label>
+                <Select
+                  value={form.gender}
+                  onValueChange={(v) =>
+                    handleGenderChange(v as 'male' | 'female')
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="male">Male</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Voice position</Label>
+                <Select
+                  value={form.voicePosition}
+                  onValueChange={(v) => set('voicePosition', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNASSIGNED_VOICE_ID}>
+                      No voice assigned yet
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {voicePositionsForGender(form.gender, allVoices()).map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
+          </FormSection>
 
-          <p className="mt-1 text-sm font-medium text-foreground">
-            Training Information
-          </p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="t-trainingStartDate">Training Start Date</Label>
+          <FormSection label="Training">
+            <div className="grid max-w-xs gap-2">
+              <Label htmlFor="t-trainingStartDate">Training start date</Label>
               <Input
                 id="t-trainingStartDate"
                 type="date"
@@ -266,36 +260,64 @@ export function TraineeFormDialog({
                 onChange={(e) => set('trainingStartDate', e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
-              <Label>Status</Label>
-              <Select
-                value={form.status}
-                onValueChange={(v) => set('status', v as 'active' | 'inactive')}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Active is currently undergoing training; Inactive is no longer
-                participating.
-              </p>
+          </FormSection>
+
+          <FormSection label="Status">
+            <div
+              role="group"
+              aria-label="Trainee status"
+              className="grid max-w-xs grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1"
+            >
+              {(
+                [
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={form.status === option.value}
+                  onClick={() => set('status', option.value)}
+                  className={cn(
+                    'h-9 rounded-md text-sm font-medium transition-colors',
+                    form.status === option.value
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
-          </div>
+          </FormSection>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={saveTrainee} loading={savingTrainee}>
-            {trainee ? 'Save Changes' : 'Add Trainee'}
+            {trainee ? 'Save changes' : 'Add trainee'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function FormSection({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </h3>
+      {children}
+    </section>
   )
 }

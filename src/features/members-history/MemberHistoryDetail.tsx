@@ -9,7 +9,6 @@ import {
   X,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -408,48 +407,5 @@ export function MemberHistoryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-/** Mobile timeline sheet. */
-export function MemberHistorySheet({
-  member,
-  reference,
-  canManage,
-  onOpenChange,
-  onRequestRestore,
-}: MemberHistoryDetailDialogProps) {
-  if (!member) return null
-  return (
-    <Sheet open onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[88dvh] flex-col gap-0 rounded-t-2xl pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-        <div className="flex shrink-0 justify-center pt-2.5 pb-1">
-          <div className="h-1.5 w-10 rounded-full bg-border/80" />
-        </div>
-        <div className="px-5 pt-2 pb-3">
-          <SheetTitle className="text-lg font-bold">Membership History</SheetTitle>
-          <SheetDescription className="text-xs">
-            Member history in the locale.
-          </SheetDescription>
-        </div>
-        <div className="min-w-0 flex-1 overflow-y-auto border-t border-border/60 px-4 pt-4 pb-6">
-          <MemberHistoryContent
-            member={member}
-            reference={reference}
-            canManage={canManage}
-            onRequestRestore={onRequestRestore ?? (() => {})}
-          />
-        </div>
-        <div className="flex shrink-0 px-4 pt-2">
-          <Button
-            variant="secondary"
-            className="h-12 flex-1 rounded-xl text-sm font-semibold"
-            onClick={() => onOpenChange(false)}
-          >
-            Close
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
   )
 }

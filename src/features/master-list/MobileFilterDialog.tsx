@@ -1,12 +1,17 @@
 import { useState } from 'react'
-import { Activity, Check, Music2, ShieldCheck, Users } from 'lucide-react'
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+  Check,
+  Music2,
+  ShieldCheck,
+  SlidersHorizontal,
+  Users,
+} from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
@@ -22,7 +27,7 @@ import {
   type MobileFilterSection,
 } from './mobileFilters'
 
-interface MobileFilterSheetProps {
+interface MobileFilterDialogProps {
   open: boolean
   section: MobileFilterSection
   onOpenChange: (open: boolean) => void
@@ -38,33 +43,12 @@ interface MobileFilterSheetProps {
   previewCount: (filters: MemberDirectoryFilters) => number
 }
 
-const STATUS_FILTERS: { value: 'all' | 'active' | 'inactive'; label: string }[] = [
-  { value: 'all', label: 'All Status' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-]
-
 const SECTION_ICON: Record<MobileFilterSection, typeof Users> = {
   voices: Music2,
-  status: Activity,
   roles: ShieldCheck,
 }
 
-function countFor(
-  stats: DirectoryStats,
-  value: 'all' | 'active' | 'inactive',
-): number {
-  switch (value) {
-    case 'all':
-      return stats.total
-    case 'active':
-      return stats.active
-    case 'inactive':
-      return stats.inactive
-  }
-}
-
-/** Selections inside one section, so a sheet's Clear button cannot silently wipe the others. */
+/** Selections inside one section, so a dialog's Clear button cannot silently wipe the others. */
 function countSection(
   filters: MemberDirectoryFilters,
   section: MobileFilterSection,
@@ -72,8 +56,6 @@ function countSection(
   switch (section) {
     case 'voices':
       return filters.voices.length
-    case 'status':
-      return filters.status === 'all' ? 0 : 1
     case 'roles':
       return filters.positions.length
   }
@@ -86,14 +68,12 @@ function clearSection(
   switch (section) {
     case 'voices':
       return { ...filters, voices: [] }
-    case 'status':
-      return { ...filters, status: 'all' }
     case 'roles':
       return { ...filters, positions: [], quick: 'all' }
   }
 }
 
-function SheetSection({
+function FilterSection({
   icon: Icon,
   title,
   children,
@@ -163,14 +143,12 @@ function CheckRow({
 }
 
 /**
- * Each mobile filter button opens one focused bottom sheet instead of a single
- * sheet holding the whole filter panel, so the search row stays five short
- * chips rather than a permanently visible column of controls. Edits are draft
- * staged until "Apply Filters" is tapped, so dismissing the sheet never leaves
- * the list in a half-filtered state, and it shows one section when opened from
- * a chip and all of them otherwise.
+ * Each mobile filter chip opens one focused floating dialog instead of a bottom
+ * sheet, so the panel never sits under the mobile nav bar. Edits are draft
+ * staged until "Apply Filters" is tapped, so dismissing the dialog never leaves
+ * the list in a half-filtered state.
  */
-export function MobileFilterSheet({
+export function MobileFilterDialog({
   open,
   section,
   onOpenChange,
@@ -181,13 +159,13 @@ export function MobileFilterSheet({
   stats,
   sections = MOBILE_FILTER_SECTIONS,
   previewCount,
-}: MobileFilterSheetProps) {
+}: MobileFilterDialogProps) {
   const [draft, setDraft] = useState(filters)
   const [lastSeed, setLastSeed] = useState(`${open}:${section}`)
 
-  // Re-seed the draft from the applied filters each time the sheet opens, using
-  // the render-phase adjustment pattern so a dismissed sheet never leaks a
-  // half-applied filter set. The key also covers switching section.
+  // Re-seed the draft from the applied filters each time the dialog opens,
+  // using the render-phase adjustment pattern so a dismissed dialog never
+  // leaks a half-applied filter set. The key also covers switching section.
   const seed = `${open}:${section}`
   if (seed !== lastSeed) {
     setLastSeed(seed)
@@ -201,92 +179,88 @@ export function MobileFilterSheet({
     ? countSection(draft, section)
     : countActiveDirectoryFilters(draft)
   const shown = section ? [section] : sections
+  const HeaderIcon = section ? SECTION_ICON[section] : SlidersHorizontal
 
-  const renderSection = (id: MobileFilterSection) => {
+  const renderOptions = (id: MobileFilterSection) => {
     switch (id) {
       case 'voices':
         return (
-          <SheetSection icon={SECTION_ICON.voices} title={MOBILE_FILTER_LABEL.voices}>
-            <ul className="flex flex-col gap-2">
-              {voices.map((voice) => (
-                <CheckRow
-                  key={voice.id}
-                  label={voice.name}
-                  count={voiceCounts.get(voice.id) ?? 0}
-                  active={draft.voices.includes(voice.id)}
-                  onToggle={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      voices: toggleInList(d.voices, voice.id),
-                    }))
-                  }
-                />
-              ))}
-            </ul>
-          </SheetSection>
-        )
-      case 'status':
-        return (
-          <SheetSection icon={SECTION_ICON.status} title={MOBILE_FILTER_LABEL.status}>
-            <ul className="flex flex-col gap-2">
-              {STATUS_FILTERS.map((item) => (
-                <CheckRow
-                  key={item.value}
-                  label={item.label}
-                  count={countFor(stats, item.value)}
-                  active={draft.status === item.value}
-                  onToggle={() => setDraft((d) => ({ ...d, status: item.value }))}
-                />
-              ))}
-            </ul>
-          </SheetSection>
+          <ul className="flex flex-col gap-2">
+            {voices.map((voice) => (
+              <CheckRow
+                key={voice.id}
+                label={voice.name}
+                count={voiceCounts.get(voice.id) ?? 0}
+                active={draft.voices.includes(voice.id)}
+                onToggle={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    voices: toggleInList(d.voices, voice.id),
+                  }))
+                }
+              />
+            ))}
+          </ul>
         )
       case 'roles':
         return (
-          <SheetSection icon={SECTION_ICON.roles} title={MOBILE_FILTER_LABEL.roles}>
-            <ul className="flex flex-col gap-2">
-              {dutyRoles.map((role) => (
-                <CheckRow
-                  key={role.id}
-                  label={role.name}
-                  count={stats.positionCounts.get(role.id) ?? 0}
-                  active={draft.positions.includes(role.id)}
-                  onToggle={() =>
-                    setDraft((d) => ({
-                      ...d,
-                      positions: toggleInList(d.positions, role.id),
-                    }))
-                  }
-                />
-              ))}
-            </ul>
-          </SheetSection>
+          <ul className="flex flex-col gap-2">
+            {dutyRoles.map((role) => (
+              <CheckRow
+                key={role.id}
+                label={role.name}
+                count={stats.positionCounts.get(role.id) ?? 0}
+                active={draft.positions.includes(role.id)}
+                onToggle={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    positions: toggleInList(d.positions, role.id),
+                  }))
+                }
+              />
+            ))}
+          </ul>
         )
     }
   }
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="max-h-[88vh] gap-0 overflow-hidden rounded-t-2xl pb-0"
-      >
-        <SheetHeader className="shrink-0 border-b border-border/70 pb-3">
-          <SheetTitle>
-            {section ? MOBILE_FILTER_LABEL[section] : 'Filters'}
-          </SheetTitle>
-          <SheetDescription>
-            {activeCount > 0
-              ? `${activeCount} filter${activeCount !== 1 ? 's' : ''} selected`
-              : 'Narrow the directory by status or choir position.'}
-          </SheetDescription>
-        </SheetHeader>
+  const renderSection = (id: MobileFilterSection) => (
+    <FilterSection icon={SECTION_ICON[id]} title={MOBILE_FILTER_LABEL[id]}>
+      {renderOptions(id)}
+    </FilterSection>
+  )
 
-        <div className="-mx-4 flex-1 overflow-y-auto px-4 py-4">
-          <div className="flex flex-col gap-5">{shown.map(renderSection)}</div>
+  const summary =
+    activeCount > 0
+      ? `${activeCount} filter${activeCount !== 1 ? 's' : ''} selected`
+      : section
+        ? 'None selected'
+        : 'No filters selected'
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-sm">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border/60 py-4 pr-12 pl-5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <HeaderIcon className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <DialogTitle className="truncate text-base font-bold">
+              {section ? MOBILE_FILTER_LABEL[section] : 'Filters'}
+            </DialogTitle>
+            <DialogDescription className="truncate text-xs">
+              {summary}
+            </DialogDescription>
+          </div>
         </div>
 
-        <div className="flex shrink-0 gap-2 border-t border-border/70 bg-background px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="min-w-0 flex-1 overflow-y-auto px-4 py-4">
+          <div className="flex flex-col gap-5">
+            {section ? renderOptions(section) : shown.map(renderSection)}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 gap-2 border-t border-border/60 bg-card px-4 py-3">
           <Button
             variant="outline"
             className="flex-1"
@@ -320,7 +294,7 @@ export function MobileFilterSheet({
             <span className="text-white/70">({previewCount(draft)})</span>
           </Button>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }

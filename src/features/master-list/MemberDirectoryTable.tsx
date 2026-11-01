@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { SearchX, Users, Venus, Mars } from 'lucide-react'
+import { ChevronDown, SearchX, Venus, Mars } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -10,12 +10,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  GenderBadge,
   MemberLifecycleBadge,
   ReturnedMemberBadge,
   VoiceBadge,
 } from '@/components/StatusBadges'
-import { Badge } from '@/components/ui/badge'
 import { memberPositionLabel } from '@/core/constants/memberMembership'
 import type { DutyRole, VoicePosition } from '@/core/types/suguan'
 import type { Member } from '@/core/types/member'
@@ -25,7 +23,6 @@ import {
   formatMemberName,
   groupMembersByGender,
   paginate,
-  type MemberPage,
   type MemberPageSize,
   type MemberSort,
 } from '@/lib/memberDirectory'
@@ -49,17 +46,15 @@ interface MemberDirectoryTableProps {
   onClearFilters: () => void
   pageSize: MemberPageSize
   onPageSizeChange: (size: MemberPageSize) => void
-  /** PNK sings one voice, so its table has no Position column. */
+  /** PNK sings one voice, so its table has no Voice column. */
   showVoice?: boolean
 }
 
-const COLUMN_COUNT = 7
-
 const headClass =
-  'h-11 bg-background text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
+  'h-10 bg-background text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground'
 
-/** The member's checked Choir Rankings (duty-role names), in stored order. */
-function rankingsFor(member: Member, dutyRoles: DutyRole[]): string[] {
+/** The member's configured Choir Positions (duty-role names), in stored order. */
+function positionsFor(member: Member, dutyRoles: DutyRole[]): string[] {
   const ids = member.assignedDutyRoleIds ?? []
   if (ids.length === 0) return []
   const nameById = new Map(dutyRoles.map((role) => [role.id, role.name]))
@@ -69,68 +64,16 @@ function rankingsFor(member: Member, dutyRoles: DutyRole[]): string[] {
 }
 
 /**
- * The Membership cell now reflects the member's Choir Rankings rather than the
- * old membership category. No rankings reads as an em dash, matching the other
- * empty directory cells.
+ * Plain text rather than coloured chips: inside a gendered section the voice
+ * badge and status already carry the row's accents, and a third colour made
+ * the directory read as confetti.
  */
-function ChoirRankings({ names }: { names: string[] }) {
+function ChoirPositions({ names }: { names: string[] }) {
   if (names.length === 0) {
     return <span className="text-xs text-muted-foreground">—</span>
   }
   return (
-    <div className="flex flex-wrap gap-1">
-      {names.map((name, index) => (
-        <Badge
-          key={`${name}-${index}`}
-          variant="outline"
-          className="h-5 rounded-md border-transparent bg-violet-100 px-1.5 text-[0.6875rem] font-medium tracking-tight text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
-        >
-          {name}
-        </Badge>
-      ))}
-    </div>
-  )
-}
-
-interface ChoirSectionHeaderProps {
-  icon: typeof Users
-  iconClass: string
-  title: string
-  count: number
-  /** e.g. `#3-#7`. Omitted when the section is empty. */
-  rangeLabel?: string
-  /** Table width, which shrinks by one when the voice column is hidden. */
-  columnCount: number
-}
-
-function ChoirSectionHeader({
-  icon: Icon,
-  iconClass,
-  title,
-  count,
-  rangeLabel,
-  columnCount,
-}: ChoirSectionHeaderProps) {
-  return (
-    <TableRow className="border-y border-border bg-background hover:bg-background">
-      <TableCell colSpan={columnCount} className="px-4 py-2">
-        <div className="flex items-center gap-2.5">
-          <Icon className={cn('size-3.5', iconClass)} />
-          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-foreground/75">
-            {title}
-          </span>
-          <span className="rounded border border-border bg-background px-1.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
-            {count}
-          </span>
-          {rangeLabel ? (
-            <span className="text-[0.625rem] tabular-nums text-muted-foreground/60">
-              {rangeLabel}
-            </span>
-          ) : null}
-          <span aria-hidden className="h-px flex-1 bg-border/60" />
-        </div>
-      </TableCell>
-    </TableRow>
+    <span className="text-xs text-foreground/80">{names.join(', ')}</span>
   )
 }
 
@@ -183,13 +126,15 @@ export function MemberDirectoryTable({
   onPageSizeChange,
   showVoice = true,
 }: MemberDirectoryTableProps) {
-  // The women's and men's tables page independently, so each keeps its own page
-  // number rather than sharing one cursor across both sections.
+  // The women's and men's sections page independently, so each keeps its own
+  // page number rather than sharing one cursor across both.
   const [pages, setPages] = useState<Record<string, number>>({})
-  const columnCount = showVoice ? COLUMN_COUNT : COLUMN_COUNT - 1
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   const setSectionPage = (key: string, page: number) =>
     setPages((current) => ({ ...current, [key]: page }))
+  const toggleSection = (key: string) =>
+    setCollapsed((current) => ({ ...current, [key]: !current[key] }))
 
   if (members.length === 0) {
     return (
@@ -221,7 +166,7 @@ export function MemberDirectoryTable({
   const sections = choirSections.map((section) => ({
     ...section,
     // `paginate` clamps, so a stale page 4 left over from a wider filter set
-    // cannot blank the table.
+    // cannot blank a section.
     page: paginate(section.members, pages[section.key] ?? 1, pageSize),
   }))
 
@@ -230,10 +175,7 @@ export function MemberDirectoryTable({
   return (
     <>
       {anyPaged ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/20 px-4 py-2.5">
-          <p className="text-[0.6875rem] text-muted-foreground">
-            Paged per choir section
-          </p>
+        <div className="mb-3 flex justify-end">
           <PageSizeControl
             value={pageSize}
             onChange={(size) => {
@@ -246,174 +188,138 @@ export function MemberDirectoryTable({
         </div>
       ) : null}
 
-      {/* Desktop / tablet: dense table */}
-      <div className="hidden md:block">
-        <Table className="min-w-[54rem]">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className={`${headClass} w-14 text-center`}>#</TableHead>
-              <TableHead className={headClass}>Member</TableHead>
-              <TableHead className={`${headClass} hidden lg:table-cell`}>
-                Gender
-              </TableHead>
-              {showVoice && <TableHead className={headClass}>Position</TableHead>}
-              <TableHead className={headClass}>Membership</TableHead>
-              <TableHead className={headClass}>Status</TableHead>
-              <TableHead className={`${headClass} w-24 text-right`}>
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sections.map((section) => (
-              <ChoirSection
-                key={section.key}
-                title={section.title}
-                page={section.page}
-                icon={section.icon}
-                iconClass={section.iconClass}
-                voices={voices}
-                showVoice={showVoice}
-                columnCount={columnCount}
-                references={references}
-                sort={sort}
-                dutyRoles={dutyRoles}
-                onEdit={onEdit}
-                onTransfer={onTransfer}
-                onDelete={onDelete}
-                canEdit={canEdit}
-                canTransfer={canTransfer}
-                canDelete={canDelete}
-                onPageChange={(page) => setSectionPage(section.key, page)}
-              />
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex flex-col gap-3">
+        {sections.map((section) => {
+          const isCollapsed = Boolean(collapsed[section.key])
+          const SectionIcon = section.icon
+          return (
+            <section
+              key={section.key}
+              className="overflow-hidden rounded-xl border border-border/70 bg-card"
+            >
+              <button
+                type="button"
+                aria-expanded={!isCollapsed}
+                onClick={() => toggleSection(section.key)}
+                className={cn(
+                  'flex w-full items-center gap-2.5 border-b border-border/60 bg-brand-teal-soft/35 px-4 py-2.5 text-left transition-colors hover:bg-brand-teal-soft/55',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+                )}
+              >
+                <SectionIcon className={cn('size-3.5', section.iconClass)} />
+                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-foreground/75">
+                  {section.title}
+                </span>
+                <span className="rounded border border-border bg-background px-1.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
+                  {section.page.total}
+                </span>
+                <span className="text-[0.625rem] tabular-nums text-muted-foreground/60">
+                  #{section.page.firstItem}–#{section.page.lastItem} of #
+                  {section.page.total}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    'ml-auto size-4 text-muted-foreground transition-transform',
+                    isCollapsed && '-rotate-90',
+                  )}
+                />
+              </button>
+
+              {isCollapsed ? null : (
+                <>
+                  <Table className="min-w-[52rem]">
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className={`${headClass} w-14 text-center`}>
+                          <span className="sr-only">#</span>
+                        </TableHead>
+                        <TableHead className={headClass}>Member</TableHead>
+                        {showVoice && (
+                          <TableHead className={headClass}>Voice</TableHead>
+                        )}
+                        <TableHead className={headClass}>
+                          Choir Position
+                        </TableHead>
+                        <TableHead className={headClass}>Status</TableHead>
+                        <TableHead className={`${headClass} w-12 text-right`}>
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {section.page.items.map((member, index) => (
+                        <TableRow
+                          key={member.id}
+                          className="h-14 border-b border-border transition-colors hover:bg-background"
+                        >
+                          <TableCell className="w-14 text-center align-middle">
+                            <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+                              {section.page.firstItem + index}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <MemberInitialsAvatar member={member} sort={sort} />
+                              <div className="min-w-0 leading-tight">
+                                <p className="truncate text-[0.8125rem] font-semibold text-foreground">
+                                  {formatMemberName(member, sort)}
+                                </p>
+                                <p className="mt-0.5 flex items-center gap-1.5 text-[0.6875rem] tabular-nums text-muted-foreground">
+                                  {references.get(member.id) ?? '—'}
+                                  {memberIsReturned(member) && (
+                                    <ReturnedMemberBadge />
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          {showVoice && (
+                            <TableCell>
+                              <VoiceBadge
+                                name={memberPositionLabel(member, voices)}
+                              />
+                            </TableCell>
+                          )}
+                          <TableCell>
+                            <ChoirPositions
+                              names={positionsFor(member, dutyRoles)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <MemberLifecycleBadge member={member} />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <MemberRowActions
+                              member={member}
+                              sort={sort}
+                              onEdit={onEdit}
+                              onTransfer={onTransfer}
+                              onDelete={onDelete}
+                              canEdit={canEdit}
+                              canTransfer={canTransfer}
+                              canDelete={canDelete}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {section.page.pageCount > 1 ? (
+                    <SectionPaginator
+                      label={section.title}
+                      page={section.page}
+                      onPageChange={(page) =>
+                        setSectionPage(section.key, page)
+                      }
+                    />
+                  ) : null}
+                </>
+              )}
+            </section>
+          )
+        })}
       </div>
-
-      </>
-  )
-}
-
-interface ChoirSectionProps {
-  title: string
-  page: MemberPage<Member>
-  icon: typeof Users
-  iconClass: string
-  voices: VoicePosition[]
-  showVoice: boolean
-  columnCount: number
-  references: Map<string, string>
-  sort: MemberSort
-  dutyRoles: DutyRole[]
-  onEdit: (member: Member) => void
-  onTransfer: (member: Member) => void
-  onDelete: (member: Member) => void
-  canEdit: boolean
-  canTransfer: boolean
-  canDelete: boolean
-  onPageChange: (page: number) => void
-}
-
-function ChoirSection({
-  title,
-  page,
-  icon,
-  iconClass,
-  voices,
-  showVoice,
-  columnCount,
-  references,
-  sort,
-  dutyRoles,
-  onEdit,
-  onTransfer,
-  onDelete,
-  canEdit,
-  canTransfer,
-  canDelete,
-  onPageChange,
-}: ChoirSectionProps) {
-  return (
-    <>
-      <ChoirSectionHeader
-        icon={icon}
-        iconClass={iconClass}
-        title={title}
-        count={page.total}
-        columnCount={columnCount}
-        rangeLabel={
-          page.pageCount > 1
-            ? `#${page.firstItem}-#${page.lastItem} of #${page.total}`
-            : `#1-#${page.total}`
-        }
-      />
-      {page.items.map((member, index) => (
-        <TableRow
-          key={member.id}
-          className="h-14 border-b border-border transition-colors hover:bg-background"
-        >
-          <TableCell className="w-14 text-center align-middle">
-            <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
-              {page.firstItem + index}
-            </span>
-          </TableCell>
-          <TableCell>
-            <div className="flex items-center gap-3">
-              <MemberInitialsAvatar member={member} sort={sort} />
-              <div className="min-w-0 leading-tight">
-                <p className="truncate text-[0.8125rem] font-semibold text-foreground">
-                  {formatMemberName(member, sort)}
-                </p>
-                <p className="mt-0.5 flex items-center gap-1.5 text-[0.6875rem] tabular-nums text-muted-foreground">
-                  {references.get(member.id) ?? '—'}
-                  {memberIsReturned(member) && <ReturnedMemberBadge />}
-                </p>
-              </div>
-            </div>
-          </TableCell>
-          <TableCell className="hidden lg:table-cell">
-            <GenderBadge gender={member.gender} />
-          </TableCell>
-          {showVoice && (
-            <TableCell>
-              <VoiceBadge name={memberPositionLabel(member, voices)} />
-            </TableCell>
-          )}
-          <TableCell>
-            <ChoirRankings
-              names={rankingsFor(member, dutyRoles)}
-            />
-          </TableCell>
-          <TableCell>
-            <MemberLifecycleBadge member={member} />
-          </TableCell>
-          <TableCell className="text-right">
-            <MemberRowActions
-              member={member}
-              sort={sort}
-              onEdit={onEdit}
-              onTransfer={onTransfer}
-              onDelete={onDelete}
-              canEdit={canEdit}
-              canTransfer={canTransfer}
-              canDelete={canDelete}
-            />
-          </TableCell>
-        </TableRow>
-      ))}
-
-      {page.pageCount > 1 ? (
-        <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={columnCount} className="p-0">
-            <SectionPaginator
-              label={title}
-              page={page}
-              onPageChange={onPageChange}
-            />
-          </TableCell>
-        </TableRow>
-      ) : null}
     </>
   )
 }

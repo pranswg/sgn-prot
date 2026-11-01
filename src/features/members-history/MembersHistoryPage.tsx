@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  ArchiveRestore,
-  Eye,
-  Search,
-  Trash2,
-  Undo2,
-  X,
-} from 'lucide-react'
+import { ArchiveRestore, Search, X } from 'lucide-react'
 import { MobileDirectoryHeader } from '@/components/MobileDirectoryHeader'
 import { PageHeader } from '@/components/PageHeader'
 import {
@@ -42,7 +35,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { useIsMobile } from '@/hooks/use-mobile'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useMemberStore } from '@/store/memberStore'
 import { useNavStore } from '@/store/navStore'
@@ -66,12 +58,12 @@ import {
   formatMemberName,
   memberInitials,
 } from '@/lib/memberDirectory'
-import { MemberHistoryDialog, MemberHistorySheet } from './MemberHistoryDetail'
+import { MemberHistoryDialog } from './MemberHistoryDetail'
 import {
   MemberLifecycleDialog,
-  MemberLifecycleSheet,
   type LifecycleFormKind,
 } from './MemberLifecycleForm'
+import { HistoryRowActions } from './HistoryRowActions'
 
 /** Members who can be brought back to the active list with one action. */
 function isRestorable(member: Member): boolean {
@@ -82,75 +74,63 @@ function isRestorable(member: Member): boolean {
 interface HistoryCardProps {
   member: Member
   reference?: string
-  canManage: boolean
+  canRestore: boolean
   canDelete: boolean
   onView: (member: Member) => void
   onRestore: (member: Member) => void
   onDelete: (member: Member) => void
 }
 
+/** Compact phone card: tap it for the timeline, or use the row menu. */
 function HistoryCard({
   member,
   reference,
-  canManage,
+  canRestore,
   canDelete,
   onView,
   onRestore,
   onDelete,
 }: HistoryCardProps) {
-  const restorable = isRestorable(member)
   return (
-    <li className="pressable overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm motion-reduce:transform-none">
+    <li className="pressable relative overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm motion-reduce:transform-none">
       <button
         type="button"
         onClick={() => onView(member)}
-        className="flex w-full items-center gap-3 p-3.5 text-left"
-      >
-        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-navy text-[0.8125rem] font-semibold tracking-tight text-white">
+        aria-label={`View history for ${formatMemberName(member)}`}
+        className="absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      />
+      <div className="pointer-events-none relative flex items-start gap-3 p-3.5">
+        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-teal-soft text-[0.8125rem] font-semibold tracking-tight text-brand-teal">
           {memberInitials(member)}
         </span>
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm font-semibold text-foreground">
-            {formatMemberName(member)}
-          </span>
-          <span className="mt-0.5 block text-[0.6875rem] tabular-nums text-muted-foreground">
-            {reference ?? '—'}
-          </span>
-          <span className="mt-2 flex flex-wrap items-center gap-1.5">
-            <MemberLifecycleBadge member={member} />
-            {memberIsReturned(member) && <ReturnedMemberBadge />}
-          </span>
-        </span>
-      </button>
-      <div className="flex items-center gap-4 border-t border-border/60 px-4 py-2.5 text-xs">
         <div className="min-w-0 flex-1">
-          <p className="text-muted-foreground">Membership</p>
-          <p className="mt-0.5 truncate font-medium text-foreground">
-            {memberMembershipSummary(member)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={() => onView(member)}>
-            <Eye className="size-3.5" />
-            View History
-          </Button>
-          {restorable && canManage && (
-            <Button size="sm" onClick={() => onRestore(member)}>
-              <Undo2 className="size-3.5" />
-              Restore
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => onDelete(member)}
-            >
-              <Trash2 className="size-3.5" />
-              Delete
-            </Button>
-          )}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 leading-tight">
+              <p className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-foreground">
+                <span className="truncate">{formatMemberName(member)}</span>
+                {memberIsReturned(member) && <ReturnedMemberBadge />}
+              </p>
+              <p className="mt-0.5 text-[0.6875rem] tabular-nums text-muted-foreground">
+                {reference ?? '—'}
+              </p>
+              <p className="mt-1.5 truncate text-[0.6875rem] text-muted-foreground">
+                {memberMembershipSummary(member)}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <MemberLifecycleBadge member={member} />
+              <span className="pointer-events-auto">
+                <HistoryRowActions
+                  member={member}
+                  canRestore={canRestore}
+                  canDelete={canDelete}
+                  onView={onView}
+                  onRestore={onRestore}
+                  onDelete={onDelete}
+                />
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </li>
@@ -169,7 +149,6 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
   )
   const removeMember = useMemberStore((s) => s.removeMember)
   const setMobileDrawerOpen = useSidebarStore((s) => s.setMobileDrawerOpen)
-  const isMobile = useIsMobile()
   const { can } = usePermissions()
   const canManage = can('manage-membership-history')
   const canDeleteMembers = can('delete-members')
@@ -258,7 +237,7 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
               key={member.id}
               member={member}
               reference={references.get(member.id)}
-              canManage={canManage}
+              canRestore={isRestorable(member) && canManage}
               canDelete={canDeleteMembers}
               onView={setHistoryTarget}
               onRestore={requestRestore}
@@ -268,87 +247,66 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
         </ul>
 
         <div className="hidden min-w-0 max-w-full overflow-x-auto rounded-xl border border-border/70 bg-card md:block">
-          <Table className="min-w-[52rem]">
+          <Table className="min-w-[48rem]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className={`${COLUMN_HEAD} w-14 text-center`}>#</TableHead>
                 <TableHead className={COLUMN_HEAD}>Member</TableHead>
                 <TableHead className={COLUMN_HEAD}>Status</TableHead>
                 <TableHead className={COLUMN_HEAD}>Membership Period</TableHead>
-                <TableHead className={`${COLUMN_HEAD} w-56 text-right`}>
-                  Actions
+                <TableHead className={`${COLUMN_HEAD} w-24 text-right`}>
+                  <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {historyMembers.map((member, index) => {
-                const restorable = isRestorable(member)
-                return (
-                  <TableRow
-                    key={member.id}
-                    className="h-14 border-b border-border transition-colors hover:bg-background"
-                  >
-                    <TableCell className="w-14 text-center align-middle">
-                      <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
-                        {index + 1}
+              {historyMembers.map((member, index) => (
+                <TableRow
+                  key={member.id}
+                  className="h-14 border-b border-border transition-colors hover:bg-background"
+                >
+                  <TableCell className="w-14 text-center align-middle">
+                    <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
+                      {index + 1}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-teal-soft text-[0.6875rem] font-semibold tracking-tight text-brand-teal">
+                        {memberInitials(member)}
                       </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-navy text-[0.6875rem] font-semibold tracking-tight text-white">
-                          {memberInitials(member)}
-                        </span>
-                        <div className="min-w-0 leading-tight">
-                          <p className="truncate text-[0.8125rem] font-semibold text-foreground">
-                            {formatMemberName(member)}
-                          </p>
-                          <p className="mt-0.5 flex items-center gap-1.5 text-[0.6875rem] tabular-nums text-muted-foreground">
-                            {references.get(member.id) ?? '—'}
-                            {memberIsReturned(member) && <ReturnedMemberBadge />}
-                          </p>
-                        </div>
+                      <div className="min-w-0 leading-tight">
+                        <p className="truncate text-[0.8125rem] font-semibold text-foreground">
+                          {formatMemberName(member)}
+                        </p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-[0.6875rem] tabular-nums text-muted-foreground">
+                          {references.get(member.id) ?? '—'}
+                          {memberIsReturned(member) && <ReturnedMemberBadge />}
+                        </p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <MemberLifecycleBadge member={member} />
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-[0.8125rem] text-foreground">
-                        {memberMembershipSummary(member)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setHistoryTarget(member)}
-                        >
-                          <Eye className="size-3.5" />
-                          View History
-                        </Button>
-                        {restorable && canManage && (
-                          <Button size="sm" onClick={() => requestRestore(member)}>
-                            <Undo2 className="size-3.5" />
-                            Restore
-                          </Button>
-                        )}
-                        {canDeleteMembers && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleteTarget(member)}
-                          >
-                            <Trash2 className="size-3.5" />
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <MemberLifecycleBadge member={member} />
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-[0.8125rem] text-foreground">
+                      {memberMembershipSummary(member)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <HistoryRowActions
+                      member={member}
+                      canRestore={isRestorable(member) && canManage}
+                      canDelete={canDeleteMembers}
+                      showView
+                      onView={setHistoryTarget}
+                      onRestore={requestRestore}
+                      onDelete={setDeleteTarget}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
@@ -359,18 +317,17 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
     <div className="flex w-full min-w-0 flex-col gap-5">
       <MobileDirectoryHeader
         title={`${CHOIR_LABELS[choir]} Members History`}
-        description="Membership changes"
+        description={`${archivedMembers.length} in the archive`}
         onOpenMenu={() => setMobileDrawerOpen(true)}
       />
 
       <PageHeader
-        eyebrow={choir === 'pnk' ? 'Pagsamba ng Kabataan Archive' : 'Choir Archive'}
         title={`${CHOIR_LABELS[choir]} Members History`}
-        description={`Track ${CHOIR_LABELS[choir]} membership changes: joined dates, transfers, returns, and gaps.`}
+        description="Members who transferred out or returned."
         className="hidden md:flex"
       />
 
-      <div className="sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5 md:top-14 md:mx-0 md:rounded-xl md:border md:bg-card md:px-3 md:py-3">
+      <div className="sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5 md:mx-0 md:rounded-xl md:border md:bg-card md:px-3 md:py-3">
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -444,31 +401,15 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
           <span>
             {historyMembers.length === 1 ? 'member' : 'members'} in the archive
           </span>
-          <span className="ml-auto hidden sm:inline">
-            {years.length > 0 && years[0]}
-          </span>
         </div>
       </div>
 
       {body}
 
       <MemberHistoryDialog
-        member={isMobile ? null : historyTarget}
+        member={historyTarget}
         reference={
-          !isMobile && historyTarget
-            ? references.get(historyTarget.id)
-            : undefined
-        }
-        canManage={canManage}
-        onOpenChange={(open) => {
-          if (!open) setHistoryTarget(null)
-        }}
-        onRequestRestore={() => historyTarget && requestRestore(historyTarget)}
-      />
-      <MemberHistorySheet
-        member={isMobile ? historyTarget : null}
-        reference={
-          isMobile && historyTarget ? references.get(historyTarget.id) : undefined
+          historyTarget ? references.get(historyTarget.id) : undefined
         }
         canManage={canManage}
         onOpenChange={(open) => {
@@ -477,26 +418,16 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
         onRequestRestore={() => historyTarget && requestRestore(historyTarget)}
       />
 
-      {lifecycle &&
-        (isMobile ? (
-          <MemberLifecycleSheet
-            open
-            onOpenChange={(open) => {
-              if (!open) setLifecycle(null)
-            }}
-            member={lifecycle.member}
-            kind={lifecycle.kind}
-          />
-        ) : (
-          <MemberLifecycleDialog
-            open
-            onOpenChange={(open) => {
-              if (!open) setLifecycle(null)
-            }}
-            member={lifecycle.member}
-            kind={lifecycle.kind}
-          />
-        ))}
+      {lifecycle && (
+        <MemberLifecycleDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setLifecycle(null)
+          }}
+          member={lifecycle.member}
+          kind={lifecycle.kind}
+        />
+      )}
 
       <AlertDialog
         open={!!deleteTarget}

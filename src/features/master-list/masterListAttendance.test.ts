@@ -66,7 +66,9 @@ test('voice mode includes only selected configured voice sections and members', 
         ? `section:${row.label}`
         : row.kind === 'member'
           ? `member:${row.member.id}`
-          : `trainee:${row.name}`,
+          : row.kind === 'trainee'
+            ? `trainee:${row.name}`
+            : row.kind,
     ),
     [
       'section:Soprano',
@@ -82,13 +84,81 @@ test('voice mode includes only selected configured voice sections and members', 
   )
 })
 
-test('flat mode separates women before men without voice section labels', () => {
+test('AWS full-roster mode separates women and men into distinct sheets', () => {
   const rows = buildMasterListAttendanceRows(members, voices, null)
   assert.deepEqual(
-    rows.map((row) => (row.kind === 'member' ? row.member.id : undefined)),
-    ['m2', 'm1', 'm3', 'm4'],
+    rows.map((row) =>
+      row.kind === 'section'
+        ? `section:${row.label}`
+        : row.kind === 'member'
+          ? `member:${row.member.id}`
+          : row.kind,
+    ),
+    [
+      'section:Women',
+      'member:m2',
+      'member:m1',
+      'page-break',
+      'section:Men',
+      'member:m3',
+      'member:m4',
+    ],
   )
-  assert.ok(rows.every((row) => row.kind === 'member'))
+})
+
+test('AWS full-roster mode places selected trainees with their gender', () => {
+  const rows = buildMasterListAttendanceRows(
+    members,
+    voices,
+    null,
+    [
+      trainee('t-f', 'Faye', 'Foxtrot', 'female'),
+      trainee('t-m', 'Mia', 'Mike', 'male'),
+      trainee('t-inactive', 'Inactive', 'Trainee', 'female', 'inactive'),
+    ],
+    true,
+    true,
+  )
+
+  assert.deepEqual(
+    rows.map((row) =>
+      row.kind === 'section'
+        ? `section:${row.label}`
+        : row.kind === 'member'
+          ? `member:${row.member.id}`
+          : row.kind === 'trainee'
+            ? `trainee:${row.name}`
+            : row.kind,
+    ),
+    [
+      'section:Women',
+      'member:m2',
+      'member:m1',
+      'section:Nagsasanay Women',
+      'trainee:Faye Foxtrot',
+      'page-break',
+      'section:Men',
+      'member:m3',
+      'member:m4',
+      'section:Nagsasanay Men',
+      'trainee:Mia Mike',
+    ],
+  )
+})
+
+test('attendance pagination keeps forced gender sheets separate', () => {
+  const rows = buildMasterListAttendanceRows(members, voices, null)
+  const pages = paginateMasterListAttendanceRows(rows, 500, 500)
+
+  assert.equal(pages.length, 2)
+  assert.deepEqual(
+    pages.map((page) =>
+      page.filter((row) => row.kind === 'section').map((row) => row.label),
+    ),
+    [['Women'], ['Men']],
+  )
+  assert.ok(pages[0].every((row) => row.kind !== 'member' || row.member.gender === 'female'))
+  assert.ok(pages[1].every((row) => row.kind !== 'member' || row.member.gender === 'male'))
 })
 
 test('PNK attendance groups members and selected trainees under Babae and Lalaki', () => {
@@ -114,7 +184,9 @@ test('PNK attendance groups members and selected trainees under Babae and Lalaki
     rows.map((row) =>
       row.kind === 'section'
         ? `section:${row.label}`
-        : `${row.kind}:${row.name}`,
+        : row.kind === 'page-break'
+          ? row.kind
+          : `${row.kind}:${row.name}`,
     ),
     [
       'section:Babae',
@@ -166,7 +238,9 @@ test('trainee gender options create only the selected Nagsasanay sections', () =
         ? `section:${row.label}`
         : row.kind === 'trainee'
           ? `trainee:${row.name}`
-          : `member:${row.member.id}`,
+          : row.kind === 'member'
+            ? `member:${row.member.id}`
+            : row.kind,
     ),
     ['section:Nagsasanay Men', 'trainee:Ben Bravo'],
   )

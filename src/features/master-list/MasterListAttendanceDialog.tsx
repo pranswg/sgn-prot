@@ -414,7 +414,8 @@ export function MasterListAttendanceDialog({
                     Include all members without voice sections
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    Lists women first, then men, without gender labels.
+                    Creates separate Women and Men sheets; selected trainees
+                    are included with their gender.
                   </span>
                 </span>
               </label>

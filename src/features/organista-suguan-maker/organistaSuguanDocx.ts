@@ -5,8 +5,45 @@ import {
   docPaperDimensionsMm,
   normalizeDocFormat,
   resolveFontSizePreset,
+  type FontSizePreset,
 } from '@/lib/suguanUtils'
 import { organistaDateLabel } from './organistaDateLabel'
+
+/**
+ * Point sizes the Word document prints at, read from the same preset the PDF
+ * uses. Word stores sizes in half-points, so the builder doubles these.
+ *
+ * This is a function rather than inline arithmetic because the PDF renderer
+ * sizes the sheet from the same preset fields (`headerFontSize` for headings and
+ * service names, `smallFontSize` for labels and signature roles,
+ * `bodyFontSize` for member and signature names). Deriving both from one place
+ * is what keeps a font-size change identical in the preview, the PDF, and Word.
+ */
+export interface OrganistaDocxFontSizes {
+  church: number
+  script: number
+  date: number
+  serviceHeading: number
+  headerCell: number
+  name: number
+  signatureName: number
+  signatureRole: number
+}
+
+export function organistaDocxFontSizes(
+  preset: FontSizePreset,
+): OrganistaDocxFontSizes {
+  return {
+    church: preset.headerFontSize * 1.25,
+    script: preset.headerFontSize * 1.4,
+    date: preset.headerFontSize * 1.05,
+    serviceHeading: preset.headerFontSize,
+    headerCell: preset.smallFontSize,
+    name: preset.bodyFontSize,
+    signatureName: preset.bodyFontSize,
+    signatureRole: preset.smallFontSize,
+  }
+}
 
 export async function buildOrganistaSuguanDocx(
   churchName: string,
@@ -35,6 +72,7 @@ export async function buildOrganistaSuguanDocx(
   const dimensions = docPaperDimensionsMm(normalized)
   const margins = docMarginsMm(normalized)
   const preset = resolveFontSizePreset(normalized)
+  const sizes = organistaDocxFontSizes(preset)
   const paragraphSpacing = {
     before: Math.round((normalized.tableSpacingBeforePt ?? 0) * 20),
     after: Math.round((normalized.tableSpacingAfterPt ?? 0) * 20),
@@ -62,7 +100,13 @@ export async function buildOrganistaSuguanDocx(
   const cell = (
     text: string,
     width: number,
-    options: { bold?: boolean; header?: boolean; spacing?: boolean } = {},
+    options: {
+      bold?: boolean
+      header?: boolean
+      spacing?: boolean
+      /** Point size; defaults to the preset's small size, like the PDF labels. */
+      size?: number
+    } = {},
   ) =>
     new TableCell({
       width: { size: width, type: WidthType.DXA },
@@ -77,7 +121,7 @@ export async function buildOrganistaSuguanDocx(
             new TextRun({
               text,
               bold: options.bold,
-              size: Math.round(preset.smallFontSize * 2),
+              size: Math.round((options.size ?? sizes.headerCell) * 2),
             }),
           ],
         }),
@@ -112,7 +156,7 @@ export async function buildOrganistaSuguanDocx(
                   new TextRun({
                     text: (service.heading || 'Service').toUpperCase(),
                     bold: true,
-                    size: Math.round(preset.headerFontSize * 2),
+                    size: Math.round(sizes.serviceHeading * 2),
                   }),
                 ],
               }),
@@ -129,7 +173,11 @@ export async function buildOrganistaSuguanDocx(
         new TableRow({
           children: [
             cell(label, widths[0], { bold: true }),
-            cell(name, widths[1], { bold: true, spacing: true }),
+            cell(name, widths[1], {
+              bold: true,
+              spacing: true,
+              size: sizes.name,
+            }),
             cell('', widths[2]),
             cell('', widths[3]),
             cell('', widths[4]),
@@ -168,11 +216,22 @@ export async function buildOrganistaSuguanDocx(
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
                   border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' } },
-                  children: [new TextRun({ text: name, bold: true, size: 22 })],
+                  children: [
+                    new TextRun({
+                      text: name,
+                      bold: true,
+                      size: Math.round(sizes.signatureName * 2),
+                    }),
+                  ],
                 }),
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: role, size: 18 })],
+                  children: [
+                    new TextRun({
+                      text: role,
+                      size: Math.round(sizes.signatureRole * 2),
+                    }),
+                  ],
                 }),
               ],
             }),
@@ -181,7 +240,6 @@ export async function buildOrganistaSuguanDocx(
     ],
   })
 
-  const titleSize = Math.round(preset.headerFontSize * 2.8)
   const dateLine = organistaDateLabel(pagsasanayDate)
   const doc = new Document({
     sections: [
@@ -212,7 +270,7 @@ export async function buildOrganistaSuguanDocx(
                   children: [
                     new TextRun({
                       text: `Lokal ng ${churchName.trim()}`,
-                      size: titleSize,
+                      size: Math.round(sizes.church * 2),
                     }),
                   ],
                 }),
@@ -226,7 +284,7 @@ export async function buildOrganistaSuguanDocx(
                 text: 'SUGUAN NG MGA ORGANISTA',
                 bold: true,
                 italics: true,
-                size: Math.round(preset.headerFontSize * 3.2),
+                size: Math.round(sizes.script * 2),
               }),
             ],
           }),
@@ -236,7 +294,10 @@ export async function buildOrganistaSuguanDocx(
                   alignment: AlignmentType.CENTER,
                   spacing: { after: 160 },
                   children: [
-                    new TextRun({ text: dateLine, size: titleSize }),
+                    new TextRun({
+                      text: dateLine,
+                      size: Math.round(sizes.date * 2),
+                    }),
                   ],
                 }),
               ]

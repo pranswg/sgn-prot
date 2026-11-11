@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Eye, FileDown, FileSpreadsheet, FileText } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { PageHeader } from '@/components/PageHeader'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useMemberStore } from '@/store/memberStore'
 import { membersOf } from '@/lib/choirs'
@@ -18,8 +17,11 @@ import {
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
+import { ExtraOccasionActions } from './ExtraOccasionActions'
+import { ExtraOccasionHeader } from './ExtraOccasionHeader'
 import {
   emptyOccasionState,
+  occasionChoirLabel,
   occasionLabel,
   occasionStateFromSuguan,
   occasionSuguanInput,
@@ -246,21 +248,23 @@ export function ExtraOccasionSingleMaker() {
   }
 
   return (
-    <div className="flex flex-col gap-5 pb-10">
+    <div className="occasion-maker">
       {exportPreview}
-      <PageHeader title="Extra Occasion Suguan" />
+      <ExtraOccasionHeader
+        title="Extra Occasion Suguan"
+        subtitle={`${state.name.trim() || 'Extra occasion'} · ${occasionChoirLabel(state.draft.group)}`}
+        badge={existingRecord ? 'Editing saved occasion' : 'Single occasion'}
+      />
 
-      <section className="space-y-5">
-        <ExtraOccasionOccasionForm
-          state={state}
-          onChange={setState}
-          members={members}
-          serviceTypes={serviceTypes}
-          canAssignMembers={canAssignMembers}
-          conflictIds={conflicts.conflictIds}
-          onMembersAdded={conflicts.queueMembers}
-        />
-      </section>
+      <ExtraOccasionOccasionForm
+        state={state}
+        onChange={setState}
+        members={members}
+        serviceTypes={serviceTypes}
+        canAssignMembers={canAssignMembers}
+        conflictIds={conflicts.conflictIds}
+        onMembersAdded={conflicts.queueMembers}
+      />
 
       <ExtraOccasionConflictDialog
         open={conflicts.pendingItem !== null}
@@ -272,64 +276,23 @@ export function ExtraOccasionSingleMaker() {
         onCancel={conflicts.cancel}
       />
 
-      {can('export-documents') && (
-        <div className="grid grid-cols-3 gap-2 lg:flex lg:flex-wrap">
+      <ExtraOccasionActions
+        canExport={can('export-documents')}
+        exporting={exporting}
+        onPreview={previewPdf}
+        onExport={requestFileExport}
+      >
+        {can(existingRecord ? 'edit-suguan' : 'create-suguan') && (
           <Button
-            variant="outline"
-            onClick={previewPdf}
-            loading={exporting === 'preview'}
-            disabled={exporting !== null}
-          >
-            <Eye className="size-4" />
-            Preview PDF
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => requestFileExport('pdf', 'PDF')}
-            loading={exporting === 'pdf'}
-            disabled={exporting !== null}
-          >
-            <FileDown className="size-4" />
-            <span>
-              <span className="hidden lg:inline">Export </span>PDF
-            </span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => requestFileExport('xlsx', 'Excel')}
-            loading={exporting === 'xlsx'}
-            disabled={exporting !== null}
-          >
-            <FileSpreadsheet className="size-4" />
-            <span>
-              <span className="hidden lg:inline">Export </span>Excel
-            </span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => requestFileExport('docx', 'Word')}
-            loading={exporting === 'docx'}
-            disabled={exporting !== null}
-          >
-            <FileText className="size-4" />
-            <span>
-              <span className="hidden lg:inline">Export </span>Word
-            </span>
-          </Button>
-        </div>
-      )}
-      {can(existingRecord ? 'edit-suguan' : 'create-suguan') && (
-        <div className="flex justify-end">
-          <Button
-            className="w-full justify-center lg:w-auto"
             onClick={saveRecord}
             loading={saving}
             disabled={saving || exporting !== null}
           >
+            <Save className="size-4" />
             {existingRecord ? 'Update History Record' : 'Save to Suguan History'}
           </Button>
-        </div>
-      )}
+        )}
+      </ExtraOccasionActions>
     </div>
   )
 }

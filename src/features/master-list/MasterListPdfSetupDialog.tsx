@@ -167,7 +167,7 @@ export function MasterListPdfSetupDialog({
           </section>
         </div>
 
-        <DialogFooter className="sticky bottom-0 flex-col-reverse gap-2 border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:px-7 sm:py-5">
+        <DialogFooter className="sticky bottom-0 mx-0 mb-0 flex-col-reverse gap-2 border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:px-7 sm:py-5">
           <Button
             type="button"
             variant="outline"

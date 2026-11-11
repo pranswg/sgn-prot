@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { AppSidebar } from '@/components/AppSidebar'
-import { MobileBottomNav } from '@/components/MobileBottomNav'
 import { useNavStore, type Page } from '@/store/navStore'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
@@ -435,8 +434,6 @@ export function Layout() {
             <CurrentPage />
           </div>
         </div>
-
-        <MobileBottomNav />
       </main>
     </div>
   )

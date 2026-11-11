@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./features/extra-occasion-suguan/extraOccasion.css";
 
 /*
  * Restrict scanning to real source. Without this Tailwind walks the whole project,

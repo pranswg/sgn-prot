@@ -1,0 +1,346 @@
+/*
+ * Extra Occasion Suguan — layout for the prototype design.
+ *
+ * Structural selectors are used only where a Tailwind class on the host cannot
+ * reach inside a shared component (`FieldCard`'s icon/label row and
+ * `DisclosureSection`'s trigger). Everything else is a plain class the
+ * components opt into.
+ */
+
+.occasion-maker {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+/* The page title block: title, the occasion/choir line, and a soft badge. */
+.occasion-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.occasion-page-header h1 {
+  font-size: 1.45rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+.occasion-page-header p {
+  margin-top: 5px;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+@media (min-width: 768px) {
+  .occasion-page-header h1 { font-size: 1.7rem; }
+  .occasion-page-header p { font-size: 0.78rem; }
+}
+
+.occasion-form {
+  container: occasion-form / inline-size;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* A column of fields is a card of rows, not a stack of tall cards. */
+.occasion-field-group,
+.occasion-disclosure {
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.occasion-field {
+  gap: 8px;
+  padding: 13px 16px;
+}
+
+.occasion-field > div:first-child > span:first-child {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+
+.occasion-field > div:first-child > span:last-child {
+  font-size: 12px;
+}
+
+.occasion-control {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.occasion-control > input,
+.occasion-control > button,
+.occasion-date-columns input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border-radius: 9px;
+  background: var(--card);
+  /* 16px avoids iOS zooming the page when the field is focused. */
+  font-size: 16px;
+}
+
+/* Every control in a field row reads at one size, wrapped or not. */
+.occasion-field input,
+.occasion-field [data-slot='select-trigger'] {
+  font-size: 16px;
+}
+
+/* A select trigger matches the inputs beside it, despite its size variant. */
+.occasion-field [data-slot='select-trigger'] {
+  height: 40px;
+  border-radius: 9px;
+  background: var(--card);
+}
+
+.occasion-disclosure > button {
+  gap: 11px;
+  padding: 10px 14px;
+}
+
+.occasion-disclosure > button > svg:first-child {
+  box-sizing: content-box;
+  padding: 7px;
+  border-radius: 7px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+
+.occasion-disclosure > button > span > span:first-child {
+  font-size: 13px;
+}
+
+.occasion-disclosure > button > span > span + span {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Pagsasanay / Pagtupad: two tinted cards, stacked until there is width. */
+.occasion-date-columns {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.occasion-date-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, #d97706 32%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #f59e0b 7%, var(--card));
+}
+
+.occasion-date-card--green {
+  border-color: color-mix(in srgb, #059669 32%, var(--border));
+  background: color-mix(in srgb, #10b981 7%, var(--card));
+}
+
+.occasion-date-card label { font-size: 12px; }
+
+.occasion-date-columns input:disabled {
+  background: color-mix(in srgb, var(--muted) 65%, transparent);
+}
+
+/* Desktop splits the form into the two matching columns. */
+.occasion-desktop-details {
+  display: none;
+}
+
+/* Choir assignments: a bare section heading above the two roster panels. */
+.occasion-roster-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.occasion-roster-head h2 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.occasion-roster-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.occasion-export-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Preview PDF spans the row; the three export buttons sit below it. */
+.occasion-export-buttons > button:first-child {
+  grid-column: 1 / -1;
+}
+
+.occasion-export-buttons > button {
+  min-width: 0;
+  padding-inline: 10px;
+  font-size: 13px;
+}
+
+.occasion-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 6px -16px -8px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+
+.occasion-save-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+}
+
+.occasion-save-actions > button {
+  flex: 1;
+  min-height: 40px;
+}
+
+/* Multiple planner: occasion rail beside the shared editor. */
+.occasion-planner {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+}
+
+.occasion-planner-rail,
+.occasion-planner-editor {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.occasion-tile {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+  padding: 13px;
+  text-align: left;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.occasion-tile:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+}
+
+.occasion-tile[data-active='true'] {
+  border-color: var(--primary);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+@media (min-width: 768px) {
+  .occasion-maker { padding-bottom: 0; }
+  .occasion-control > input,
+  .occasion-control > button,
+  .occasion-date-columns input,
+  .occasion-field input,
+  .occasion-field [data-slot='select-trigger'] { font-size: 13px; }
+  .occasion-actions { margin-inline: -24px; padding-inline: 24px; }
+}
+
+@media (min-width: 1024px) {
+  .occasion-desktop-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  .occasion-export-buttons {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .occasion-export-buttons > button:first-child {
+    grid-column: auto;
+  }
+
+  .occasion-save-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .occasion-save-actions > button { flex: 0 0 auto; }
+}
+
+@media (min-width: 1280px) {
+  .occasion-planner {
+    grid-template-columns: 260px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .occasion-planner-rail {
+    position: sticky;
+    top: 4.5rem;
+    max-height: calc(100dvh - 11rem);
+    overflow-y: auto;
+    padding: 2px;
+  }
+}
+
+@container occasion-form (min-width: 42rem) {
+  .occasion-date-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container occasion-form (min-width: 62rem) {
+  .occasion-field {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+  }
+
+  .occasion-field > div:first-child {
+    padding-top: 6px;
+  }
+
+  .occasion-disclosure > button > span {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .occasion-disclosure > button > span > span + span {
+    margin-top: 0;
+  }
+}

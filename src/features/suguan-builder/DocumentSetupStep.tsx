@@ -1,11 +1,11 @@
-﻿import { useMemo, useState, type ReactNode } from 'react'
+﻿import { useId, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, FileText, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-CUSTOM_BODY_FONT_MAX,
+  CUSTOM_BODY_FONT_MAX,
   CUSTOM_BODY_FONT_MIN,
   docMarginsMm,
   docPaperDimensionsMm,
@@ -26,6 +26,7 @@ interface DocumentSetupStepProps {
   value: SuguanDocFormat
   onChange: (format: SuguanDocFormat) => void
   nameOnlyFontSize?: boolean
+  layout?: 'default' | 'occasion'
   /** Render without the outer "Document setup" disclosure trigger. The host
    *  page owns that trigger instead (the Organist Suguan maker), so the
    *  section is not shown twice under two different names. */
@@ -44,6 +45,7 @@ function UnitInput({
   min = 0,
   max,
   step = 0.5,
+  compact = false,
 }: {
   label: string
   value: number | undefined
@@ -52,11 +54,20 @@ function UnitInput({
   min?: number
   max?: number
   step?: number
+  compact?: boolean
 }) {
+  const id = useId()
+
   return (
-    <div className="grid gap-1">
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+    <div className={cn('grid gap-1', compact && 'min-w-0')}>
+      <Label
+        htmlFor={id}
+        className={cn('text-xs font-medium text-muted-foreground', compact && 'leading-snug')}
+      >
+        {label}
+      </Label>
       <Input
+        id={id}
         type="number"
         min={min}
         max={max}
@@ -66,6 +77,7 @@ function UnitInput({
           onChange(e.target.value === '' ? undefined : Number(e.target.value))
         }
         placeholder={unit}
+        className={compact ? 'h-10 md:text-[13px]' : undefined}
       />
     </div>
   )
@@ -77,20 +89,29 @@ function CardRow<T extends string>({
   options,
   value,
   onChange,
+  compact = false,
 }: {
   label: string
   hint?: string
   options: { id: T; label: string; description?: string }[]
   value: T
   onChange: (v: T) => void
+  compact?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn('flex flex-col gap-2', compact && 'min-w-0')}>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className={compact
+          ? 'text-[13px] font-semibold text-foreground'
+          : 'text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground'}
+        >
           {label}
         </p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+        {hint && (
+          <p className={cn('text-xs text-muted-foreground', compact && 'mt-1 text-[11px] leading-relaxed')}>
+            {hint}
+          </p>
+        )}
       </div>
       <div
         className={cn(
@@ -99,23 +120,49 @@ function CardRow<T extends string>({
             ? 'grid-cols-2'
             : options.length === 3
               ? 'grid-cols-3'
-              : 'grid-cols-2 sm:grid-cols-4',
+              : compact
+                ? options.length === 5
+                  ? 'grid-cols-3 @min-[30rem]:grid-cols-5'
+                  : 'grid gap-2 rounded-lg border border-border/70 bg-muted/40 px-2.5 py-1.5'
+                : 'grid-cols-2 sm:grid-cols-4',
         )}
       >
         {options.map((o) => (
           <button
             key={o.id}
             type="button"
+            aria-pressed={value === o.id}
+            title={compact ? o.description : undefined}
             onClick={() => onChange(o.id)}
             className={cn(
-              'rounded-lg border px-3 py-2.5 text-left transition-colors',
-              value === o.id
-                ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                : 'border-border hover:border-primary/50 hover:bg-accent/50',
+              compact
+                ? 'flex min-h-11 min-w-0 flex-col items-start gap-1.5 rounded-lg border px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 motion-reduce:transition-none @min-[30rem]:flex-row @min-[30rem]:items-center'
+                : 'rounded-lg border px-3 py-2.5 text-left transition-colors',
+              compact
+                ? value === o.id
+                  ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                  : 'border-border hover:border-blue-300 hover:bg-accent/50'
+                : value === o.id
+                  ? 'border-blue bg-blue-50 ring-1 ring-blue'
+                  : 'border-border hover:border-blue-300 hover:bg-accent/50',
             )}
           >
-            <span className="block text-sm font-semibold">{o.label}</span>
-            {o.description && (
+            {compact && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'size-3.5 shrink-0 rounded-full border',
+                  value === o.id ? 'border-4 border-blue-500' : 'border-input',
+                )}
+              />
+            )}
+            <span className={compact
+              ? 'block min-w-0 break-words text-xs font-semibold'
+              : 'block text-sm font-semibold'}
+            >
+              {o.label}
+            </span>
+            {!compact && o.description && (
               <span className="mt-0.5 block text-[11px] text-muted-foreground">
                 {o.description}
               </span>
@@ -221,7 +268,7 @@ export function DocumentSetupStep({
       />
 
       {value.paperSize === 'custom' && (
-        <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
           <UnitInput
             label="Width (mm)"
             value={value.customWidthMm}
@@ -263,7 +310,7 @@ export function DocumentSetupStep({
       />
 
       {value.fontSize === 'custom' && (
-        <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
           <UnitInput
             label={nameOnlyFontSize ? 'Member-name font size (pt)' : 'Body font size (pt)'}
             value={value.customBodyFontSize}
@@ -309,7 +356,7 @@ export function DocumentSetupStep({
         />
 
         {value.margins === 'custom' && (
-          <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
             <UnitInput
               label="Top margin (mm)"
               value={value.customMarginTopMm}
@@ -347,7 +394,7 @@ export function DocumentSetupStep({
 
         <div className="grid gap-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
               Table spacing
             </p>
             <p className="text-xs text-muted-foreground">

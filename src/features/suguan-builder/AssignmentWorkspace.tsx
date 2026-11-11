@@ -4,7 +4,6 @@ import {
   ArrowDown,
   ArrowUp,
   BadgeCheck,
-  Bookmark,
   CalendarClock,
   Check,
   ChevronDown,
@@ -126,6 +125,9 @@ function assignmentSortKey(
   return a.memberName.split(' ').reverse().join(' ')
 }
 
+const OCCASION_ROW = 'group flex min-h-[52px] items-center gap-2.5 border-b border-border/60 px-3 py-2 last:border-b-0 transition-colors hover:bg-muted/50 xl:min-h-[49px] xl:px-3.5'
+const OCCASION_CONFLICT_ROW = 'bg-amber-50 hover:bg-amber-100/60 dark:bg-amber-950/30 dark:hover:bg-amber-950/50'
+
 function PanelShell({
   icon,
   title,
@@ -137,6 +139,7 @@ function PanelShell({
   bodyClassName,
   scrollClassName,
   dropProps,
+  occasion = false,
 }: {
   icon: ReactNode
   title: string
@@ -148,19 +151,29 @@ function PanelShell({
   bodyClassName?: string
   scrollClassName: string
   dropProps?: HTMLAttributes<HTMLDivElement>
+  occasion?: boolean
 }) {
   return (
-    <section className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card xl:rounded-lg">
-      <header className="flex items-center gap-2.5 border-b border-border/70 px-4 py-3">
-        <span className="text-brand-navy/60">{icon}</span>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    <section className={cn(
+      'flex h-full min-w-0 flex-col overflow-hidden border bg-card',
+      occasion ? 'rounded-xl border-border' : 'rounded-2xl border-border/70 xl:rounded-lg',
+    )}>
+      <header className={cn(
+        'flex items-center gap-2.5 border-b border-border/70',
+        occasion ? 'px-3.5 py-2.5' : 'px-4 py-3',
+      )}>
+        {!occasion && <span className="text-brand-navy/60">{icon}</span>}
+        <h3 className={cn('font-semibold text-foreground', occasion ? 'text-[0.8125rem]' : 'text-sm')}>{title}</h3>
         {count !== undefined && (
-          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-muted-foreground">
+          <span className={cn(
+            'rounded-full bg-muted px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-muted-foreground',
+            occasion && !headerExtra && 'ml-auto',
+          )}>
             {count}
           </span>
         )}
         {meta && (
-          <span className="truncate text-[11px] text-muted-foreground">
+          <span className={cn('truncate text-[11px] text-muted-foreground', occasion && 'sr-only')}>
             {meta}
           </span>
         )}
@@ -175,7 +188,7 @@ function PanelShell({
           pointer can be anywhere over the container when content is short. */}
       <div className={cn('min-h-0 flex-1', scrollClassName)} {...dropProps}>
         <ScrollArea className="size-full">
-          <div className={cn('flex flex-col gap-1.5 p-3', bodyClassName)}>
+          <div className={cn('flex flex-col', !occasion && 'gap-1.5 p-3', bodyClassName)}>
             {body}
           </div>
         </ScrollArea>
@@ -184,10 +197,13 @@ function PanelShell({
   )
 }
 
-function EmptyState({ children }: { children: ReactNode }) {
+function EmptyState({ children, occasion = false }: { children: ReactNode; occasion?: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed border-border px-4 py-8 text-center">
-      <p className="text-sm font-medium text-muted-foreground">{children}</p>
+    <div className={cn(
+      'flex flex-col items-center gap-1 px-4 py-8 text-center',
+      !occasion && 'rounded-lg border border-dashed border-border',
+    )}>
+      <p className={cn('font-medium text-muted-foreground', occasion ? 'text-xs' : 'text-sm')}>{children}</p>
     </div>
   )
 }
@@ -638,8 +654,7 @@ export function AssignmentWorkspace({
   const presetMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Bookmark className="size-4" />
+        <Button variant="outline" size="sm" className="h-8 rounded-lg bg-card text-xs dark:bg-card">
           Presets
           <ChevronDown className="size-3.5 text-muted-foreground" />
         </Button>
@@ -705,7 +720,7 @@ export function AssignmentWorkspace({
       <Button
         variant="ghost"
         size={iconOnlyClear ? 'icon-sm' : 'sm'}
-        className="text-muted-foreground hover:text-destructive"
+        className="h-8 text-xs text-muted-foreground hover:text-destructive"
         disabled={assignments.length === 0}
         title="Remove every member from this occasion"
         aria-label="Clear the roster"
@@ -749,13 +764,19 @@ export function AssignmentWorkspace({
       title="Special duties"
       summary={dutiesSubtitle}
       trailing={
-        specialDutiesCount > 0 && (
-          <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+        (isOccasion || specialDutiesCount > 0) && (
+          <span
+            className={cn(
+              'shrink-0 rounded-full px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums',
+              isOccasion ? 'bg-muted text-muted-foreground' : 'bg-brand-navy-soft text-brand-navy',
+            )}
+            aria-label={isOccasion ? `${specialDutiesCount} assigned duties` : undefined}
+          >
             {specialDutiesCount}
           </span>
         )
       }
-      className="rounded-2xl xl:rounded-lg"
+      className={isOccasion ? 'occasion-disclosure' : 'rounded-2xl xl:rounded-lg'}
     >
       <DutyRolesPanel
         flat
@@ -783,48 +804,62 @@ export function AssignmentWorkspace({
     return (
       <div
         key={key}
-        className="overflow-hidden rounded-xl border border-border/60 bg-background"
+        className={isOccasion ? 'overflow-hidden' : 'overflow-hidden rounded-xl border border-border/60 bg-background'}
       >
         <button
           type="button"
           aria-expanded={open}
           onClick={() => toggleVoice(key)}
-          className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+          className={cn(
+            'flex w-full items-center gap-2 px-3 text-left',
+            isOccasion ? 'border-y border-border/60 bg-muted/50 py-2 dark:bg-background/40' : 'py-2.5',
+          )}
         >
           <ChevronDown
             className={cn(
               'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
-              open && 'rotate-180',
+              isOccasion ? !open && '-rotate-90' : open && 'rotate-180',
             )}
           />
-          <span className="truncate text-sm font-semibold text-foreground">
+          <span className={cn('truncate font-semibold', isOccasion ? 'text-xs text-muted-foreground' : 'text-sm text-foreground')}>
             {label}
           </span>
-          <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+          <span className={cn(
+            'rounded-full px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums',
+            isOccasion ? 'ml-auto bg-card text-muted-foreground' : 'bg-brand-navy-soft text-brand-navy',
+          )}>
             {items.length}
           </span>
         </button>
         {open && (
-          <div className="flex max-h-[45vh] flex-col gap-2 overflow-y-auto px-2.5 pb-2.5">
+          <div className={cn('flex max-h-[45vh] flex-col overflow-y-auto', !isOccasion && 'gap-2 px-2.5 pb-2.5')}>
             {items.map((a) => {
               const member = memberById.get(a.memberId)
               const idx = indexOfAssignment(a)
               return (
                 <div
                   key={`${a.memberId}-${a.voicePosition}`}
-                  className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3 py-2.5"
+                  className={cn(
+                    isOccasion ? OCCASION_ROW : 'flex items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3 py-2.5',
+                    isOccasion && bookedIds.has(a.memberId) && OCCASION_CONFLICT_ROW,
+                  )}
                 >
                   <MemberAvatar
                     member={member}
                     name={a.memberName}
-                    className="size-9"
+                    occasion={isOccasion}
+                    className={isOccasion ? 'size-8' : 'size-9'}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
+                    <p className={cn('truncate font-semibold text-foreground', isOccasion ? 'text-xs' : 'text-sm')}>
                       {a.memberName}
                     </p>
-                    <p className="truncate font-mono text-[0.625rem] tracking-tight text-muted-foreground">
+                    <p className={cn(
+                      'truncate text-muted-foreground',
+                      isOccasion ? 'mt-0.5 text-[0.6875rem]' : 'font-mono text-[0.625rem] tracking-tight',
+                    )}>
                       {memberRefs.get(a.memberId) ?? '—'}
+                      {isOccasion && ` · ${getVoiceName(a.voicePosition, voices)}`}
                     </p>
                   </div>
                   {bookedIds.has(a.memberId) && (
@@ -833,7 +868,7 @@ export function AssignmentWorkspace({
                       aria-label={conflictLabel}
                     />
                   )}
-                  <VoiceBadge name={getVoiceName(a.voicePosition, voices)} />
+                  {!isOccasion && <VoiceBadge name={getVoiceName(a.voicePosition, voices)} />}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -893,32 +928,42 @@ export function AssignmentWorkspace({
     return (
       <div
         key={key}
-        className="overflow-hidden rounded-lg border border-border/60 bg-background"
+        className={isOccasion ? 'overflow-hidden' : 'overflow-hidden rounded-lg border border-border/60 bg-background'}
       >
         <button
           type="button"
           aria-expanded={open}
           onClick={() => toggleVoice(key)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left"
+          className={cn(
+            'flex w-full items-center gap-2 py-2 text-left',
+            isOccasion ? 'border-y border-border/60 bg-muted/50 px-3.5 dark:bg-background/40' : 'px-3',
+          )}
         >
           <ChevronDown
             className={cn(
               'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
-              open && 'rotate-180',
+              isOccasion ? !open && '-rotate-90' : open && 'rotate-180',
             )}
           />
-          <span className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-foreground">
+          <span className={cn(
+            'font-semibold',
+            isOccasion ? 'text-[0.6875rem] text-muted-foreground' : 'text-[0.625rem] uppercase tracking-[0.12em] text-foreground',
+          )}>
             {label}
           </span>
-          <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-brand-navy">
+          <span className={cn(
+            'rounded-full px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums',
+            isOccasion ? 'ml-auto bg-card text-muted-foreground' : 'bg-brand-navy-soft text-brand-navy',
+          )}>
             {items.length}
           </span>
         </button>
         {open && (
-          <div className="flex flex-col gap-1.5 border-t border-border/60 p-1.5">
+          <div className={cn('flex flex-col', !isOccasion && 'gap-1.5 border-t border-border/60 p-1.5')}>
             {items.map((a) => (
               <AssignmentRow
                 key={`${a.memberId}-${a.voicePosition}`}
+                occasion={isOccasion}
                 assignment={a}
                 member={memberById.get(a.memberId)}
                 reference={memberRefs.get(a.memberId)}
@@ -965,16 +1010,20 @@ export function AssignmentWorkspace({
       {/* Mobile app layout */}
       <div className="flex flex-col gap-3 xl:hidden">
         {/* Header / schedule context */}
-        <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04)]">
+        <div
+          className={cn(
+            isOccasion
+              ? 'occasion-roster-head'
+              : 'rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgba(16,42,67,0.04)]',
+          )}
+        >
           {isOccasion ? (
-            <div className="flex items-center justify-between gap-3">
+            <>
               {/* No count pill here: the Assigned Members card just below
                   already carries it, and the title would truncate with it. */}
-              <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground">
-                Choir assignments
-              </h2>
+              <h2 className="min-w-0 truncate">Choir assignments</h2>
               {presetActions(true)}
-            </div>
+            </>
           ) : (
             <>
               <div className="flex items-start justify-between gap-3">
@@ -1112,7 +1161,13 @@ export function AssignmentWorkspace({
               )}
 
             <Button
-              className="mt-1 h-12 w-full rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.3)]"
+              variant={isOccasion ? 'outline' : 'default'}
+              className={cn(
+                'mt-1 h-11 w-full rounded-lg',
+                isOccasion
+                  ? 'border-primary/40 text-primary hover:bg-accent'
+                  : 'shadow-[0_4px_14px_rgba(37,99,235,0.3)]',
+              )}
               onClick={openAddMembers}
             >
               <Plus className="size-4.5" />
@@ -1130,30 +1185,35 @@ export function AssignmentWorkspace({
           and the preset card belong to the builder, which has several
           sections to move between; an occasion has exactly one. */}
       <div className="hidden flex-col gap-4 xl:flex">
+        {isOccasion ? (
+          <div className="occasion-roster-head">
+            <div className="flex min-w-0 items-baseline gap-2">
+              <h2>Choir assignments</h2>
+              <span className="occasion-roster-count">
+                {assignments.length} assigned
+              </span>
+            </div>
+            {presetActions(false)}
+          </div>
+        ) : (
         <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
           <header className="flex items-center gap-2.5 border-b border-border/70 px-4 py-3">
             <span className="text-brand-navy/60">
               <UserRoundCheck className="size-4" />
             </span>
             <h3 className="text-sm font-semibold text-foreground">
-              {isOccasion ? 'Choir assignments' : 'Assign Members'}
+              Assign Members
             </h3>
             <span className="rounded-full bg-brand-navy-soft px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-brand-navy">
               {assignments.length} assigned
             </span>
-            {isOccasion ? (
-              <span className="ml-auto flex shrink-0 items-center gap-1">
-                {presetActions(false)}
-              </span>
-            ) : (
-              <span className="ml-auto truncate text-[11px] text-muted-foreground">
-                {section
-                  ? [section.scheduleDay, section.scheduleTime]
-                      .filter(Boolean)
-                      .join(' · ')
-                  : ''}
-              </span>
-            )}
+            <span className="ml-auto truncate text-[11px] text-muted-foreground">
+              {section
+                ? [section.scheduleDay, section.scheduleTime]
+                    .filter(Boolean)
+                    .join(' · ')
+                : ''}
+            </span>
           </header>
 
           {!isOccasion &&
@@ -1184,11 +1244,11 @@ export function AssignmentWorkspace({
               </Tabs>
             ))}
 
-          {!isOccasion &&
-            renderPresetCard(
-              'rounded-none border-x-0 border-b-0 border-t border-border/60 bg-transparent shadow-none',
-            )}
+          {renderPresetCard(
+            'rounded-none border-x-0 border-b-0 border-t border-border/60 bg-transparent shadow-none',
+          )}
         </section>
+        )}
 
       {/* Available | Assigned | Special duties */}
       <div
@@ -1211,7 +1271,10 @@ export function AssignmentWorkspace({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search members…"
-                className="h-9 bg-background pl-9"
+                className={cn(
+                  'bg-background pl-9',
+                  isOccasion ? 'h-8 text-xs' : 'h-9',
+                )}
               />
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -1221,9 +1284,14 @@ export function AssignmentWorkspace({
                   type="button"
                   onClick={() => setVoiceFilter(v.id)}
                   className={cn(
-                    'rounded-full border px-2.5 py-1 text-[0.6875rem] font-medium transition-colors',
+                    'border px-2.5 py-1 font-semibold transition-colors',
+                    isOccasion
+                      ? 'rounded-md text-[11px]'
+                      : 'rounded-full text-[0.6875rem] font-medium',
                     voiceFilter === v.id
-                      ? 'border-transparent bg-brand-navy text-white'
+                      ? isOccasion
+                        ? 'border-primary/30 bg-accent text-accent-foreground'
+                        : 'border-transparent bg-brand-navy text-white'
                       : 'border-border/60 bg-background text-muted-foreground hover:text-foreground',
                   )}
                 >
@@ -1251,40 +1319,89 @@ export function AssignmentWorkspace({
                   }}
                   onDragEnd={() => setDrag(null)}
                   onDoubleClick={() => addMember(m)}
-                  className="group flex cursor-grab items-center gap-2.5 rounded-2xl border border-border/60 bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] transition-colors hover:border-brand-teal/40 hover:bg-brand-teal-soft/40 active:cursor-grabbing xl:gap-2.5 xl:rounded-lg xl:bg-background xl:px-2.5 xl:py-2 xl:shadow-none"
+                  className={cn(
+                    'group flex cursor-grab items-center gap-2.5 transition-colors active:cursor-grabbing',
+                    isOccasion
+                      ? 'min-h-[49px] border-b border-border/50 px-3 py-2 last:border-b-0 hover:bg-muted/50'
+                      : 'rounded-2xl border border-border/60 bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(16,42,67,0.04)] hover:border-brand-teal/40 hover:bg-brand-teal-soft/40 xl:gap-2.5 xl:rounded-lg xl:bg-background xl:px-2.5 xl:py-2 xl:shadow-none',
+                  )}
                 >
-                  <GripVertical className="hidden size-3.5 shrink-0 text-muted-foreground/40 xl:block" />
-                  <MemberAvatar member={m} className="size-9 xl:size-7" />
+                  <GripVertical
+                    className={cn(
+                      'size-3.5 shrink-0 text-muted-foreground/40',
+                      !isOccasion && 'hidden xl:block',
+                    )}
+                  />
+                  <MemberAvatar
+                    member={m}
+                    occasion={isOccasion}
+                    className={isOccasion ? 'size-7' : 'size-9 xl:size-7'}
+                  />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">
-                      {m.firstName} {m.lastName}
+                    <span
+                      className={cn(
+                        'block truncate font-semibold',
+                        isOccasion ? 'text-[12px]' : 'text-sm',
+                      )}
+                    >
+                      {isOccasion
+                        ? `${m.lastName}, ${m.firstName}`
+                        : `${m.firstName} ${m.lastName}`}
                     </span>
-                    <span className="block truncate font-mono text-[0.625rem] tracking-tight text-muted-foreground">
+                    <span
+                      className={cn(
+                        'block truncate',
+                        isOccasion
+                          ? 'mt-0.5 text-[10.5px] text-muted-foreground'
+                          : 'font-mono text-[0.625rem] tracking-tight text-muted-foreground',
+                      )}
+                    >
                       {memberRefs.get(m.id) ?? '—'}
+                      {isOccasion &&
+                        ` · ${getVoiceName(m.voicePosition, voices)}`}
                     </span>
-                    <span className="mt-1.5 flex items-center gap-1.5 xl:hidden">
+                    {!isOccasion && (
+                      <span className="mt-1.5 flex items-center gap-1.5 xl:hidden">
+                        {bookedIds.has(m.id) && (
+                          <AlertTriangle
+                            className="size-3.5 text-amber-500"
+                            aria-label={conflictLabel}
+                          />
+                        )}
+                        <VoiceBadge
+                          name={getVoiceName(m.voicePosition, voices)}
+                        />
+                      </span>
+                    )}
+                  </span>
+                  {isOccasion ? (
+                    bookedIds.has(m.id) && (
+                      <AlertTriangle
+                        className="size-3.5 shrink-0 text-amber-500"
+                        aria-label={conflictLabel}
+                      />
+                    )
+                  ) : (
+                    <span className="hidden shrink-0 items-center gap-1.5 xl:flex">
                       {bookedIds.has(m.id) && (
                         <AlertTriangle
                           className="size-3.5 text-amber-500"
                           aria-label={conflictLabel}
                         />
                       )}
-                      <VoiceBadge name={getVoiceName(m.voicePosition, voices)} />
-                    </span>
-                  </span>
-                  <span className="hidden shrink-0 items-center gap-1.5 xl:flex">
-                    {bookedIds.has(m.id) && (
-                      <AlertTriangle
-                        className="size-3.5 text-amber-500"
-                        aria-label={conflictLabel}
+                      <VoiceBadge
+                        name={getVoiceName(m.voicePosition, voices)}
                       />
-                    )}
-                    <VoiceBadge name={getVoiceName(m.voicePosition, voices)} />
-                  </span>
+                    </span>
+                  )}
                   <Button
-                    variant="ghost"
+                    variant={isOccasion ? 'outline' : 'ghost'}
                     size="icon-sm"
-                    className="size-8 shrink-0 rounded-full border border-border/60 text-brand-navy/70 hover:border-brand-teal hover:bg-brand-teal-soft hover:text-brand-teal xl:size-7 xl:border-0"
+                    className={
+                      isOccasion
+                        ? 'size-7 shrink-0 rounded-md border-border bg-card text-muted-foreground hover:text-foreground'
+                        : 'size-8 shrink-0 rounded-full border border-border/60 text-brand-navy/70 hover:border-brand-teal hover:bg-brand-teal-soft hover:text-brand-teal xl:size-7 xl:border-0'
+                    }
                     onClick={() => addMember(m)}
                     title="Add to roster"
                   >
@@ -1549,10 +1666,13 @@ function MemberAvatar({
   member,
   name,
   className,
+  occasion = false,
 }: {
   member?: Member
   name?: string
   className?: string
+  /** The Extra Occasion layout uses the prototype's flat light-blue avatar. */
+  occasion?: boolean
 }) {
   const initials = member
     ? memberInitials(member, 'first-name')
@@ -1568,7 +1688,10 @@ function MemberAvatar({
     <span
       aria-hidden
       className={cn(
-        'flex size-7 shrink-0 select-none items-center justify-center rounded-full bg-brand-navy-soft text-[0.625rem] font-semibold tracking-tight text-brand-navy ring-1 ring-inset ring-brand-navy/10',
+        'flex size-7 shrink-0 select-none items-center justify-center rounded-full text-[0.625rem] font-semibold tracking-tight',
+        occasion
+          ? 'bg-accent text-accent-foreground'
+          : 'bg-brand-navy-soft text-brand-navy ring-1 ring-inset ring-brand-navy/10',
         className,
       )}
     >
@@ -1587,6 +1710,7 @@ function AssignmentRow({
   reorderable,
   first,
   last,
+  occasion = false,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -1604,6 +1728,8 @@ function AssignmentRow({
   reorderable: boolean
   first: boolean
   last: boolean
+  /** The Extra Occasion layout: a flat roster row, not a builder card. */
+  occasion?: boolean
   onDragStart: () => void
   onDragEnd: () => void
   onDrop: (e: DragEvent) => void
@@ -1611,6 +1737,113 @@ function AssignmentRow({
   onRemove: (a: SuguanAssignment) => void
   onReplace: (a: SuguanAssignment) => void
 }) {
+  const dragHandlers = {
+    draggable: reorderable,
+    onDragStart: (e: DragEvent) => {
+      const payload: DragPayload = {
+        kind: 'assigned' as const,
+        memberId: assignment.memberId,
+        voicePosition: assignment.voicePosition,
+      }
+      e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload))
+      e.dataTransfer.effectAllowed = 'move' as const
+      onDragStart()
+    },
+    onDragEnd,
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = reorderable ? 'move' : 'copy'
+    },
+    onDrop,
+  }
+
+  /**
+   * The Extra Occasion roster row: name and reference on one line pair, the
+   * four row actions always visible, and no voice badge — the voice already
+   * appears in the reference line.
+   */
+  if (occasion) {
+    const displayName = member
+      ? `${member.lastName}, ${member.firstName}`
+      : assignment.memberName
+    return (
+      <div
+        {...dragHandlers}
+        className={cn(
+          'group flex min-h-[48px] items-center gap-2.5 border-b border-border/50 px-3.5 py-2 transition-colors last:border-b-0 hover:bg-muted/50',
+          conflicting &&
+            'bg-amber-50 hover:bg-amber-100/60 dark:bg-amber-950/30 dark:hover:bg-amber-950/50',
+          reorderable && 'cursor-grab active:cursor-grabbing',
+        )}
+      >
+        {reorderable && (
+          <GripVertical className="size-3.5 shrink-0 text-muted-foreground/40" />
+        )}
+        <MemberAvatar
+          member={member}
+          name={assignment.memberName}
+          occasion
+          className="size-7"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-semibold">
+            {displayName}
+          </span>
+          <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
+            {reference ?? '—'} ·{' '}
+            {getVoiceName(assignment.voicePosition, voices)}
+          </span>
+        </span>
+        {conflicting && (
+          <AlertTriangle
+            className="size-3.5 shrink-0 text-amber-500"
+            aria-label={conflictLabel}
+          />
+        )}
+        <span className="flex shrink-0 items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 text-muted-foreground"
+            title="Move up"
+            disabled={!reorderable || first}
+            onClick={() => onMove(assignment, -1)}
+          >
+            <ArrowUp className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 text-muted-foreground"
+            title="Move down"
+            disabled={!reorderable || last}
+            onClick={() => onMove(assignment, 1)}
+          >
+            <ArrowDown className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 text-muted-foreground"
+            title="Edit"
+            onClick={() => onReplace(assignment)}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 text-muted-foreground hover:text-destructive"
+            title="Remove"
+            onClick={() => onRemove(assignment)}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div
       draggable={reorderable}

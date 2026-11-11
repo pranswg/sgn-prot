@@ -24,6 +24,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDateKeyNumeric, isDateKey } from '@/lib/phDate'
+import {
+  normalizeDocFormat,
+  PAPER_SIZE_LABELS,
+  resolveFontSizePreset,
+} from '@/lib/suguanUtils'
 import type { Member } from '@/core/types/member'
 import type { ServiceType, SuguanGroup } from '@/core/types/suguan'
 import { AssignmentWorkspace } from '@/features/suguan-builder/AssignmentWorkspace'
@@ -31,13 +36,14 @@ import { DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import {
   applyServiceType,
   applyTime,
+  OCCASION_CHOIR_LABELS,
   type ExtraOccasionOccasionState,
 } from './extraOccasionDraft'
 
 const GROUP_OPTIONS: { id: SuguanGroup; label: string }[] = [
-  { id: 'babae', label: "Women's Choir" },
-  { id: 'lalaki', label: "Men's Choir" },
-  { id: 'mixed', label: 'Mixed Choir' },
+  { id: 'babae', label: OCCASION_CHOIR_LABELS.babae },
+  { id: 'lalaki', label: OCCASION_CHOIR_LABELS.lalaki },
+  { id: 'mixed', label: OCCASION_CHOIR_LABELS.mixed },
 ]
 
 function isSuguanGroup(value: string): value is SuguanGroup {
@@ -116,8 +122,6 @@ export function ExtraOccasionOccasionForm({
       setValue: (value: typeof pagsasanay) =>
         onChange({ ...state, pagsasanay: value }),
       accent: 'text-amber-700 dark:text-amber-300',
-      panel:
-        'border-amber-300/70 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/25',
     },
     {
       id: 'pagtupad',
@@ -127,8 +131,6 @@ export function ExtraOccasionOccasionForm({
       setValue: (value: typeof pagtupad) =>
         onChange({ ...state, pagtupad: value }),
       accent: 'text-emerald-700 dark:text-emerald-300',
-      panel:
-        'border-emerald-300/70 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/25',
     },
   ]
 
@@ -136,6 +138,18 @@ export function ExtraOccasionOccasionForm({
     serviceTypes.find((type) => type.id === draft.serviceTypeId)?.name ?? ''
   const groupLabel =
     GROUP_OPTIONS.find((group) => group.id === draft.group)?.label ?? ''
+
+  // The folded "Document setup" row reads back the current sheet settings, so
+  // the closed row still states what the export will use.
+  const normalizedFormat = normalizeDocFormat(draft.docFormat)
+  const documentSummary = [
+    PAPER_SIZE_LABELS[normalizedFormat.paperSize].short,
+    normalizedFormat.orientation === 'portrait' ? 'Portrait' : 'Landscape',
+    `${
+      normalizedFormat.fontSize.charAt(0).toUpperCase() +
+      normalizedFormat.fontSize.slice(1)
+    } ${resolveFontSizePreset(normalizedFormat).bodyFontSize} pt`,
+  ].join(' · ')
 
   /**
    * The folded "Occasion details" line. Service type is the first thing the save
@@ -197,9 +211,11 @@ export function ExtraOccasionOccasionForm({
       icon={CalendarDays}
       label="Occasion name"
       tone="violet"
+      className="occasion-field"
     >
       <Input
         id={`${idPrefix}-name`}
+        className="h-10"
         value={state.name}
         onChange={(event) =>
           onChange({ ...state, name: event.target.value })
@@ -210,14 +226,14 @@ export function ExtraOccasionOccasionForm({
   )
 
   const choirField = (
-    <FieldCard icon={Music} label="Choir" tone="rose">
+    <FieldCard icon={Music} label="Choir" tone="rose" className="occasion-field">
       <Select
         value={draft.group}
         onValueChange={(value) => {
           if (isSuguanGroup(value)) patch({ group: value })
         }}
       >
-        <SelectTrigger className="w-full" aria-label="Choir group">
+        <SelectTrigger className="h-10 w-full" aria-label="Choir group">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -232,23 +248,26 @@ export function ExtraOccasionOccasionForm({
   )
 
   const timeField = (
-    <FieldCard icon={Clock} label="Time" tone="amber">
-      <Input
-        id={`${idPrefix}-time`}
-        type="time"
-        value={draft.time}
-        onChange={(event) => onChange(applyTime(state, event.target.value))}
-      />
-      {draft.schedules[0]?.scheduleTime && (
-        <p className="text-xs text-muted-foreground">
-          Displayed on sheet as {draft.schedules[0].scheduleTime}
-        </p>
-      )}
+    <FieldCard icon={Clock} label="Time" tone="amber" className="occasion-field">
+      <div className="occasion-control">
+        <Input
+          id={`${idPrefix}-time`}
+          className="h-10"
+          type="time"
+          value={draft.time}
+          onChange={(event) => onChange(applyTime(state, event.target.value))}
+        />
+        {draft.schedules[0]?.scheduleTime && (
+          <p className="text-xs text-muted-foreground">
+            Displayed on sheet as {draft.schedules[0].scheduleTime}
+          </p>
+        )}
+      </div>
     </FieldCard>
   )
 
   const signatoriesField = (
-    <FieldCard icon={PenLine} label="Signatories" tone="slate">
+    <FieldCard icon={PenLine} label="Signatories" tone="slate" className="occasion-field">
       <div className="flex items-center gap-2.5">
         <Checkbox
           id={`${idPrefix}-footer-signatories`}
@@ -270,9 +289,11 @@ export function ExtraOccasionOccasionForm({
       icon={MapPin}
       label="Locale Congregation Name"
       tone="emerald"
+      className="occasion-field"
     >
       <Input
         id={`${idPrefix}-locale`}
+        className="h-10"
         value={churchName}
         onChange={(event) =>
           onChange({ ...state, churchName: event.target.value })
@@ -283,34 +304,42 @@ export function ExtraOccasionOccasionForm({
   )
 
   const serviceTypeField = (
-    <FieldCard icon={Settings2} label="Service type" required tone="sky">
-      <Select
-        value={draft.serviceTypeId}
-        onValueChange={(value) =>
-          onChange(applyServiceType(state, value, serviceTypes))
-        }
-      >
-        <SelectTrigger
-          id={`${idPrefix}-service-type`}
-          className="w-full"
-          aria-label="Service type"
+    <FieldCard
+      icon={Settings2}
+      label="Service type"
+      required
+      tone="sky"
+      className="occasion-field"
+    >
+      <div className="occasion-control">
+        <Select
+          value={draft.serviceTypeId}
+          onValueChange={(value) =>
+            onChange(applyServiceType(state, value, serviceTypes))
+          }
         >
-          <SelectValue placeholder="Select a service type" />
-        </SelectTrigger>
-        <SelectContent>
-          {serviceTypes.map((type) => (
-            <SelectItem key={type.id} value={type.id}>
-              {type.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {serviceTypes.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          No service types are configured. Add one in Settings to
-          continue.
-        </p>
-      )}
+          <SelectTrigger
+            id={`${idPrefix}-service-type`}
+            className="h-10 w-full"
+            aria-label="Service type"
+          >
+            <SelectValue placeholder="Select a service type" />
+          </SelectTrigger>
+          <SelectContent>
+            {serviceTypes.map((type) => (
+              <SelectItem key={type.id} value={type.id}>
+                {type.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {serviceTypes.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            No service types are configured. Add one in Settings to
+            continue.
+          </p>
+        )}
+      </div>
     </FieldCard>
   )
 
@@ -319,13 +348,17 @@ export function ExtraOccasionOccasionForm({
       icon={CalendarRange}
       label="Pagsasanay & Pagtupad"
       tone="slate"
+      className="occasion-field"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="occasion-date-columns">
         {columnPanels.map(
-          ({ id, title, value, setValue, accent, panel }) => (
+          ({ id, title, value, setValue, accent }) => (
             <div
               key={id}
-              className={cn('space-y-3 rounded-xl border p-3', panel)}
+              className={cn(
+                'occasion-date-card',
+                id === 'pagtupad' && 'occasion-date-card--green',
+              )}
             >
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -355,7 +388,7 @@ export function ExtraOccasionOccasionForm({
                 </Label>
                 <Input
                   id={`${idPrefix}-${id}-label`}
-                  className="bg-background"
+                  className="h-10 bg-card"
                   value={value.label}
                   disabled={!value.enabled}
                   onChange={(event) =>
@@ -377,7 +410,7 @@ export function ExtraOccasionOccasionForm({
                 <Input
                   id={`${idPrefix}-${id}-date`}
                   type="date"
-                  className="bg-background"
+                  className="h-10 bg-card"
                   value={value.date}
                   disabled={!value.enabled}
                   onChange={(event) =>
@@ -398,7 +431,7 @@ export function ExtraOccasionOccasionForm({
   )
 
   return (
-    <>
+    <div className="occasion-form">
       {/*
         Phones fold the two groups of settings away, so the page opens on the
         roster instead of six cards of setup to scroll past. A folded row says
@@ -413,6 +446,7 @@ export function ExtraOccasionOccasionForm({
             icon={CalendarDays}
             title="Occasion details"
             summary={detailsSummary}
+            className="occasion-disclosure"
           >
             <FieldCardList>
               {occasionNameField}
@@ -430,21 +464,22 @@ export function ExtraOccasionOccasionForm({
             icon={CalendarRange}
             title="Pagsasanay &amp; Pagtupad"
             summary={columnsSummary}
+            className="occasion-disclosure"
           >
             <FieldCardList>{columnsField}</FieldCardList>
           </DisclosureSection>
         </div>
 
         {/* The design lays both columns open from lg up. */}
-        <div className="hidden gap-4 lg:grid lg:grid-cols-2">
-          <FieldCardGroup>
+        <div className="occasion-desktop-details">
+          <FieldCardGroup className="occasion-field-group">
             {occasionNameField}
             {choirField}
             {timeField}
             {signatoriesField}
           </FieldCardGroup>
 
-          <FieldCardGroup>
+          <FieldCardGroup className="occasion-field-group">
             {localeField}
             {serviceTypeField}
             {columnsField}
@@ -457,6 +492,8 @@ export function ExtraOccasionOccasionForm({
         onToggle={() => setDocumentSetupOpen((open) => !open)}
         icon={FileText}
         title="Document setup"
+        summary={documentSummary}
+        className="occasion-disclosure"
       >
         <div className="space-y-4 p-4">
           <p className="text-xs text-muted-foreground">
@@ -488,6 +525,6 @@ export function ExtraOccasionOccasionForm({
             onChange({ ...state, organistaAssignments }),
         }}
       />
-    </>
+    </div>
   )
 }

@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
-import { ArrowDown, ArrowUp, CalendarDays, Copy, Eye, FileDown, FileText, GripVertical, Music4, Pencil, Piano, Plus, Save, Trash2 } from 'lucide-react'
+import { CalendarDays, Eye, FileDown, FileText, MapPin, Music4, PenLine, Plus, Save, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { reorderList } from '@/lib/reorderList'
 import { Button } from '@/components/ui/button'
+import { DisclosureSection } from '@/components/DisclosureSection'
+import { FieldCard, FieldCardGroup } from '@/components/FieldCard'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { DisclosureButton, DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
+import { DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import type { SuguanDocFormat } from '@/core/types/suguan'
 import {
   DEFAULT_DOC_FORMAT,
   docMarginsMm,
   docPaperDimensionsMm,
   normalizeDocFormat,
+  PAPER_SIZE_LABELS,
   resolveFontSizePreset,
   worshipWeekFromRehearsal,
 } from '@/lib/suguanUtils'
@@ -31,7 +33,7 @@ import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import type { OrganistaSuguanService } from '@/core/types/organistaSuguan'
-import { MemberPicker } from './memberPicker'
+import { OrganistaServiceCard } from './OrganistaServiceCard'
 import {
   SchedulePicker,
   type SelectedWorshipSchedule,
@@ -344,6 +346,13 @@ export async function buildOrganistaSuguanPdf(
   return pdf.output('blob')
 }
 
+/**
+ * The Organist Suguan maker. Shares the Extra Occasion maker's layout
+ * primitives (`occasion-page-header`, `occasion-form`, `occasion-field`,
+ * `occasion-disclosure`, `occasion-actions` from `extraOccasion.css`) so both
+ * document makers read as one screen: a title block, a card of fields, folded
+ * document setup, the roster, and one sticky action bar.
+ */
 export function OrganistaSuguanMakerPage() {
   const [churchName, setChurchName] = useState('')
   const [destinadoName, setDestinadoName] = useState('')
@@ -376,7 +385,6 @@ export function OrganistaSuguanMakerPage() {
     fontSize: 'large',
   })
   const [pagsasanayDate, setPagsasanayDate] = useState('')
-  const [coverageOpen, setCoverageOpen] = useState(false)
   const [documentSetupOpen, setDocumentSetupOpen] = useState(false)
   const [dragServiceId, setDragServiceId] = useState<string | null>(null)
   const [overServiceId, setOverServiceId] = useState<string | null>(null)
@@ -386,7 +394,8 @@ export function OrganistaSuguanMakerPage() {
     | { mode: 'replace'; serviceId: string }
     | null
   >(null)
-  const newServiceCardRef = useRef<HTMLDivElement>(null)
+  const newServiceCardRef = useRef<HTMLElement>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
   const { exportPreview, requestExport } = useExportPreview()
 
   const takenScheduleIds = useMemo(
@@ -423,6 +432,18 @@ export function OrganistaSuguanMakerPage() {
     [week],
   )
   const dateHeading = organistaDateLabel(pagsasanayDate)
+  const normalizedFormat = normalizeDocFormat(docFormat)
+  const documentSummary = [
+    PAPER_SIZE_LABELS[normalizedFormat.paperSize].short,
+    normalizedFormat.orientation === 'portrait' ? 'Portrait' : 'Landscape',
+    `${
+      normalizedFormat.fontSize.charAt(0).toUpperCase() +
+      normalizedFormat.fontSize.slice(1)
+    } ${resolveFontSizePreset(normalizedFormat).bodyFontSize} pt`,
+  ].join(' · ')
+  const assignedCount = services.filter((service) =>
+    service.organist.trim(),
+  ).length
 
   const updatePagsasanayDate = (value: string) => {
     setPagsasanayDate(value)
@@ -430,8 +451,9 @@ export function OrganistaSuguanMakerPage() {
 
   const requirePagsasanayDate = () => {
     if (dateHeading) return true
-    setCoverageOpen(true)
     toast.error('Choose a Petsa ng Pagsasanay date before previewing or exporting.')
+    dateInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    dateInputRef.current?.focus()
     return false
   }
 
@@ -622,378 +644,170 @@ export function OrganistaSuguanMakerPage() {
   const [previewOrganistSuguan, previewingOrganistSuguan] = useAsyncAction(previewPdf)
   const [exportOrganistSuguan, exportingOrganistSuguan] = useAsyncAction(exportPdf)
 
+  const exportButtons = (
+    <div className="grid min-w-0 grid-cols-2 gap-2 lg:flex lg:flex-wrap">
+      <Button
+        variant="outline"
+        className="col-span-2 lg:col-auto"
+        onClick={() => void previewOrganistSuguan()}
+        loading={previewingOrganistSuguan}
+        disabled={exportingOrganistSuguan}
+      >
+        <Eye className="size-4" />
+        Preview PDF
+      </Button>
+      <Button
+        variant="outline"
+        onClick={() => void exportOrganistSuguan()}
+        loading={exportingOrganistSuguan}
+        disabled={previewingOrganistSuguan}
+      >
+        <FileDown className="size-4" />
+        <span>
+          <span className="hidden lg:inline">Export </span>
+          PDF
+        </span>
+      </Button>
+      <Button
+        variant="outline"
+        onClick={exportDocx}
+        disabled={previewingOrganistSuguan || exportingOrganistSuguan}
+      >
+        <FileText className="size-4" />
+        <span>
+          <span className="hidden lg:inline">Export </span>
+          Word
+        </span>
+      </Button>
+    </div>
+  )
+
   return (
-    <div className="flex flex-col gap-5 pb-10">
+    <div className="occasion-maker">
       {exportPreview}
-      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 items-center justify-center rounded-lg bg-brand-navy text-white">
-            <Piano className="size-5" />
-          </span>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              Organist Suguan
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Generate a printable organist sign-up sheet in the same style as the reference PDF.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={saveOrganistSuguan} loading={savingOrganistSuguan}>
-            <Save className="size-4" />
-            Save to History
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void previewOrganistSuguan()}
-            loading={previewingOrganistSuguan}
-          >
-            <Eye className="size-4" />
-            Preview PDF
-          </Button>
-          <Button onClick={() => void exportOrganistSuguan()} loading={exportingOrganistSuguan}>
-            <FileDown className="size-4" />
-            Export PDF
-          </Button>
-          <Button variant="outline" onClick={exportDocx}>
-            <FileText className="size-4" />
-            Export Word
-          </Button>
-        </div>
-      </div>
 
-      <div className="rounded-xl border border-border/70 bg-card p-4">
-          <div className="space-y-2">
-            <Label htmlFor="church-name">Locale Congregation Name</Label>
-            <Input
-              id="church-name"
-              value={churchName}
-              onChange={(event) => setChurchName(event.target.value)}
-              placeholder="e.g. Templo Central"
-            />
-          </div>
-
-          <div className="mt-6">
-            <DisclosureButton
-              open={coverageOpen}
-              onToggle={() => setCoverageOpen((o) => !o)}
-              icon={CalendarDays}
-            >
-              Coverage
-            </DisclosureButton>
-
-            {coverageOpen && (
-              <div className="mt-4 space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  Pick the Pagsasanay date — the Wednesday, Thursday, Saturday, and
-                  Sunday services of that week are derived automatically.
-                </p>
-                <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-[minmax(0,260px)_1fr] md:items-start">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="organista-coverage-rehearsal-date">
-                      Petsa ng Pagsasanay
-                    </Label>
-                    <Input
-                      id="organista-coverage-rehearsal-date"
-                      type="date"
-                      value={pagsasanayDate}
-                      onChange={(event) => updatePagsasanayDate(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Label>PDF date heading</Label>
-                      <p
-                        aria-live="polite"
-                        className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground"
-                      >
-                        {dateHeading || 'Select a Pagsasanay date to set the heading.'}
-                      </p>
-                    </div>
-                    {weekDates.length > 0 && week && (
-                      <div className="flex flex-wrap gap-2">
-                        {weekDates.map((date) => (
-                          <div
-                            key={date}
-                            className={`rounded-md border px-3 py-2 text-xs ${
-                              weekdayOf(date) === 6 || weekdayOf(date) === 0
-                                ? 'border-emerald-300/60 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30'
-                                : 'border-amber-300/60 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30'
-                            }`}
-                          >
-                            <span className="font-bold uppercase">
-                              {WEEKDAY_LABELS[weekdayOf(date)]}
-                            </span>
-                            <span className="ml-2 text-muted-foreground">
-                              {formatDateKeyNumeric(date)}
-                            </span>
-                          </div>
-                        ))}
-                        <p className="w-full text-xs text-muted-foreground">
-                          The PDF heading shows the date ranges as midweek and weekend.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6">
-            <DisclosureButton
-              open={documentSetupOpen}
-              onToggle={() => setDocumentSetupOpen((o) => !o)}
-              icon={FileText}
-            >
-              Document setup
-            </DisclosureButton>
-
-            {documentSetupOpen && (
-              <div className="mt-4 space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  These document options are applied to exported PDF and Word files.
-                </p>
-                <DocumentSetupStep
-                  value={docFormat}
-                  onChange={setDocFormat}
-                  embedded
-                  nameOnlyFontSize={false}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Schedule rows</h2>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setSchedulePicker({ mode: 'add' })}
-            >
-              <Plus className="size-4" />
-              Add Worship Schedule
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Services come from the Worship Service Schedule Settings. Changing a
-            schedule there affects new picks; saved records keep theirs.
+      <header className="occasion-page-header">
+        <div className="min-w-0">
+          <h1>Organist Suguan</h1>
+          <p className="truncate">
+            {[
+              churchName.trim() || 'No locale yet',
+              dateHeading || 'Pagsasanay date not set',
+            ].join(' · ')}
           </p>
+        </div>
+        <span className="hidden shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground sm:inline-flex">
+          {services.length} {services.length === 1 ? 'service' : 'services'}
+        </span>
+      </header>
 
-          <div className="mt-4 space-y-4">
-            {services.length === 0 && (
-              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/70 px-4 py-8 text-center">
-                <Music4 className="size-6 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  No worship schedules are enabled. Add worship schedules in
-                  Settings, or build a service list from the current settings.
+      <div className="occasion-form">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-2 lg:items-start">
+          <FieldCardGroup className="occasion-field-group">
+            <FieldCard
+              icon={MapPin}
+              label="Locale Congregation Name"
+              tone="emerald"
+              className="occasion-field"
+            >
+              <Input
+                id="church-name"
+                aria-label="Locale Congregation Name"
+                className="h-10"
+                value={churchName}
+                onChange={(event) => setChurchName(event.target.value)}
+                placeholder="e.g. Templo Central"
+              />
+            </FieldCard>
+
+            <FieldCard
+              icon={CalendarDays}
+              label="Petsa ng Pagsasanay"
+              tone="amber"
+              className="occasion-field"
+            >
+              <div className="occasion-control">
+                <Input
+                  id="organista-coverage-rehearsal-date"
+                  ref={dateInputRef}
+                  type="date"
+                  aria-label="Petsa ng Pagsasanay"
+                  className="h-10"
+                  value={pagsasanayDate}
+                  onChange={(event) =>
+                    updatePagsasanayDate(event.target.value)
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  {dateHeading
+                    ? `Prints as ${dateHeading}`
+                    : 'Pick a date to set the printed heading.'}
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSchedulePicker({ mode: 'add' })}
-                >
-                  <Plus className="size-4" />
-                  Add Worship Schedule
-                </Button>
-              </div>
-            )}
-            {services.map((service, index) => (
-              <div
-                key={service.id}
-                ref={service.id === newServiceId ? newServiceCardRef : undefined}
-                onDragOver={(event) => {
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'move'
-                  if (dragServiceId && dragServiceId !== service.id) {
-                    setOverServiceId(service.id)
-                  }
-                }}
-                onDragLeave={() => {
-                  if (overServiceId === service.id) setOverServiceId(null)
-                }}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  if (dragServiceId && dragServiceId !== service.id) {
-                    moveServiceTo(dragServiceId, index)
-                  }
-                  setDragServiceId(null)
-                  setOverServiceId(null)
-                }}
-                className={cn(
-                  'rounded-lg border border-border/70 bg-background/80 p-3 transition-colors',
-                  overServiceId === service.id &&
-                    'border-primary ring-1 ring-primary',
-                )}
-              >
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Service {index + 1}
-                  </p>
-                  {services.length > 1 && (
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Move up"
-                        aria-label={`Move ${service.heading || `Service ${index + 1}`} up`}
-                        disabled={index === 0}
-                        onClick={() => moveService(service.id, -1)}
-                      >
-                        <ArrowUp className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Move down"
-                        aria-label={`Move ${service.heading || `Service ${index + 1}`} down`}
-                        disabled={index === services.length - 1}
-                        onClick={() => moveService(service.id, 1)}
-                      >
-                        <ArrowDown className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Drag to reorder"
-                        aria-label={`Drag ${service.heading || `Service ${index + 1}`} to reorder`}
-                        draggable
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = 'move'
-                          event.dataTransfer.setData('text/plain', service.id)
-                          setDragServiceId(service.id)
-                        }}
-                        onDragEnd={() => {
-                          setDragServiceId(null)
-                          setOverServiceId(null)
-                        }}
-                      >
-                        <GripVertical className="size-4 cursor-grab text-muted-foreground" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Duplicate service"
-                        aria-label={`Duplicate ${service.heading || `Service ${index + 1}`}`}
-                        onClick={() => duplicateService(service.id)}
-                      >
-                        <Copy className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Remove ${service.heading}`}
-                        onClick={() => removeService(service.id)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-4 border-t border-border/70 pt-3">
-                  {service.dayName ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSchedulePicker({
-                          mode: 'replace',
-                          serviceId: service.id,
-                        })
-                      }
-                      aria-label={`Change the worship schedule of ${service.heading}`}
-                      className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/50"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-foreground">
-                          {service.dayName}
-                        </span>
-                        <span className="block text-lg leading-tight font-semibold text-foreground">
-                          {service.scheduleTime}
-                        </span>
-                        {service.categoryLabel && (
-                          <span className="mt-0.5 block text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                            {service.categoryLabel}
+                {weekDates.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {weekDates.map((date) => {
+                      const weekend =
+                        weekdayOf(date) === 6 || weekdayOf(date) === 0
+                      return (
+                        <span
+                          key={date}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold',
+                            weekend
+                              ? 'border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+                              : 'border-amber-300/60 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300',
+                          )}
+                        >
+                          {WEEKDAY_LABELS[weekdayOf(date)]}
+                          <span className="font-normal opacity-70">
+                            {formatDateKeyNumeric(date)}
                           </span>
-                        )}
-                      </span>
-                      <Pencil className="mt-1 size-4 shrink-0 text-muted-foreground" />
-                    </button>
-                  ) : (
-                    <p className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
-                      {service.heading}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor={`service-organist-${service.id}`}>Organista</Label>
-                    <MemberPicker
-                      id={`service-organist-${service.id}`}
-                      label="Organista"
-                      value={service.organist}
-                      onChange={(name) =>
-                        updateService(service.id, 'organist', name)
-                      }
-                      exclude={[service.reserve]}
-                      placeholder="Select Organista…"
-                    />
+                        </span>
+                      )
+                    })}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`service-reserve-${service.id}`}>Reserba</Label>
-                    <MemberPicker
-                      id={`service-reserve-${service.id}`}
-                      label="Backup Organista"
-                      value={service.reserve}
-                      onChange={(name) =>
-                        updateService(service.id, 'reserve', name)
-                      }
-                      exclude={[service.organist]}
-                      allowNA
-                      placeholder="Select backup Organista…"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
+            </FieldCard>
+          </FieldCardGroup>
 
-          <section className="mt-6 border-t border-border/70 pt-5">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-foreground">Signatories</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                These names appear beneath the Organista schedule in the exported PDF.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="organista-pangulong-mang-aawit">
-                  Pangulong Mang-aawit
-                </Label>
+          <FieldCardGroup className="occasion-field-group">
+            <FieldCard
+              icon={User}
+              label="Pangulong Mang-aawit"
+              tone="sky"
+              className="occasion-field"
+            >
+              <div className="occasion-control">
                 <Input
                   id="organista-pangulong-mang-aawit"
-                  value={pmName || 'No active Pangulong Mang-aawit in Master List'}
+                  className="h-10"
+                  aria-label="Pangulong Mang-aawit"
+                  value={
+                    pmName || 'No active Pangulong Mang-aawit in Master List'
+                  }
                   readOnly
                   aria-readonly="true"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Automatically taken from the active Master List member with this position.
+                  Taken from the active Master List member holding this
+                  position.
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="organista-destinado">Destinado</Label>
+            </FieldCard>
+
+            <FieldCard
+              icon={PenLine}
+              label="Destinado"
+              tone="violet"
+              className="occasion-field"
+            >
+              <div className="occasion-control">
                 <Input
                   id="organista-destinado"
                   list="organista-destinado-options"
+                  aria-label="Destinado"
+                  className="h-10"
                   value={destinadoName}
                   onChange={(event) => setDestinadoName(event.target.value)}
                   placeholder="Select or type a name…"
@@ -1007,20 +821,167 @@ export function OrganistaSuguanMakerPage() {
                   Choose a Master List member or enter a name manually.
                 </p>
               </div>
-            </div>
-          </section>
+            </FieldCard>
+          </FieldCardGroup>
         </div>
 
-        <SchedulePicker
-          open={schedulePicker !== null}
-          confirmLabel={
-            schedulePicker?.mode === 'replace' ? 'Change Schedule' : 'Add Schedule'
-          }
-          takenScheduleIds={takenScheduleIds}
-          currentScheduleId={currentPickedScheduleId}
-          onClose={() => setSchedulePicker(null)}
-          onConfirm={confirmSchedulePick}
-        />
+        <DisclosureSection
+          open={documentSetupOpen}
+          onToggle={() => setDocumentSetupOpen((open) => !open)}
+          icon={FileText}
+          title="Document setup"
+          summary={documentSummary}
+          className="occasion-disclosure"
+        >
+          <div className="space-y-4 p-4">
+            <p className="text-xs text-muted-foreground">
+              Applies to the exported PDF and Word files.
+            </p>
+            <DocumentSetupStep
+              value={docFormat}
+              onChange={setDocFormat}
+              embedded
+              nameOnlyFontSize={false}
+            />
+          </div>
+        </DisclosureSection>
+
+        {/* Phones carry the export row here, under the sheet settings, rather
+            than at the end of a long roster; the sticky bar keeps Save in reach
+            while these stay one screen away. */}
+        <div className="lg:hidden">{exportButtons}</div>
+
+        <section
+          aria-labelledby="organist-services-heading"
+          className="flex flex-col gap-3"
+        >
+          <div className="occasion-roster-head">
+            <div className="min-w-0">
+              <h2 id="organist-services-heading">Schedule rows</h2>
+              <p className="occasion-roster-count">
+                {services.length}{' '}
+                {services.length === 1 ? 'service' : 'services'} ·{' '}
+                {assignedCount} with an Organista
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSchedulePicker({ mode: 'add' })}
+            >
+              <Plus className="size-4" />
+              Add schedule
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Rows come from Worship Service Schedule Settings. Changing a
+            schedule there affects new picks; saved records keep theirs.
+          </p>
+
+          {services.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 px-4 py-8 text-center">
+              <Music4 className="size-6 text-muted-foreground" />
+              <p className="max-w-md text-sm text-muted-foreground">
+                No worship schedules are enabled. Add worship schedules in
+                Settings, or add a service row from the current settings.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSchedulePicker({ mode: 'add' })}
+              >
+                <Plus className="size-4" />
+                Add schedule
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {services.map((service, index) => (
+                <OrganistaServiceCard
+                  key={service.id}
+                  service={service}
+                  index={index}
+                  count={services.length}
+                  dragging={dragServiceId === service.id}
+                  dropTarget={overServiceId === service.id}
+                  cardRef={
+                    service.id === newServiceId ? newServiceCardRef : undefined
+                  }
+                  onOrganistChange={(name) =>
+                    updateService(service.id, 'organist', name)
+                  }
+                  onReserveChange={(name) =>
+                    updateService(service.id, 'reserve', name)
+                  }
+                  onChangeSchedule={() =>
+                    setSchedulePicker({
+                      mode: 'replace',
+                      serviceId: service.id,
+                    })
+                  }
+                  onMove={(direction) => moveService(service.id, direction)}
+                  onDuplicate={() => duplicateService(service.id)}
+                  onRemove={() => removeService(service.id)}
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', service.id)
+                    setDragServiceId(service.id)
+                  }}
+                  onDragEnd={() => {
+                    setDragServiceId(null)
+                    setOverServiceId(null)
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    if (dragServiceId && dragServiceId !== service.id) {
+                      setOverServiceId(service.id)
+                    }
+                  }}
+                  onDragLeave={() => {
+                    if (overServiceId === service.id) setOverServiceId(null)
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    if (dragServiceId && dragServiceId !== service.id) {
+                      moveServiceTo(dragServiceId, index)
+                    }
+                    setDragServiceId(null)
+                    setOverServiceId(null)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <footer className="occasion-actions">
+        <div className="hidden lg:block">{exportButtons}</div>
+        <div className="occasion-save-actions">
+          <Button
+            onClick={() => void saveOrganistSuguan()}
+            loading={savingOrganistSuguan}
+            disabled={previewingOrganistSuguan || exportingOrganistSuguan}
+          >
+            <Save className="size-4" />
+            Save to History
+          </Button>
         </div>
+      </footer>
+
+      <SchedulePicker
+        open={schedulePicker !== null}
+        confirmLabel={
+          schedulePicker?.mode === 'replace' ? 'Change Schedule' : 'Add Schedule'
+        }
+        takenScheduleIds={takenScheduleIds}
+        currentScheduleId={currentPickedScheduleId}
+        onClose={() => setSchedulePicker(null)}
+        onConfirm={confirmSchedulePick}
+      />
+    </div>
   )
 }

@@ -6,6 +6,7 @@ import type {
   ExtraOccasionSuguanConfig,
   Suguan,
   SuguanAssignment,
+  SuguanGroup,
   SuguanScheduleSection,
   VoicePosition,
 } from '@/core/types/suguan'
@@ -217,6 +218,17 @@ export function occasionSuguanInput(
     dutyRoles: preview.dutyRoles,
     destinadoName: preview.destinadoName,
   }
+}
+
+/** The choir names the Extra Occasion makers show in the page subtitle. */
+export const OCCASION_CHOIR_LABELS: Record<SuguanGroup, string> = {
+  babae: "Women's Choir",
+  lalaki: "Men's Choir",
+  mixed: 'Mixed Choir',
+}
+
+export function occasionChoirLabel(group: SuguanGroup): string {
+  return OCCASION_CHOIR_LABELS[group] ?? OCCASION_CHOIR_LABELS.mixed
 }
 
 /** The sheet's own title for this occasion: the plan name, else the service. */

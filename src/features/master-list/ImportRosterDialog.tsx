@@ -323,7 +323,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
         onOpenChange(value)
       }}
     >
-      <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col sm:max-w-4xl">
+      <DialogContent className="flex max-h-[85dvh] max-w-4xl flex-col sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Import {CHOIR_LABELS[choir]} Master List</DialogTitle>
         <DialogDescription>

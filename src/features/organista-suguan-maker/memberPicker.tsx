@@ -30,6 +30,8 @@ interface MemberPickerProps {
   /** Show the pinned N/A option. */
   allowNA?: boolean
   placeholder?: string
+  /** Extra classes for the desktop field, so it can match the controls beside it. */
+  className?: string
 }
 
 /**
@@ -48,6 +50,7 @@ export function MemberPicker({
   exclude,
   allowNA = false,
   placeholder,
+  className,
 }: MemberPickerProps) {
   const isMobile = useIsMobile()
   const allMembers = useMemberStore((state) => state.members)
@@ -103,6 +106,7 @@ export function MemberPicker({
       currentKey={currentKey}
       isNA={isNA}
       allowNA={allowNA}
+      inputClassName={className}
     />
   )
 }
@@ -117,6 +121,7 @@ function DesktopMemberCombobox({
   currentKey,
   isNA,
   allowNA,
+  inputClassName,
 }: {
   id: string
   label: string
@@ -127,6 +132,7 @@ function DesktopMemberCombobox({
   currentKey: string
   isNA: boolean
   allowNA: boolean
+  inputClassName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [contentWidth, setContentWidth] = useState(0)
@@ -178,7 +184,7 @@ function DesktopMemberCombobox({
             aria-expanded={open}
             aria-haspopup="listbox"
             aria-label={label}
-            className="pr-9"
+            className={cn('pr-9', inputClassName)}
           />
           <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-muted-foreground" />
         </div>

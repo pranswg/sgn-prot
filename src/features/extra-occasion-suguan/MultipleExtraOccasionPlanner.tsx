@@ -2,10 +2,6 @@ import { useMemo, useState } from 'react'
 import {
   CalendarPlus,
   Copy,
-  Eye,
-  FileDown,
-  FileSpreadsheet,
-  FileText,
   Pencil,
   Save,
   Trash2,
@@ -26,7 +22,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { PageHeader } from '@/components/PageHeader'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useMemberStore } from '@/store/memberStore'
 import { membersOf } from '@/lib/choirs'
@@ -42,6 +37,8 @@ import {
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { ExtraOccasionOccasionForm } from './ExtraOccasionOccasionForm'
 import { ExtraOccasionConflictDialog } from './ExtraOccasionConflictDialog'
+import { ExtraOccasionActions } from './ExtraOccasionActions'
+import { ExtraOccasionHeader } from './ExtraOccasionHeader'
 import {
   findOccasion,
   plannerOccasionLabel,
@@ -481,47 +478,22 @@ export function MultipleExtraOccasionPlanner() {
     setExtraOccasionMode('choose')
   }
 
+  const occasionCountLabel = `${session.occasions.length} ${
+    session.occasions.length === 1 ? 'occasion' : 'occasions'
+  }`
+
   return (
-    <div className="flex flex-col gap-5 pb-10">
+    <div className="occasion-maker">
       {exportPreview}
-      <PageHeader
+      <ExtraOccasionHeader
         title="Multiple Extra Occasions"
-        description="Plan several occasions together. Members booked on a shared date are flagged before you commit."
+        subtitle={`${session.batchName.trim() || 'Planning session'} · ${occasionCountLabel}`}
+        badge={occasionCountLabel}
       />
 
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <CalendarPlus className="size-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-lg leading-tight font-bold">
-              {selected?.savedId ? selectedLabel : 'Add Occasion'}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {selected?.savedId
-                ? 'Update this occasion and its details.'
-                : 'Create a new occasion and set up its details.'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={requestCancel}>
-            <X className="size-4" />
-            Cancel
-          </Button>
-          <Button
-            onClick={saveSession}
-            loading={saving}
-            disabled={saving || session.occasions.length === 0}
-          >
-            <Save className="size-4" />
-            Save session
-          </Button>
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+      <div className="occasion-planner">
+        <aside className="occasion-planner-rail">
+      <section className="space-y-2.5 rounded-xl border border-border bg-card p-4">
         <div className="space-y-1.5">
           <Label htmlFor="extra-occasion-draft-name">
             Draft name (optional)
@@ -549,26 +521,23 @@ export function MultipleExtraOccasionPlanner() {
         </div>
       </section>
 
-      <section className="space-y-4 rounded-xl border border-border/70 bg-card p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <section className="space-y-3 rounded-xl border border-border bg-card p-3">
+        <div className="flex items-center justify-between gap-2 px-1">
           <h2 className="text-sm font-semibold">Occasions</h2>
           <Button variant="outline" size="sm" onClick={addEmptyOccasion}>
             <CalendarPlus className="size-4" />
-            Add occasion
+            Add
           </Button>
         </div>
 
         {session.occasions.length === 0 ? (
-          <div className="rounded-lg border border-dashed px-4 py-10 text-center">
-            <p className="text-sm font-medium text-muted-foreground">
-              No occasions yet.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Add the first occasion to begin planning.
+          <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+            <p className="text-xs font-medium text-muted-foreground">
+              No occasions yet. Add the first occasion to begin planning.
             </p>
           </div>
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="flex flex-col gap-2">
             {session.occasions.map((occasion) => {
               const active = selected?.localId === occasion.localId
               const conflictCount = allConflicts.get(occasion.localId)?.size ?? 0
@@ -577,30 +546,24 @@ export function MultipleExtraOccasionPlanner() {
                   <button
                     type="button"
                     onClick={() => setSelectedLocalId(occasion.localId)}
-                    className={
-                      'flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ' +
-                      (active
-                        ? 'border-primary bg-accent'
-                        : 'border-border/60 hover:bg-accent')
-                    }
+                    data-active={active}
+                    className="occasion-tile"
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold">
                         {occasion.state.name.trim() || 'Draft'}
                       </span>
-                      {occasion.dirty ? (
-                        <span className="block text-xs text-muted-foreground">
-                          Unsaved changes
-                        </span>
-                      ) : occasion.savedId ? (
-                        <span className="block text-xs text-muted-foreground">
-                          Saved
-                        </span>
-                      ) : null}
+                      <span className="mt-1 block text-[11px] text-muted-foreground">
+                        {occasion.dirty
+                          ? 'Unsaved changes'
+                          : occasion.savedId
+                            ? 'Saved'
+                            : 'Draft'}
+                      </span>
                     </span>
                     {conflictCount > 0 && (
-                      <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                        <TriangleAlert className="size-3.5" />
+                      <span className="flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                        <TriangleAlert className="size-3" />
                         {conflictCount}
                       </span>
                     )}
@@ -611,30 +574,36 @@ export function MultipleExtraOccasionPlanner() {
           </ul>
         )}
       </section>
+        </aside>
 
+        <div className="occasion-planner-editor">
       {selected ? (
         <>
           <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-primary hover:text-primary"
-                onClick={duplicateSelected}
-              >
-                <Copy className="size-4" />
-                Duplicate
-              </Button>
-              <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={removeSelected}
-              >
-                <Trash2 className="size-4" />
-                Remove occasion
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-bold tracking-tight">
+                {selectedLabel}
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary hover:text-primary"
+                  onClick={duplicateSelected}
+                >
+                  <Copy className="size-4" />
+                  Duplicate
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={removeSelected}
+                >
+                  <Trash2 className="size-4" />
+                  Remove occasion
+                </Button>
+              </div>
             </div>
             <ExtraOccasionOccasionForm
               state={selected.state}
@@ -648,57 +617,6 @@ export function MultipleExtraOccasionPlanner() {
             />
           </section>
 
-          {/* One row of short export buttons on a phone; the labelled buttons
-              from sm up, where there is room for them. */}
-          <section className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-            {can('export-documents') && (
-              <>
-                <Button
-                  variant="outline"
-                  className="col-span-3 sm:col-span-1"
-                  onClick={previewSelectedPdf}
-                  loading={exporting === 'preview'}
-                  disabled={exporting !== null}
-                >
-                  <Eye className="size-4" />
-                  Preview PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => requestOccasionExport('pdf', 'PDF')}
-                  loading={exporting === 'pdf'}
-                  disabled={exporting !== null}
-                >
-                  <FileDown className="size-4" />
-                  <span>
-                    <span className="hidden sm:inline">Export </span>PDF
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => requestOccasionExport('xlsx', 'Excel')}
-                  loading={exporting === 'xlsx'}
-                  disabled={exporting !== null}
-                >
-                  <FileSpreadsheet className="size-4" />
-                  <span>
-                    <span className="hidden sm:inline">Export </span>Excel
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => requestOccasionExport('docx', 'Word')}
-                  loading={exporting === 'docx'}
-                  disabled={exporting !== null}
-                >
-                  <FileText className="size-4" />
-                  <span>
-                    <span className="hidden sm:inline">Export </span>Word
-                  </span>
-                </Button>
-              </>
-            )}
-          </section>
         </>
       ) : (
         <section className="rounded-xl border border-dashed px-4 py-10 text-center">
@@ -707,6 +625,28 @@ export function MultipleExtraOccasionPlanner() {
           </p>
         </section>
       )}
+        </div>
+      </div>
+
+      <ExtraOccasionActions
+        canExport={can('export-documents')}
+        exporting={exporting}
+        onPreview={previewSelectedPdf}
+        onExport={requestOccasionExport}
+      >
+        <Button variant="outline" onClick={requestCancel}>
+          <X className="size-4" />
+          Cancel
+        </Button>
+        <Button
+          onClick={saveSession}
+          loading={saving}
+          disabled={saving || session.occasions.length === 0}
+        >
+          <Save className="size-4" />
+          Save session
+        </Button>
+      </ExtraOccasionActions>
 
       <ExtraOccasionConflictDialog
         open={pendingItem !== null}

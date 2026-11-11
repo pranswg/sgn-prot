@@ -789,7 +789,7 @@ export function SuguanHistoryPage() {
         open={!!viewingOrganista}
         onOpenChange={(open) => !open && setViewingOrganista(null)}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Organist Suguan</DialogTitle>
             <DialogDescription>

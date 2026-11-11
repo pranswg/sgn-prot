@@ -442,15 +442,19 @@ export function AttendanceSheetDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5 pr-12">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-border/70 px-6 py-5 pr-12">
           <DialogTitle>Generate Attendance Sheet</DialogTitle>
           <DialogDescription>
             Configure the attendance dates and printable page.
           </DialogDescription>
         </DialogHeader>
-        <div className="overflow-y-auto">{configuration}</div>
-        <DialogFooter className="px-6">
+        {/* The settings scroll; the header and the export buttons stay put, so
+            Generate PDF is reachable on a short window. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {configuration}
+        </div>
+        <DialogFooter className="mx-0 mb-0 shrink-0 px-6">
           {actions}
         </DialogFooter>
       </DialogContent>

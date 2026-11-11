@@ -73,8 +73,11 @@ const GROUPS: { value: SuguanGroup; label: string }[] = [
 
 export function KoroMakerPage() {
   const allMembers = useMemberStore((state) => state.members)
+  const allTrainees = useMemberStore((state) => state.trainees)
   // AWS only: a PNK member must never be arranged into an AWS Koro.
   const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
+  // Include trainees (Nagsasanay) in the available member pool for Koro arrangement.
+  const trainees = useMemo(() => traineesOf(allTrainees, 'aws'), [allTrainees])
   const voices = useSettingsStore((state) => state.allVoices())
   const dutyRoles = useSettingsStore((state) => state.dutyRoles)
   const localeName = useSettingsStore((state) => state.localeName)
@@ -107,7 +110,11 @@ export function KoroMakerPage() {
   const [createNewKoro, creatingKoro] = useAsyncAction(createDocument)
   const document =
     documents.find((entry) => entry.id === activeDocumentId) ?? documents[0]
-  const availableMembers = members.filter((member) => member.isActive)
+  const availableMembers = useMemo(() => {
+    const m = members.filter((member) => member.isActive)
+    const t = trainees.filter((t) => t.status === 'active')
+    return [...m, ...t]
+  }, [members, trainees])
   const placedMemberIds = document
     ? koroPlacedMemberIds(document)
     : new Set<string>()

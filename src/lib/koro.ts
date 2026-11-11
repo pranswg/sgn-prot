@@ -69,6 +69,142 @@ export function createKoroTable(
   }
 }
 
+/**
+ * Table transforms. The maker's grid only ever adds or removes a seat or a
+ * tier, so these keep that arithmetic in one testable place instead of three
+ * nested `map`s in the page.
+ */
+export function addKoroSeat(table: KoroTable, rowId: string): KoroTable {
+  return {
+    ...table,
+    rows: table.rows.map((row) =>
+      row.id === rowId ? { ...row, cells: [...row.cells, createKoroCell()] } : row,
+    ),
+  }
+}
+
+export function removeKoroSeat(table: KoroTable, rowId: string): KoroTable {
+  return {
+    ...table,
+    rows: table.rows.map((row) =>
+      row.id === rowId && row.cells.length > 1
+        ? { ...row, cells: row.cells.slice(0, -1) }
+        : row,
+    ),
+  }
+}
+
+export function removeKoroRow(table: KoroTable, rowId: string): KoroTable {
+  if (table.rows.length <= 1) return table
+  return { ...table, rows: table.rows.filter((row) => row.id !== rowId) }
+}
+
+/** A deep copy under a new id, for repeating a past formation. */
+export function duplicateKoroDocument(document: KoroDocument): KoroDocument {
+  const now = new Date().toISOString()
+  return {
+    ...document,
+    id: nanoid(),
+    title: `${document.title.trim() || 'Special Occasion Koro'} (copy)`,
+    tables: document.tables.map((table) => ({
+      ...table,
+      id: nanoid(),
+      rows: table.rows.map((row) => ({
+        ...row,
+        id: nanoid(),
+        cells: row.cells.map((cell) => ({ ...cell })),
+      })),
+    })),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+export interface KoroSeatRef {
+  rowIndex: number
+  columnIndex: number
+}
+
+/** Exchange two seats' occupants; their voice arrangement travels with them. */
+export function swapKoroSeats(
+  table: KoroTable,
+  left: KoroSeatRef,
+  right: KoroSeatRef,
+): KoroTable {
+  const rows = table.rows.map((row) => ({ ...row, cells: [...row.cells] }))
+  const first = rows[left.rowIndex]?.cells?.[left.columnIndex]
+  const second = rows[right.rowIndex]?.cells?.[right.columnIndex]
+  if (!first || !second) return table
+  rows[left.rowIndex].cells[left.columnIndex] = second
+  rows[right.rowIndex].cells[right.columnIndex] = first
+  return { ...table, rows }
+}
+
+/**
+ * Seat candidates left to right, row by row, into the empty seats only. Anyone
+ * already placed anywhere in the document is skipped, so a fill can never seat
+ * the same singer twice.
+ */
+export function fillKoroTable(
+  table: KoroTable,
+  candidates: Member[],
+  placedIds: Set<string>,
+): KoroTable {
+  const taken = new Set(placedIds)
+  const queue = candidates.filter((member) => !taken.has(member.id))
+  let next = 0
+  const rows = table.rows.map((row) => ({
+    ...row,
+    cells: row.cells.map((cell) => {
+      if (cell.memberId && cell.firstName.trim()) return cell
+      const member = queue[next]
+      if (!member) return cell
+      next += 1
+      taken.add(member.id)
+      return {
+        memberId: member.id,
+        firstName: member.firstName,
+        voicePosition: member.voicePosition,
+      }
+    }),
+  }))
+  return { ...table, rows }
+}
+
+/** Fill every table in the document in reading order, without double-booking. */
+export function fillKoroDocument(
+  document: KoroDocument,
+  candidates: Member[],
+): KoroDocument {
+  const placed = new Set<string>()
+  for (const table of document.tables) {
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        if (cell.memberId && cell.firstName.trim()) placed.add(cell.memberId)
+      }
+    }
+  }
+  const tables = document.tables.map((table) => {
+    const filled = fillKoroTable(table, candidates, placed)
+    for (const row of filled.rows) {
+      for (const cell of row.cells) {
+        if (cell.memberId && cell.firstName.trim()) placed.add(cell.memberId)
+      }
+    }
+    return filled
+  })
+  return { ...document, tables }
+}
+
+/** New tiers match the widest existing tier, so a table keeps its formation. */
+export function addKoroRow(table: KoroTable): KoroTable {
+  const columns = Math.max(
+    KORO_DEFAULT_COLUMNS,
+    ...table.rows.map((row) => row.cells.length),
+  )
+  return { ...table, rows: [...table.rows, createKoroRow(columns)] }
+}
+
 export function createKoroDocument(): KoroDocument {
   const now = new Date().toISOString()
   const date = todayPHT()

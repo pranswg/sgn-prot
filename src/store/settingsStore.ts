@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { ServiceType, VoicePosition, DutyRole } from '@/core/types/suguan'
 import { reorderList } from '@/lib/reorderList'
+import { voiceShortName, withVoiceShortNames } from '@/core/constants/voicePositions'
 import { persistSettingsRow, snapshotSettingsRow } from '@/lib/settingsSync'
 
 export type StoredDutyRole = DutyRole & { custom: boolean }
@@ -153,7 +154,7 @@ export const useSettingsStore = create<SettingsState>()(
               {
                 id: nanoid(),
                 name,
-                shortName: name.trim().slice(0, 2).toUpperCase(),
+                shortName: voiceShortName(name),
                 gender,
                 custom: true,
               },
@@ -168,7 +169,7 @@ export const useSettingsStore = create<SettingsState>()(
                 ? {
                     ...v,
                     ...patch,
-                    shortName: patch.name.trim().slice(0, 2).toUpperCase(),
+                    shortName: voiceShortName(patch.name),
                   }
                 : v,
             ),
@@ -195,7 +196,11 @@ export const useSettingsStore = create<SettingsState>()(
         importData: (serviceTypes, dutyRoles, voices) => {
           const configuredServiceTypes = serviceTypes.filter((item) => item.custom !== false)
           const configuredDutyRoles = dutyRoles.filter((item) => item.custom !== false)
-          const configuredVoices = voices.filter((item) => item.custom !== false)
+          // The abbreviation is derived, never stored by hand, so every
+          // hydration repairs a list saved under the older two-letter rule.
+          const configuredVoices = withVoiceShortNames(
+            voices.filter((item) => item.custom !== false),
+          )
           set((s) => ({
             serviceTypes: configuredServiceTypes,
             dutyRoles: configuredDutyRoles,
@@ -223,7 +228,7 @@ export const useSettingsStore = create<SettingsState>()(
     },
     {
       name: 'choir-settings',
-      version: 6,
+      version: 7,
       migrate: (persisted) => {
         const p = persisted as Partial<SettingsState> | undefined
         const serviceTypes = (p?.serviceTypes ?? []).filter(
@@ -232,8 +237,10 @@ export const useSettingsStore = create<SettingsState>()(
         const dutyRoles = (p?.dutyRoles ?? []).filter(
           (item) => item.custom !== false,
         )
-        const voices = (p?.voices ?? []).filter(
-          (item) => item.custom !== false,
+        // v7 re-derives every abbreviation, so lists saved as "SO"/"AL" come
+        // back as "S1"/"A".
+        const voices = withVoiceShortNames(
+          (p?.voices ?? []).filter((item) => item.custom !== false),
         )
         return {
           ...(p as Partial<SettingsState>),

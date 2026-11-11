@@ -7,9 +7,8 @@ import {
   balanceKoroVoiceSections,
   buildKoroSuguanVoiceSections,
   koroDayLabel,
-  koroVoiceColor,
 } from '@/lib/koro'
-import { formatDateLong, formatDateLongDate } from '@/lib/format'
+import { formatDateLongDate } from '@/lib/format'
 import { exportFileName } from '@/lib/exportNaming'
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -19,145 +18,6 @@ function hexToRgb(hex: string): [number, number, number] {
     Number.parseInt(normalized.slice(2, 4), 16),
     Number.parseInt(normalized.slice(4, 6), 16),
   ]
-}
-
-export async function exportKoroTablePdf(
-  document: KoroDocument,
-  members: Member[],
-  voices: VoicePosition[] = [],
-  filename?: string,
-): Promise<void> {
-  const { jsPDF } = await import('jspdf')
-  const docFormat = {
-    paperSize: 'legal' as const,
-    orientation: 'landscape' as const,
-    margins: 'normal' as const,
-    scaling: 'auto' as const,
-    fontSize: 'normal' as const,
-  }
-  const dimensions = docPaperDimensionsMm(docFormat)
-  const margin = 10
-  const pageBottom = dimensions.height - margin
-  const contentWidth = dimensions.width - margin * 2
-  const fontPreset =
-    FONT_SIZE_PRESETS[document.exportFontSize ?? 'large']
-  const fontScale = fontPreset.bodyFontSize / FONT_SIZE_PRESETS.normal.bodyFontSize
-  const title = document.title.trim() || 'KORO'
-  const date = document.date ? formatDateLong(document.date) : ''
-  const headingTop = 12
-  let y = headingTop
-
-  const pdf = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: [dimensions.width, dimensions.height],
-  })
-
-  const drawHeading = () => {
-    pdf.setFont('helvetica', 'bold')
-    pdf.setFontSize(fontPreset.titleFontSize)
-    pdf.text(title.toUpperCase(), dimensions.width / 2, y, { align: 'center' })
-    y += 6 * fontScale
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(fontPreset.headerFontSize)
-    pdf.text(`${date}${date ? ' · ' : ''}${document.group.toUpperCase()}`, dimensions.width / 2, y, {
-      align: 'center',
-    })
-    y += 8 * fontScale
-  }
-
-  const newPage = () => {
-    pdf.addPage([dimensions.width, dimensions.height], 'landscape')
-    y = headingTop
-    drawHeading()
-  }
-
-  drawHeading()
-
-  for (const table of document.tables) {
-    const columnCount = Math.max(1, ...table.rows.map((row) => row.cells.length))
-    const columnWidth = contentWidth / columnCount
-    const rowHeight = 12 * fontScale
-    const labelHeight = 7 * fontScale
-    let rowIndex = 0
-    let continued = false
-
-    while (rowIndex < table.rows.length) {
-      if (y + labelHeight + rowHeight > pageBottom) newPage()
-      pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(fontPreset.headerFontSize)
-      pdf.text(`${table.title || 'KORO'}${continued ? ' (CONTINUED)' : ''}`, margin, y + 5)
-      y += labelHeight
-
-      const rowsOnPage = Math.max(
-        1,
-        Math.floor((pageBottom - y) / rowHeight),
-      )
-      const rowEnd = Math.min(table.rows.length, rowIndex + rowsOnPage)
-      for (; rowIndex < rowEnd; rowIndex++) {
-        const row = table.rows[rowIndex]
-        for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
-          const cell = row.cells[columnIndex]
-          const x = margin + columnIndex * columnWidth
-          const member = cell?.memberId
-            ? members.find((entry) => entry.id === cell.memberId)
-            : undefined
-          const fill = cell?.memberId
-            ? koroVoiceColor(
-                cell.voicePosition || member?.voicePosition || '',
-                voices,
-              )
-            : '#ffffff'
-          pdf.setFillColor(...hexToRgb(fill))
-          pdf.setDrawColor(0, 0, 0)
-          pdf.rect(x, y, columnWidth, rowHeight, 'FD')
-          const name = member
-            ? member.lastName.trim()
-              ? `${member.lastName.trim()}, ${member.firstName.trim()}`.trim()
-              : member.firstName.trim()
-            : cell?.firstName.trim() ?? ''
-          if (name) {
-            pdf.setFont('helvetica', 'normal')
-            pdf.setFontSize(
-              Math.min(
-                fontPreset.bodyFontSize,
-                Math.max(6, columnWidth * 0.38 * fontScale),
-              ),
-            )
-            pdf.text(name, x + columnWidth / 2, y + rowHeight / 2, {
-              align: 'center',
-              baseline: 'middle',
-              maxWidth: Math.max(1, columnWidth - 2),
-            })
-          }
-        }
-        y += rowHeight
-      }
-      y += 5
-      continued = true
-    }
-  }
-
-  const legendItemWidth = 33
-  const legendHeight = 7 * fontScale
-  if (y + legendHeight + 5 > pageBottom) newPage()
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(fontPreset.smallFontSize)
-  pdf.text('VOICE ARRANGEMENT', margin, y + 5)
-  y += 7
-
-  voices.forEach((voice, index) => {
-    const x = margin + index * legendItemWidth
-    pdf.setFillColor(...hexToRgb(koroVoiceColor(voice.id, voices)))
-    pdf.setDrawColor(0, 0, 0)
-    pdf.rect(x, y, 6, 5, 'FD')
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(fontPreset.smallFontSize)
-    pdf.text(voice.shortName, x + 8, y + 4)
-  })
-
-  const safeTitle = title.replace(/[<>:"/\\|?*]+/g, '').trim() || 'Koro'
-  pdf.save(filename ?? exportFileName(`${safeTitle} - Koro`, 'pdf'))
 }
 
 export async function exportKoroAsSuguanPdf(

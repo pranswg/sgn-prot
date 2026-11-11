@@ -3,13 +3,14 @@ import { persist } from 'zustand/middleware'
 import type { KoroDocument } from '@/core/types/koro'
 import { deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
-import { createKoroDocument } from '@/lib/koro'
+import { createKoroDocument, duplicateKoroDocument } from '@/lib/koro'
 
 interface KoroState {
   documents: KoroDocument[]
   activeDocumentId: string
   importData: (documents: KoroDocument[]) => void
   createDocument: () => string
+  duplicateDocument: (id: string) => string
   selectDocument: (id: string) => void
   updateDocument: (id: string, patch: Partial<Omit<KoroDocument, 'id'>>) => void
   deleteDocument: (id: string) => void
@@ -52,6 +53,23 @@ export const useKoroStore = create<KoroState>()(
             failure: 'Could not save the new document. It was not added.',
           })
           return document.id
+        },
+
+        duplicateDocument: (id) => {
+          const previous = get().documents
+          const source = previous.find((document) => document.id === id)
+          if (!source) return ''
+          const copy = duplicateKoroDocument(source)
+          set((state) => ({
+            documents: [...state.documents, copy],
+            activeDocumentId: copy.id,
+          }))
+          persistWrite({
+            write: upsertRow('koro_documents', copy.id, copy),
+            rollback: () => set({ documents: previous }),
+            failure: 'Could not duplicate the Koro. It was not added.',
+          })
+          return copy.id
         },
 
         // Selecting a document is pure UI state; it is never written server-side.

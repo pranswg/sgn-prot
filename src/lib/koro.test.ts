@@ -4,12 +4,20 @@ import type { KoroDocument } from '@/core/types/koro'
 import type { Member } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import {
+  addKoroRow,
+  addKoroSeat,
   assignmentsFromKoro,
   balanceKoroVoiceSections,
   buildKoroSuguanVoiceSections,
   createKoroDocument,
+  duplicateKoroDocument,
+  fillKoroDocument,
+  fillKoroTable,
   koroDayLabel,
+  removeKoroRow,
+  removeKoroSeat,
   suguanFromKoro,
+  swapKoroSeats,
 } from './koro.ts'
 
 const member: Member = {
@@ -120,6 +128,78 @@ test('direct Suguan groups names by effective voice and balances sections across
   const [left, right] = balanceKoroVoiceSections(sections)
   assert.equal(left.length, 1)
   assert.equal(right.length, 1)
+})
+
+test('seat and tier transforms keep the grid rectangular and non-empty', () => {
+  const document = createKoroDocument()
+  const table = document.tables[0]
+  const front = table.rows[2]
+
+  const widened = addKoroSeat(table, front.id)
+  assert.equal(widened.rows[2].cells.length, 15)
+  assert.equal(widened.rows[0].cells.length, 10)
+
+  const narrowed = removeKoroSeat(widened, front.id)
+  assert.equal(narrowed.rows[2].cells.length, 14)
+
+  const added = addKoroRow(table)
+  assert.equal(added.rows.length, 4)
+  assert.equal(added.rows[3].cells.length, 15)
+
+  const removed = removeKoroRow(table, table.rows[1].id)
+  assert.equal(removed.rows.length, 2)
+  const single = { ...removed, rows: removed.rows.slice(0, 1) }
+  assert.equal(removeKoroRow(single, single.rows[0].id).rows.length, 1)
+})
+
+test('duplicating a Koro re-keys its tables and rows under a copy title', () => {
+  const document = createKoroDocument()
+  const copy = duplicateKoroDocument(document)
+  assert.notEqual(copy.id, document.id)
+  assert.equal(copy.title, 'Special Occasion Koro (copy)')
+  assert.equal(copy.tables.length, document.tables.length)
+  assert.notEqual(copy.tables[0].id, document.tables[0].id)
+  assert.notEqual(copy.tables[0].rows[0].id, document.tables[0].rows[0].id)
+  assert.equal(copy.tables[0].rows[0].cells.length, 10)
+})
+
+test('swapping two seats exchanges their occupants', () => {
+  const document = createKoroDocument()
+  const table = document.tables[0]
+  table.rows[0].cells[0] = { memberId: 'kim', firstName: 'Kim', voicePosition: 'alto' }
+  table.rows[2].cells[13] = { memberId: 'ana', firstName: 'Ana', voicePosition: 'bass' }
+  const swapped = swapKoroSeats(
+    table,
+    { rowIndex: 0, columnIndex: 0 },
+    { rowIndex: 2, columnIndex: 13 },
+  )
+  assert.equal(swapped.rows[0].cells[0].memberId, 'ana')
+  assert.equal(swapped.rows[2].cells[13].memberId, 'kim')
+  // The original table is untouched.
+  assert.equal(table.rows[0].cells[0].memberId, 'kim')
+})
+
+test('filling a table seats candidates in empty seats only, skipping placed members', () => {
+  const document = createKoroDocument()
+  const table = document.tables[0]
+  table.rows[0].cells[0] = { memberId: 'kim', firstName: 'Kim', voicePosition: 'alto' }
+  const candidates: Member[] = [
+    { ...member, id: 'kim', firstName: 'Kim' },
+    { ...member, id: 'ana', firstName: 'Ana' },
+  ]
+  const filled = fillKoroTable(table, candidates, new Set(['kim']))
+  assert.equal(filled.rows[0].cells[0].memberId, 'kim')
+  assert.equal(filled.rows[0].cells[1].memberId, 'ana')
+  assert.equal(filled.rows[0].cells[2].memberId, null)
+})
+
+test('filling a document stops once the candidates run out', () => {
+  const document = createKoroDocument()
+  const candidates: Member[] = [{ ...member, id: 'ana', firstName: 'Ana' }]
+  const filled = fillKoroDocument(document, candidates)
+  const seated = filled.tables[0].rows[0].cells.filter((cell) => cell.memberId)
+  assert.equal(seated.length, 1)
+  assert.equal(seated[0].memberId, 'ana')
 })
 
 test('direct Suguan conversion carries date, choir group, tables, and full names', () => {

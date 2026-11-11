@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Eye, FileDown, Grid2X2, Minus, Plus, Rows3, Trash2 } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  Check,
+  Eye,
+  FileDown,
+  Grid2X2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -11,18 +19,50 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useKoroStore } from '@/store/koroStore'
 import { exportFileName } from '@/lib/exportNaming'
 import {
-  KORO_DEFAULT_COLUMNS,
   KORO_DEFAULT_ROW_COLUMNS,
-  createKoroCell,
-  createKoroRow,
+  addKoroRow,
+  addKoroSeat,
   createKoroTable,
+  fillKoroDocument,
+  fillKoroTable,
   koroDayLabel,
   koroVoiceColor,
+  removeKoroRow,
+  removeKoroSeat,
+  swapKoroSeats,
 } from '@/lib/koro'
+import {
+  koroDocumentCounts,
+  koroPlacedMemberIds,
+  koroPlacedSeatLabels,
+  koroRosterByVoice,
+} from '@/lib/koroLayout'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { KoroTableCard } from './KoroTableCard'
+import { KoroLibraryCard } from './KoroLibraryCard'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { memberIsOrganist } from '@/core/constants/memberMembership'
 import type { KoroCell, KoroTable } from '@/core/types/koro'
 import type { DocFontSize, SuguanGroup } from '@/core/types/suguan'
-import { exportKoroAsSuguanPdf, exportKoroTablePdf } from './koroPdfExport'
+import { exportKoroAsSuguanPdf } from './koroPdfExport'
+import { exportKoroTablePdf } from './koroTablePdfExport'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 
 const GROUPS: { value: SuguanGroup; label: string }[] = [
@@ -36,27 +76,69 @@ export function KoroMakerPage() {
   // AWS only: a PNK member must never be arranged into an AWS Koro.
   const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const voices = useSettingsStore((state) => state.allVoices())
+  const dutyRoles = useSettingsStore((state) => state.dutyRoles)
+  const localeName = useSettingsStore((state) => state.localeName)
   const documents = useKoroStore((state) => state.documents)
   const activeDocumentId = useKoroStore((state) => state.activeDocumentId)
   const createDocument = useKoroStore((state) => state.createDocument)
+  const duplicateDocument = useKoroStore((state) => state.duplicateDocument)
   const selectDocument = useKoroStore((state) => state.selectDocument)
   const updateDocument = useKoroStore((state) => state.updateDocument)
   const deleteDocument = useKoroStore((state) => state.deleteDocument)
-  const [exporting, setExporting] = useState<'table' | 'suguan' | 'preview' | null>(null)
+  const [exporting, setExporting] = useState<
+    'table' | 'suguan' | 'preview' | 'table-preview' | null
+  >(null)
   const [memberQuery, setMemberQuery] = useState('')
   const [memberVoice, setMemberVoice] = useState('')
   const [memberGender, setMemberGender] = useState<'all' | 'male' | 'female'>('all')
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [hidePlaced, setHidePlaced] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
+    new Set(),
+  )
+  const [swapMode, setSwapMode] = useState(false)
+  const [swapSource, setSwapSource] = useState<{
+    tableId: string
+    rowIndex: number
+    columnIndex: number
+  } | null>(null)
   const { exportPreview, requestExport } = useExportPreview()
   const [createNewKoro, creatingKoro] = useAsyncAction(createDocument)
   const document =
     documents.find((entry) => entry.id === activeDocumentId) ?? documents[0]
   const availableMembers = members.filter((member) => member.isActive)
+  const placedMemberIds = document
+    ? koroPlacedMemberIds(document)
+    : new Set<string>()
+  const counts = document ? koroDocumentCounts(document) : null
+  const placedSeats = document
+    ? koroPlacedSeatLabels(document)
+    : new Map<string, string>()
+  const rosterByVoice = koroRosterByVoice(availableMembers)
+  const unplacedCount = availableMembers.length - placedMemberIds.size
+  const selectedCount = selectedMemberIds.size
+  // The organist field only offers organist-family members, the same rule the
+  // Organist Suguan pickers use.
+  const organistCandidates = availableMembers.filter((member) =>
+    memberIsOrganist(member, dutyRoles),
+  )
+  const toggleSelectedMember = (memberId: string) =>
+    setSelectedMemberIds((current) => {
+      const next = new Set(current)
+      if (next.has(memberId)) next.delete(memberId)
+      else next.add(memberId)
+      return next
+    })
 
   const panelMembers = useMemo(() => {
     const q = memberQuery.trim().toLowerCase()
+    const voiceOrder = new Map(
+      voices.map((voice, index) => [voice.id, index] as const),
+    )
     return availableMembers
       .filter((member) => {
+        if (hidePlaced && placedMemberIds.has(member.id)) return false
         if (memberGender !== 'all' && member.gender !== memberGender)
           return false
         if (memberVoice && member.voicePosition !== memberVoice) return false
@@ -64,12 +146,27 @@ export function KoroMakerPage() {
           return false
         return true
       })
-      .sort(
-        (a, b) =>
+      .sort((a, b) => {
+        // Voice groups first, in the configured order, then surname — so the
+        // panel reads sopranos through bass instead of a flat alphabetical list.
+        const left = voiceOrder.get(a.voicePosition) ?? Number.MAX_SAFE_INTEGER
+        const right =
+          voiceOrder.get(b.voicePosition) ?? Number.MAX_SAFE_INTEGER
+        return (
+          left - right ||
           a.lastName.localeCompare(b.lastName) ||
-          a.firstName.localeCompare(b.firstName),
-      )
-  }, [availableMembers, memberQuery, memberVoice, memberGender])
+          a.firstName.localeCompare(b.firstName)
+        )
+      })
+  }, [
+    availableMembers,
+    memberQuery,
+    memberVoice,
+    memberGender,
+    hidePlaced,
+    placedMemberIds,
+    voices,
+  ])
 
   if (!document) return null
 
@@ -77,6 +174,17 @@ export function KoroMakerPage() {
     updateDocument(document.id, {
       tables: document.tables.map((table) =>
         table.id === tableId ? { ...table, ...patch } : table,
+      ),
+    })
+  }
+
+  const updateTable = (
+    tableId: string,
+    transform: (table: KoroTable) => KoroTable,
+  ) => {
+    updateDocument(document.id, {
+      tables: document.tables.map((table) =>
+        table.id === tableId ? transform(table) : table,
       ),
     })
   }
@@ -102,12 +210,64 @@ export function KoroMakerPage() {
     patchTable(table.id, { rows })
   }
 
-  const placedMemberIds = new Set(
-    document.tables
-      .flatMap((table) => table.rows.flatMap((row) => row.cells))
-      .map((cell) => cell.memberId)
-      .filter((id): id is string => Boolean(id)),
-  )
+  const fillTableByVoice = (tableId: string) => {
+    const voiceOrder = new Map(voices.map((voice, index) => [voice.id, index]))
+    const candidates = availableMembers
+      .filter((member) => !placedMemberIds.has(member.id))
+      .sort(
+        (left, right) =>
+          (voiceOrder.get(left.voicePosition) ?? Number.MAX_SAFE_INTEGER) -
+            (voiceOrder.get(right.voicePosition) ?? Number.MAX_SAFE_INTEGER) ||
+          left.lastName.localeCompare(right.lastName) ||
+          left.firstName.localeCompare(right.firstName),
+      )
+    updateTable(tableId, (table) =>
+      fillKoroTable(table, candidates, placedMemberIds),
+    )
+  }
+
+  const placeSelectedMembers = () => {
+    const chosen = availableMembers.filter((member) =>
+      selectedMemberIds.has(member.id),
+    )
+    if (chosen.length === 0) return
+    const before = koroDocumentCounts(document).filled
+    const next = fillKoroDocument(document, chosen)
+    const seatedNow = koroDocumentCounts(next).filled - before
+    updateDocument(document.id, { tables: next.tables })
+    setSelectedMemberIds(new Set())
+    toast.success(
+      seatedNow > 0
+        ? `Seated ${seatedNow} member${seatedNow === 1 ? '' : 's'}.`
+        : 'There were no empty seats to fill.',
+    )
+  }
+
+  const handleSwapSeat = (
+    tableId: string,
+    rowIndex: number,
+    columnIndex: number,
+  ) => {
+    if (!swapSource) {
+      setSwapSource({ tableId, rowIndex, columnIndex })
+      return
+    }
+    const sameSeat =
+      swapSource.rowIndex === rowIndex &&
+      swapSource.columnIndex === columnIndex
+    if (swapSource.tableId !== tableId || sameSeat) {
+      setSwapSource(null)
+      return
+    }
+    updateTable(tableId, (table) =>
+      swapKoroSeats(
+        table,
+        { rowIndex: swapSource.rowIndex, columnIndex: swapSource.columnIndex },
+        { rowIndex, columnIndex },
+      ),
+    )
+    setSwapSource(null)
+  }
 
   const dropMember = (
     table: KoroTable,
@@ -153,7 +313,9 @@ export function KoroMakerPage() {
     setExporting(kind)
     try {
       if (kind === 'table') {
-        await exportKoroTablePdf(document, members, voices, fileName)
+        await exportKoroTablePdf(document, members, voices, fileName, {
+          localeName,
+        })
         toast.success('Koro table exported as PDF.')
       } else {
         await exportKoroAsSuguanPdf(document, members, voices, 'download', fileName)
@@ -167,62 +329,64 @@ export function KoroMakerPage() {
     }
   }
 
+  const handlePreviewTable = async () => {
+    if (!document.title.trim() || !document.date) {
+      toast.error('Enter an occasion title and date before previewing.')
+      return
+    }
+    const previewWindow = openPdfPreviewWindow()
+    if (!previewWindow) {
+      toast.error('Allow pop-ups to preview the table.')
+      return
+    }
+
+    setExporting('table-preview')
+    try {
+      const pdfBlob = await exportKoroTablePdf(
+        document,
+        members,
+        voices,
+        undefined,
+        { localeName, output: 'preview' },
+      )
+      if (!(pdfBlob instanceof Blob)) {
+        throw new Error('Koro table preview did not produce a PDF.')
+      }
+      showPdfPreview(previewWindow, pdfBlob, 'Koro Table')
+    } catch (error) {
+      previewWindow.close()
+      console.error(error)
+      toast.error('Could not create the Koro table preview.')
+    } finally {
+      setExporting(null)
+    }
+  }
+
   const handlePreviewSuguan = async () => {
     if (!document.title.trim() || !document.date) {
       toast.error('Enter an occasion title and date before previewing.')
       return
     }
-    const previewWindow = window.open('', '_blank')
+    const previewWindow = openPdfPreviewWindow()
     if (!previewWindow) {
       toast.error('Allow pop-ups to preview the Suguan PDF.')
       return
     }
 
     setExporting('preview')
-    let pdfUrl: string | null = null
-    let viewerUrl: string | null = null
     try {
-      const pdfBlob = await exportKoroAsSuguanPdf(document, members, voices, 'preview')
+      const pdfBlob = await exportKoroAsSuguanPdf(
+        document,
+        members,
+        voices,
+        'preview',
+      )
       if (!(pdfBlob instanceof Blob)) {
         throw new Error('Suguan PDF preview did not produce a PDF.')
       }
-
-      pdfUrl = URL.createObjectURL(pdfBlob)
-      const previewTitle = document.title.replace(/[&<>"]/g, (character) => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-      })[character] ?? character)
-      const viewerHtml = `<!doctype html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>${previewTitle} - Suguan Preview</title>
-            <style>
-              html, body, iframe { width: 100%; height: 100%; margin: 0; border: 0; }
-              body { overflow: hidden; }
-            </style>
-          </head>
-          <body>
-            <iframe title="Suguan PDF preview" src="${pdfUrl}"></iframe>
-            <script>
-              window.addEventListener('pagehide', () => {
-                URL.revokeObjectURL(${JSON.stringify(pdfUrl)})
-                URL.revokeObjectURL(location.href)
-              }, { once: true })
-            </script>
-          </body>
-        </html>`
-      viewerUrl = URL.createObjectURL(
-        new Blob([viewerHtml], { type: 'text/html' }),
-      )
-      previewWindow.location.replace(viewerUrl)
+      showPdfPreview(previewWindow, pdfBlob, 'Koro Suguan')
     } catch (error) {
       previewWindow.close()
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl)
-      if (viewerUrl) URL.revokeObjectURL(viewerUrl)
       console.error(error)
       toast.error('Could not create the Suguan PDF preview.')
     } finally {
@@ -241,6 +405,15 @@ export function KoroMakerPage() {
             <Button variant="outline" onClick={createNewKoro} loading={creatingKoro}>
               <Plus className="size-4" />
               New Koro
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handlePreviewTable()}
+              loading={exporting === 'table-preview'}
+              disabled={exporting !== null}
+            >
+              <Eye className="size-4" />
+              Preview Table
             </Button>
             <Button
               variant="outline"
@@ -272,38 +445,14 @@ export function KoroMakerPage() {
         }
       />
 
+      <KoroLibraryCard
+        documents={documents}
+        activeId={document.id}
+        onSelect={selectDocument}
+        onDuplicate={duplicateDocument}
+      />
+
       <section className="grid gap-4 rounded-xl border border-border/70 bg-card p-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="grid gap-2">
-          <Label htmlFor="koro-document">Saved Koro</Label>
-          <select
-            id="koro-document"
-            value={document.id}
-            onChange={(event) => selectDocument(event.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {documents.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.title || 'Untitled Koro'} — {entry.date || 'No date'}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={documents.length <= 1}
-            onClick={() => {
-              if (window.confirm(`Delete "${document.title || 'Untitled Koro'}"?`)) {
-                deleteDocument(document.id)
-              }
-            }}
-          >
-            <Trash2 className="size-4" />
-            Delete Koro
-          </Button>
-        </div>
         <div className="grid gap-2">
           <Label htmlFor="koro-title">Occasion title</Label>
           <Input
@@ -343,302 +492,202 @@ export function KoroMakerPage() {
         </div>
         <div className="grid gap-2">
           <Label htmlFor="koro-group">Choir group</Label>
-          <select
-            id="koro-group"
+          <Select
             value={document.group}
-            onChange={(event) =>
-              updateDocument(document.id, {
-                group: event.target.value as SuguanGroup,
-              })
+            onValueChange={(value) =>
+              updateDocument(document.id, { group: value as SuguanGroup })
             }
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
           >
-            {GROUPS.map((group) => (
-              <option key={group.value} value={group.value}>
-                {group.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="koro-group" className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {GROUPS.map((group) => (
+                <SelectItem key={group.value} value={group.value}>
+                  {group.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="koro-export-font-size">Export font size</Label>
-          <select
-            id="koro-export-font-size"
+          <Select
             value={document.exportFontSize ?? 'large'}
-            onChange={(event) =>
+            onValueChange={(value) =>
               updateDocument(document.id, {
-                exportFontSize: event.target.value as Exclude<DocFontSize, 'custom'>,
+                exportFontSize: value as Exclude<DocFontSize, 'custom'>,
               })
             }
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
           >
-            <option value="small">Small — fit more names</option>
-            <option value="normal">Normal</option>
-            <option value="large">Large — easier to read</option>
-          </select>
+            <SelectTrigger id="koro-export-font-size" className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="small">Small — fit more names</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="large">Large — easier to read</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="koro-organist">Organist</Label>
-          <select
-            id="koro-organist"
-            value={document.organistMemberId ?? ''}
-            onChange={(event) =>
+          <Select
+            value={document.organistMemberId || 'none'}
+            onValueChange={(value) =>
               updateDocument(document.id, {
-                organistMemberId: event.target.value,
+                organistMemberId: value === 'none' ? '' : value,
               })
             }
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
           >
-            <option value="">Select organist</option>
-            {availableMembers.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.firstName}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="koro-organist" className="h-9 w-full">
+              <SelectValue placeholder="Select organist" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No organist</SelectItem>
+              {organistCandidates.map((member) => (
+                <SelectItem key={member.id} value={member.id}>
+                  {member.lastName.trim()
+                    ? `${member.lastName.trim()}, ${member.firstName.trim()}`
+                    : member.firstName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 sm:col-span-2 xl:col-span-4">
+          <p className="max-w-prose text-xs text-muted-foreground">
+            {documents.length <= 1
+              ? 'A Koro is always kept open, so the last one cannot be deleted.'
+              : 'Deleting a Koro removes it from this browser and the shared database.'}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="text-destructive"
+            disabled={documents.length <= 1}
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-4" />
+            Delete Koro
+          </Button>
         </div>
       </section>
 
+      {counts && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border/70 bg-card px-4 py-3 text-xs">
+          <span className="font-medium tabular-nums">
+            {counts.filled} of {counts.seats} seats filled
+          </span>
+          <span className="text-muted-foreground tabular-nums">
+            {counts.empty} empty
+          </span>
+          {counts.duplicatedMemberIds.length > 0 && (
+            <span className="font-medium text-amber-700 dark:text-amber-400">
+              {counts.duplicatedMemberIds.length} seated twice
+            </span>
+          )}
+          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+            {voices.map((voice) => (
+              <span key={voice.id} className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="size-3 rounded-sm border border-black/20"
+                  style={{ backgroundColor: koroVoiceColor(voice.id, voices) }}
+                />
+                {voice.shortName}
+                <span className="text-muted-foreground tabular-nums">
+                  {counts.byVoice[voice.id] ?? 0}/{rosterByVoice[voice.id] ?? 0}
+                </span>
+              </span>
+            ))}
+          </span>
+          <Button
+            type="button"
+            variant={swapMode ? 'secondary' : 'outline'}
+            size="sm"
+            aria-pressed={swapMode}
+            onClick={() => {
+              setSwapMode((current) => !current)
+              setSwapSource(null)
+            }}
+          >
+            <ArrowLeftRight className="size-4" />
+            {swapMode ? 'Exit swap' : 'Swap seats'}
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-5">
-          {document.tables.map((table, tableIndex) => {
-            const columnCount = table.rows[0]?.cells.length ?? 0
-        return (
-          <section
-            key={table.id}
-            className="rounded-xl border border-border/70 bg-card p-4"
-          >
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-              <div className="grid min-w-48 flex-1 gap-2">
-                <Label htmlFor={`koro-table-title-${table.id}`}>
-                  Table {tableIndex + 1} title
-                </Label>
-                <Input
-                  id={`koro-table-title-${table.id}`}
-                  value={table.title}
-                  onChange={(event) =>
-                    patchTable(table.id, { title: event.target.value })
-                  }
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    patchTable(table.id, {
-                      rows: [
-                        ...table.rows,
-                        createKoroRow(columnCount || KORO_DEFAULT_COLUMNS),
-                      ],
-                    })
-                  }
-                >
-                  <Rows3 className="size-4" />
-                  Add row
-                </Button>
-                {document.tables.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove table ${tableIndex + 1}`}
-                    title="Remove table"
-                    onClick={() =>
-                      updateDocument(document.id, {
-                        tables: document.tables.filter(
-                          (entry) => entry.id !== table.id,
-                        ),
-                      })
+          {/* KORO_GRID */}
+          {document.tables.map((table, tableIndex) => (
+            <KoroTableCard
+              key={table.id}
+              table={table}
+              tableIndex={tableIndex}
+              canRemoveTable={document.tables.length > 1}
+              members={availableMembers}
+              voices={voices}
+              placedSeats={placedSeats}
+              dropTarget={dropTarget}
+              swapMode={swapMode}
+              swapSource={
+                swapSource?.tableId === table.id
+                  ? {
+                      rowIndex: swapSource.rowIndex,
+                      columnIndex: swapSource.columnIndex,
                     }
-                  >
-                    <Trash2 className="size-4 text-destructive" />
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full border-collapse">
-                <tbody>
-                  {table.rows.map((row, rowIndex) => (
-                    <tr key={row.id}>
-                      {row.cells.map((cell, columnIndex) => {
-                        const assignedMember = availableMembers.find(
-                          (member) => member.id === cell.memberId,
-                        )
-                        const colorVoice =
-                          cell.voicePosition || assignedMember?.voicePosition || ''
-                        return (
-                          <td
-                            key={`${table.id}:${rowIndex}:${columnIndex}`}
-                            onDragOver={(event) => {
-                              event.preventDefault()
-                              setDropTarget(`${table.id}:${rowIndex}:${columnIndex}`)
-                            }}
-                            onDragLeave={() =>
-                              setDropTarget((current) =>
-                                current === `${table.id}:${rowIndex}:${columnIndex}`
-                                  ? null
-                                  : current,
-                              )
-                            }
-                            onDrop={(event) => {
-                              event.preventDefault()
-                              setDropTarget(null)
-                              dropMember(
-                                table,
-                                rowIndex,
-                                columnIndex,
-                                event.dataTransfer.getData('text/plain'),
-                              )
-                            }}
-                            className={`min-w-32 border p-1.5 align-top transition-colors ${
-                              dropTarget === `${table.id}:${rowIndex}:${columnIndex}`
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border'
-                            }`}
-                            style={{
-                              backgroundColor: cell.memberId
-                                ? koroVoiceColor(colorVoice, voices)
-                                : '#ffffff',
-                            }}
-                          >
-                            <select
-                              aria-label={`Row ${rowIndex + 1}, seat ${columnIndex + 1} member`}
-                              value={cell.memberId ?? ''}
-                              onChange={(event) => {
-                                const member = availableMembers.find(
-                                  (entry) => entry.id === event.target.value,
-                                )
-                                patchCell(table, rowIndex, columnIndex, {
-                                  memberId: member?.id ?? null,
-                                  firstName: member?.firstName ?? '',
-                                  voicePosition: member?.voicePosition ?? '',
-                                })
-                              }}
-                              className="h-9 w-full rounded-md border border-black/20 bg-white/90 px-2 text-sm text-black"
-                            >
-                              <option value="">Choose member</option>
-                              {availableMembers.map((member) => (
-                                <option key={member.id} value={member.id}>
-                                  {member.lastName.trim()
-                                    ? `${member.lastName.trim()}, ${member.firstName.trim()}`
-                                    : member.firstName}
-                                </option>
-                              ))}
-                            </select>
-                            {cell.memberId && (
-                              <select
-                                aria-label={`Row ${rowIndex + 1}, seat ${columnIndex + 1} voice arrangement`}
-                                value={cell.voicePosition}
-                                onChange={(event) =>
-                                  patchCell(table, rowIndex, columnIndex, {
-                                    voicePosition: event.target.value,
-                                  })
-                                }
-                                className="mt-1 h-7 w-full rounded-md border border-black/20 bg-white/90 px-1 text-xs text-black"
-                              >
-                                <option value="">Member voice</option>
-                                {voices.map((voice) => (
-                                  <option key={voice.id} value={voice.id}>
-                                    {voice.shortName}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                          </td>
-                        )
-                      })}
-                      <td className="w-10 border border-border p-1 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <button
-                            type="button"
-                            aria-label={`Add seat to row ${rowIndex + 1}`}
-                            title="Add seat"
-                            onClick={() =>
-                              patchTable(table.id, {
-                                rows: table.rows.map((entry) =>
-                                  entry.id === row.id
-                                    ? {
-                                        ...entry,
-                                        cells: [...entry.cells, createKoroCell()],
-                                      }
-                                    : entry,
-                                ),
-                              })
-                            }
-                            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            <Plus className="size-4" />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Remove seat from row ${rowIndex + 1}`}
-                            title="Remove seat"
-                            disabled={row.cells.length <= 1}
-                            onClick={() =>
-                              patchTable(table.id, {
-                                rows: table.rows.map((entry) =>
-                                  entry.id === row.id
-                                    ? {
-                                        ...entry,
-                                        cells: entry.cells.slice(0, -1),
-                                      }
-                                    : entry,
-                                ),
-                              })
-                            }
-                            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-40"
-                          >
-                            <Minus className="size-4" />
-                          </button>
-                          {table.rows.length > 1 && (
-                            <button
-                              type="button"
-                              aria-label={`Remove row ${rowIndex + 1}`}
-                              title="Remove row"
-                              onClick={() =>
-                                patchTable(table.id, {
-                                  rows: table.rows.filter(
-                                    (entry) => entry.id !== row.id,
-                                  ),
-                                })
-                              }
-                              className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )
-      })}
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
+                  : null
+              }
+              onSwapSeat={(rowIndex, columnIndex) =>
+                handleSwapSeat(table.id, rowIndex, columnIndex)
+              }
+              onFillByVoice={() => fillTableByVoice(table.id)}
+              onTitleChange={(title) => patchTable(table.id, { title })}
+              onAddRow={() => updateTable(table.id, addKoroRow)}
+              onAddSeat={(rowId) =>
+                updateTable(table.id, (current) => addKoroSeat(current, rowId))
+              }
+              onRemoveSeat={(rowId) =>
+                updateTable(table.id, (current) =>
+                  removeKoroSeat(current, rowId),
+                )
+              }
+              onRemoveRow={(rowId) =>
+                updateTable(table.id, (current) =>
+                  removeKoroRow(current, rowId),
+                )
+              }
+              onRemoveTable={() =>
+                updateDocument(document.id, {
+                  tables: document.tables.filter(
+                    (entry) => entry.id !== table.id,
+                  ),
+                })
+              }
+              onSeatSelect={(rowIndex, columnIndex, member) =>
+                patchCell(table, rowIndex, columnIndex, {
+                  memberId: member?.id ?? null,
+                  firstName: member?.firstName ?? '',
+                  voicePosition: member?.voicePosition ?? '',
+                })
+              }
+              onDropSeat={(rowIndex, columnIndex, memberId) =>
+                dropMember(table, rowIndex, columnIndex, memberId)
+              }
+              onDragSeatChange={setDropTarget}
+            />
+          ))}
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" onClick={addTable}>
           <Grid2X2 className="size-4" />
           Add another table
         </Button>
-        <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-border/70 bg-card px-3 py-2">
-          {voices.map((voice) => (
-            <span key={voice.id} className="inline-flex items-center gap-1.5 text-xs">
-              <span
-                aria-hidden
-                className="size-3 rounded-sm border border-black/20"
-                style={{ backgroundColor: koroVoiceColor(voice.id, voices) }}
-              />
-              {voice.shortName} — {voice.name}
-            </span>
-          ))}
-        </div>
+        <p className="max-w-prose text-xs text-muted-foreground">
+          Voice colours print with the chart, so the seating stays readable on
+          paper.
+        </p>
       </div>
 
       {availableMembers.length === 0 && (
@@ -689,23 +738,50 @@ export function KoroMakerPage() {
                 ))}
               </select>
             </div>
+            <Button
+              type="button"
+              variant={hidePlaced ? 'secondary' : 'outline'}
+              size="sm"
+              aria-pressed={hidePlaced}
+              onClick={() => setHidePlaced((current) => !current)}
+              className="justify-between"
+            >
+              Unplaced only
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {unplacedCount}
+              </span>
+            </Button>
           </div>
           <div className="mt-3 max-h-[60vh] space-y-1 overflow-y-auto pr-1">
             {panelMembers.map((member) => {
               const placed = placedMemberIds.has(member.id)
+              const voiceShort =
+                voices.find((voice) => voice.id === member.voicePosition)
+                  ?.shortName ?? ''
               return (
                 <div
                   key={member.id}
                   draggable
                   title={`${member.firstName} ${member.lastName}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedMemberIds.has(member.id)}
                   onDragStart={(event) => {
                     event.dataTransfer.setData('text/plain', member.id)
                     event.dataTransfer.effectAllowed = 'copy'
                   }}
+                  onClick={() => toggleSelectedMember(member.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    toggleSelectedMember(member.id)
+                  }}
                   className={`flex cursor-grab items-center gap-2 rounded-md border px-2 py-1.5 text-sm transition-opacity ${
-                    placed
-                      ? 'border-border/60 bg-muted/60 opacity-50'
-                      : 'border-border bg-background hover:border-primary/50 hover:bg-muted/50 active:cursor-grabbing'
+                    selectedMemberIds.has(member.id)
+                      ? 'border-primary bg-primary/10'
+                      : placed
+                        ? 'border-border/60 bg-muted/60 opacity-50'
+                        : 'border-border bg-background hover:border-primary/50 hover:bg-muted/50 active:cursor-grabbing'
                   }`}
                 >
                   <span
@@ -718,6 +794,14 @@ export function KoroMakerPage() {
                   <span className="min-w-0 flex-1 truncate">
                     {member.firstName} {member.lastName}
                   </span>
+                  {voiceShort && (
+                    <span className="shrink-0 text-[0.7rem] text-muted-foreground">
+                      {voiceShort}
+                    </span>
+                  )}
+                  {selectedMemberIds.has(member.id) && (
+                    <Check className="size-4 shrink-0 text-primary" />
+                  )}
                   {placed && (
                     <span className="shrink-0 text-xs text-muted-foreground">
                       placed
@@ -732,11 +816,46 @@ export function KoroMakerPage() {
               </p>
             )}
           </div>
+          <Button
+            type="button"
+            className="mt-2 w-full"
+            disabled={selectedCount === 0}
+            onClick={placeSelectedMembers}
+          >
+            Place selected members
+            {selectedCount > 0 && (
+              <span className="tabular-nums">({selectedCount})</span>
+            )}
+          </Button>
           <p className="mt-3 text-xs text-muted-foreground">
-            Drag a name onto a seat to place it. Already-placed seats are dimmed.
+            Tap a name to select it, then place it into the empty seats. You can
+            also drag a name onto a seat. Already-placed seats are dimmed.
           </p>
         </aside>
       </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this Koro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`“${document.title || 'Untitled Koro'}” and its seating arrangement will be removed. This cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white"
+              onClick={() => {
+                setDeleteOpen(false)
+                deleteDocument(document.id)
+              }}
+            >
+              Delete Koro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

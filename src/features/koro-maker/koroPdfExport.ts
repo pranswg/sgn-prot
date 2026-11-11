@@ -1,5 +1,5 @@
 import type { KoroDocument } from '@/core/types/koro'
-import type { Member } from '@/core/types/member'
+import type { KoroRosterEntry } from '@/lib/koro'
 import type { VoicePosition } from '@/core/types/suguan'
 import { FONT_SIZE_PRESETS, docPaperDimensionsMm } from '@/lib/suguanUtils'
 import { fitFontSizePt, suguanSheetAccent } from '@/lib/suguanExport'
@@ -22,7 +22,7 @@ function hexToRgb(hex: string): [number, number, number] {
 
 export async function exportKoroAsSuguanPdf(
   document: KoroDocument,
-  members: Member[],
+  members: KoroRosterEntry[],
   voices: VoicePosition[] = [],
   output: 'download' | 'preview' = 'download',
   filename?: string,

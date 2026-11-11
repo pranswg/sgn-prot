@@ -1,21 +1,21 @@
 import { useRef, useState } from 'react'
-import { Minus, Plus, Rows3, Trash2, Wand2 } from 'lucide-react'
+import { Minus, Plus, GripVertical, Rows3, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { koroVoiceColor } from '@/lib/koro'
-import { koroSeatKey, koroTableCounts } from '@/lib/koroLayout'
+import type { KoroRosterEntry } from '@/lib/koro'
+import { koroIsSeated, koroSeatKey, koroTableCounts } from '@/lib/koroLayout'
 import { KoroSeatPicker } from './KoroSeatPicker'
 import type { KoroRow, KoroTable } from '@/core/types/koro'
-import type { Member } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 
 interface KoroTableCardProps {
   table: KoroTable
   tableIndex: number
   canRemoveTable: boolean
-  members: Member[]
+  members: KoroRosterEntry[]
   voices: VoicePosition[]
   /** Where each seated member sits, so a repeat can be confirmed first. */
   placedSeats: Map<string, string>
@@ -30,10 +30,27 @@ interface KoroTableCardProps {
   onRemoveSeat: (rowId: string) => void
   onRemoveTable: () => void
   onFillByVoice: () => void
-  onSeatSelect: (rowIndex: number, columnIndex: number, member: Member | null) => void
+  onSeatSelect: (
+    rowIndex: number,
+    columnIndex: number,
+    member: KoroRosterEntry | null,
+  ) => void
   onSwapSeat: (rowIndex: number, columnIndex: number) => void
   onDropSeat: (rowIndex: number, columnIndex: number, memberId: string) => void
+  /** Drag one occupied seat onto another to exchange their occupants. */
+  onSwapSeats: (
+    fromRowIndex: number,
+    fromColumnIndex: number,
+    toRowIndex: number,
+    toColumnIndex: number,
+  ) => void
   onDragSeatChange: (seatKey: string | null) => void
+  /** This table is the one currently being dragged to a new position. */
+  dragging: boolean
+  /** More than one table exists, so the grip handle is meaningful. */
+  canReorder: boolean
+  onTableDragStart: () => void
+  onTableDragEnd: () => void
 }
 
 const KEY_DELTAS: Record<string, [number, number]> = {
@@ -41,6 +58,25 @@ const KEY_DELTAS: Record<string, [number, number]> = {
   ArrowRight: [0, 1],
   ArrowUp: [-1, 0],
   ArrowDown: [1, 0],
+}
+
+/** A seated member being dragged carries this instead of a bare member id. */
+const SEAT_DRAG_PREFIX = 'koro-seat:'
+
+function seatDragPayload(rowIndex: number, columnIndex: number): string {
+  return `${SEAT_DRAG_PREFIX}${rowIndex}:${columnIndex}`
+}
+
+function parseSeatDragPayload(
+  value: string,
+): { rowIndex: number; columnIndex: number } | null {
+  if (!value.startsWith(SEAT_DRAG_PREFIX)) return null
+  const [row, column] = value
+    .slice(SEAT_DRAG_PREFIX.length)
+    .split(':')
+    .map(Number)
+  if (Number.isNaN(row) || Number.isNaN(column)) return null
+  return { rowIndex: row, columnIndex: column }
 }
 
 /**
@@ -72,7 +108,12 @@ export function KoroTableCard({
   onSeatSelect,
   onSwapSeat,
   onDropSeat,
+  onSwapSeats,
   onDragSeatChange,
+  dragging,
+  canReorder,
+  onTableDragStart,
+  onTableDragEnd,
 }: KoroTableCardProps) {
   const isMobile = useIsMobile()
   const counts = koroTableCounts(table)
@@ -160,15 +201,34 @@ export function KoroTableCard({
             const isSwapSource =
               swapSource?.rowIndex === rowIndex &&
               swapSource?.columnIndex === columnIndex
+            const occupied = koroIsSeated(cell)
+            // An occupied seat can be picked up and dropped on another seat to
+            // exchange them, except in tap-swap mode where the tap owns the
+            // gesture.
+            const draggableSeat = occupied && !swapMode
             return (
               <div
                 key={`${row.id}:${columnIndex}`}
                 data-seat={`${rowIndex}:${columnIndex}`}
-                className="min-w-[4.75rem] flex-1"
+                className={`min-w-[4.75rem] flex-1${
+                  draggableSeat ? ' cursor-grab active:cursor-grabbing' : ''
+                }`}
+                draggable={draggableSeat}
                 onKeyDown={(event) =>
                   handleSeatKeyDown(event, rowIndex, columnIndex)
                 }
+                onDragStart={(event) => {
+                  if (!draggableSeat) return
+                  event.dataTransfer.setData(
+                    'text/plain',
+                    seatDragPayload(rowIndex, columnIndex),
+                  )
+                  event.dataTransfer.effectAllowed = 'move'
+                }}
                 onDragOver={(event) => {
+                  // Only a member/seat drag (text/plain) can target a seat; a
+                  // table-reorder drag passes through to the card wrapper.
+                  if (!event.dataTransfer.types.includes('text/plain')) return
                   event.preventDefault()
                   onDragSeatChange(seatKey)
                 }}
@@ -178,11 +238,18 @@ export function KoroTableCard({
                 onDrop={(event) => {
                   event.preventDefault()
                   onDragSeatChange(null)
-                  onDropSeat(
-                    rowIndex,
-                    columnIndex,
-                    event.dataTransfer.getData('text/plain'),
-                  )
+                  const payload = event.dataTransfer.getData('text/plain')
+                  const source = parseSeatDragPayload(payload)
+                  if (source) {
+                    onSwapSeats(
+                      source.rowIndex,
+                      source.columnIndex,
+                      rowIndex,
+                      columnIndex,
+                    )
+                    return
+                  }
+                  onDropSeat(rowIndex, columnIndex, payload)
                 }}
                 style={
                   active
@@ -195,6 +262,7 @@ export function KoroTableCard({
                 <KoroSeatPicker
                   cell={cell}
                   seatLabel={`${tier.label} seat ${columnIndex + 1}`}
+                  seatNumber={columnIndex + 1}
                   members={members}
                   placedSeats={placedSeats}
                   voices={voices}
@@ -214,17 +282,43 @@ export function KoroTableCard({
   }
 
   return (
-    <section className="rounded-xl border border-border/70 bg-card p-4">
+    <section
+      className={`rounded-xl border border-border/70 bg-card p-4 transition-opacity${
+        dragging ? ' opacity-50' : ''
+      }`}
+    >
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <div className="grid min-w-48 flex-1 gap-2">
-          <Label htmlFor={`koro-table-title-${table.id}`}>
-            Table {tableIndex + 1} title
-          </Label>
-          <Input
-            id={`koro-table-title-${table.id}`}
-            value={table.title}
-            onChange={(event) => onTitleChange(event.target.value)}
-          />
+        <div className="flex min-w-48 flex-1 items-end gap-1">
+          {canReorder && (
+            <button
+              type="button"
+              draggable
+              aria-label={`Drag table ${tableIndex + 1} to reorder`}
+              title="Drag to reorder tables"
+              onDragStart={(event) => {
+                event.dataTransfer.setData(
+                  'application/x-koro-table',
+                  table.id,
+                )
+                event.dataTransfer.effectAllowed = 'move'
+                onTableDragStart()
+              }}
+              onDragEnd={onTableDragEnd}
+              className="grid size-9 shrink-0 cursor-grab place-items-center self-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+            >
+              <GripVertical className="size-4" />
+            </button>
+          )}
+          <div className="grid flex-1 gap-2">
+            <Label htmlFor={`koro-table-title-${table.id}`}>
+              Table {tableIndex + 1} title
+            </Label>
+            <Input
+              id={`koro-table-title-${table.id}`}
+              value={table.title}
+              onChange={(event) => onTitleChange(event.target.value)}
+            />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-xs text-muted-foreground tabular-nums">

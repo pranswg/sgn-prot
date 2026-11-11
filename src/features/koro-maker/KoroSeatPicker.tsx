@@ -16,20 +16,22 @@ import {
 } from '@/components/ui/sheet'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { koroVoiceColor } from '@/lib/koro'
+import type { KoroRosterEntry } from '@/lib/koro'
 import { koroIsSeated } from '@/lib/koroLayout'
 import type { KoroCell } from '@/core/types/koro'
-import type { Member } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 
 interface KoroSeatPickerProps {
   cell: KoroCell
   /** Seat position, e.g. "Row 3 seat 4". Used for labels and the sheet title. */
   seatLabel: string
-  members: Member[]
+  /** Seat number within its row, printed in the tile corner. */
+  seatNumber?: number
+  members: KoroRosterEntry[]
   /** Where each already-seated member sits, e.g. "Table 2 · Row 1 seat 3". */
   placedSeats: Map<string, string>
   voices: VoicePosition[]
-  onSelect: (member: Member | null) => void
+  onSelect: (member: KoroRosterEntry | null) => void
   /**
    * When set the seat no longer opens the picker; it reports the tap instead.
    * The table card uses this for swap mode, where a seat tap picks an endpoint.
@@ -47,6 +49,7 @@ interface KoroSeatPickerProps {
 export function KoroSeatPicker({
   cell,
   seatLabel,
+  seatNumber,
   members,
   placedSeats,
   voices,
@@ -85,13 +88,24 @@ export function KoroSeatPicker({
       title={fullName ? `${seatLabel} · ${fullName}` : `${seatLabel} · choose member`}
       onClick={openSeat}
       className={cn(
-        'flex h-16 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-center transition-colors',
+        'relative flex h-16 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-center transition-colors',
         seated
           ? 'border-black/20 text-black'
           : 'border-dashed border-foreground/25 bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground',
       )}
       style={seated ? { backgroundColor: koroVoiceColor(voice, voices) } : undefined}
     >
+      {seatNumber !== undefined && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute top-0.5 left-1 text-[0.6rem] leading-none font-semibold tabular-nums',
+            seated ? 'text-black/50' : 'text-muted-foreground',
+          )}
+        >
+          {seatNumber}
+        </span>
+      )}
       {seated ? (
         <>
           <span className="w-full truncate text-[0.72rem] leading-tight font-medium">
@@ -206,15 +220,15 @@ function SeatOptions({
   voiceLabel,
   onPick,
 }: {
-  members: Member[]
+  members: KoroRosterEntry[]
   placedSeats: Map<string, string>
   currentId: string | null
   voices: VoicePosition[]
   voiceLabel: (voicePosition: string) => string
-  onPick: (member: Member | null) => void
+  onPick: (member: KoroRosterEntry | null) => void
 }) {
   const [query, setQuery] = useState('')
-  const [pending, setPending] = useState<Member | null>(null)
+  const [pending, setPending] = useState<KoroRosterEntry | null>(null)
 
   const options = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -231,7 +245,7 @@ function SeatOptions({
       )
   }, [members, query])
 
-  const pick = (member: Member) => {
+  const pick = (member: KoroRosterEntry) => {
     const elsewhere = placedSeats.get(member.id)
     if (elsewhere && member.id !== currentId) {
       setPending(member)

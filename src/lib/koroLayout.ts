@@ -137,7 +137,7 @@ export function koroPlacedSeatLabels(
 
 /** How many active members each configured voice position can supply. */
 export function koroRosterByVoice(
-  members: { voicePosition: string }[],
+  members: readonly { voicePosition: string }[],
 ): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const member of members) {

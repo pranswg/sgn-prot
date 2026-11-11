@@ -141,13 +141,27 @@ export function swapKoroSeats(
 }
 
 /**
+ * One seat-able person in the Koro pool. Both `Member` and `Trainee` satisfy
+ * this shape, and every Koro surface — grid, pickers, exports — reads only
+ * these fields, so trainees can be arranged next to members without faking
+ * membership data they do not have.
+ */
+export type KoroRosterEntry = Pick<
+  Member,
+  'id' | 'firstName' | 'lastName' | 'gender' | 'voicePosition'
+> & {
+  /** Present only on real members; the organist check reads it when it exists. */
+  membershipType?: Member['membershipType']
+}
+
+/**
  * Seat candidates left to right, row by row, into the empty seats only. Anyone
  * already placed anywhere in the document is skipped, so a fill can never seat
  * the same singer twice.
  */
 export function fillKoroTable(
   table: KoroTable,
-  candidates: Member[],
+  candidates: readonly KoroRosterEntry[],
   placedIds: Set<string>,
 ): KoroTable {
   const taken = new Set(placedIds)
@@ -174,7 +188,7 @@ export function fillKoroTable(
 /** Fill every table in the document in reading order, without double-booking. */
 export function fillKoroDocument(
   document: KoroDocument,
-  candidates: Member[],
+  candidates: readonly KoroRosterEntry[],
 ): KoroDocument {
   const placed = new Set<string>()
   for (const table of document.tables) {
@@ -223,7 +237,10 @@ export function createKoroDocument(): KoroDocument {
   }
 }
 
-function koroMemberName(member: Member | undefined, cell: KoroCell): string {
+function koroMemberName(
+  member: KoroRosterEntry | undefined,
+  cell: KoroCell,
+): string {
   if (member) {
     const last = member.lastName.trim()
     const first = member.firstName.trim()
@@ -235,7 +252,7 @@ function koroMemberName(member: Member | undefined, cell: KoroCell): string {
 
 export function assignmentsFromKoro(
   document: KoroDocument,
-  members: Member[],
+  members: readonly KoroRosterEntry[],
 ): SuguanAssignment[] {
   const memberById = new Map(members.map((member) => [member.id, member]))
   const assignedAt = new Date().toISOString()
@@ -263,7 +280,7 @@ export interface KoroSuguanVoiceSection {
 
 export function buildKoroSuguanVoiceSections(
   document: KoroDocument,
-  members: Member[],
+  members: readonly KoroRosterEntry[],
   voices: VoicePosition[],
 ): KoroSuguanVoiceSection[] {
   const memberById = new Map(members.map((member) => [member.id, member]))
@@ -329,7 +346,7 @@ export function balanceKoroVoiceSections(
 
 export function suguanFromKoro(
   document: KoroDocument,
-  members: Member[],
+  members: readonly KoroRosterEntry[],
 ): Suguan {
   const membersById = new Map(members.map((member) => [member.id, member]))
   const now = new Date().toISOString()

@@ -1,5 +1,5 @@
 import type { KoroDocument, KoroRow, KoroTable } from '@/core/types/koro'
-import type { Member } from '@/core/types/member'
+import type { KoroRosterEntry } from '@/lib/koro'
 import type { VoicePosition } from '@/core/types/suguan'
 import { FONT_SIZE_PRESETS, docPaperDimensionsMm } from '@/lib/suguanUtils'
 import { fitFontSizePt } from '@/lib/suguanExport'
@@ -38,7 +38,7 @@ export interface KoroTableExportOptions {
  */
 export async function exportKoroTablePdf(
   document: KoroDocument,
-  members: Member[],
+  members: KoroRosterEntry[],
   voices: VoicePosition[] = [],
   filename?: string,
   options: KoroTableExportOptions = {},

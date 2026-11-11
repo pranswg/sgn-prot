@@ -10,11 +10,12 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/PageHeader'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useMemberStore } from '@/store/memberStore'
-import { membersOf } from '@/lib/choirs'
+import { membersOf, traineesOf } from '@/lib/choirs'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useKoroStore } from '@/store/koroStore'
 import { exportFileName } from '@/lib/exportNaming'
@@ -31,6 +32,7 @@ import {
   removeKoroSeat,
   swapKoroSeats,
 } from '@/lib/koro'
+import type { KoroRosterEntry } from '@/lib/koro'
 import {
   koroDocumentCounts,
   koroPlacedMemberIds,
@@ -58,6 +60,7 @@ import {
 } from '@/components/ui/select'
 import { memberIsOrganist } from '@/core/constants/memberMembership'
 import type { KoroCell, KoroTable } from '@/core/types/koro'
+import type { Member } from '@/core/types/member'
 import type { DocFontSize, SuguanGroup } from '@/core/types/suguan'
 import { exportKoroAsSuguanPdf } from './koroPdfExport'
 import { exportKoroTablePdf } from './koroTablePdfExport'
@@ -95,6 +98,9 @@ export function KoroMakerPage() {
   const [memberVoice, setMemberVoice] = useState('')
   const [memberGender, setMemberGender] = useState<'all' | 'male' | 'female'>('all')
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  // Table-reorder drag: which table is lifted, and which is under the pointer.
+  const [dragTableId, setDragTableId] = useState<string | null>(null)
+  const [dropTableId, setDropTableId] = useState<string | null>(null)
   const [hidePlaced, setHidePlaced] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(
@@ -110,9 +116,9 @@ export function KoroMakerPage() {
   const [createNewKoro, creatingKoro] = useAsyncAction(createDocument)
   const document =
     documents.find((entry) => entry.id === activeDocumentId) ?? documents[0]
-  const availableMembers = useMemo(() => {
+  const availableMembers = useMemo<KoroRosterEntry[]>(() => {
     const m = members.filter((member) => member.isActive)
-    const t = trainees.filter((t) => t.status === 'active')
+    const t = trainees.filter((trainee) => trainee.status === 'active')
     return [...m, ...t]
   }, [members, trainees])
   const placedMemberIds = document
@@ -126,10 +132,11 @@ export function KoroMakerPage() {
   const unplacedCount = availableMembers.length - placedMemberIds.size
   const selectedCount = selectedMemberIds.size
   // The organist field only offers organist-family members, the same rule the
-  // Organist Suguan pickers use.
-  const organistCandidates = availableMembers.filter((member) =>
-    memberIsOrganist(member, dutyRoles),
-  )
+  // Organist Suguan pickers use. Trainees carry no membership, so they never
+  // qualify here.
+  const organistCandidates = availableMembers.filter(
+    (entry): entry is Member => entry.membershipType !== undefined,
+  ).filter((member) => memberIsOrganist(member, dutyRoles))
   const toggleSelectedMember = (memberId: string) =>
     setSelectedMemberIds((current) => {
       const next = new Set(current)
@@ -289,6 +296,38 @@ export function KoroMakerPage() {
       firstName: member.firstName,
       voicePosition: member.voicePosition,
     })
+  }
+
+  // Dragging one occupied seat onto another exchanges the two, the same
+  // primitive the tap-swap flow uses, but resolved in a single drop.
+  const swapDroppedSeats = (
+    tableId: string,
+    fromRowIndex: number,
+    fromColumnIndex: number,
+    toRowIndex: number,
+    toColumnIndex: number,
+  ) => {
+    updateTable(tableId, (table) =>
+      swapKoroSeats(
+        table,
+        { rowIndex: fromRowIndex, columnIndex: fromColumnIndex },
+        { rowIndex: toRowIndex, columnIndex: toColumnIndex },
+      ),
+    )
+  }
+
+  // Dropping one table onto another moves it to that table's position, keeping
+  // every other table in place. Order is the print order, so this re-sequences
+  // the whole chart.
+  const reorderTables = (fromId: string, toId: string) => {
+    if (fromId === toId) return
+    const from = document.tables.findIndex((entry) => entry.id === fromId)
+    const to = document.tables.findIndex((entry) => entry.id === toId)
+    if (from < 0 || to < 0) return
+    const next = [...document.tables]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    updateDocument(document.id, { tables: next })
   }
 
   const addTable = () => {
@@ -563,11 +602,6 @@ export function KoroMakerPage() {
           </Select>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 sm:col-span-2 xl:col-span-4">
-          <p className="max-w-prose text-xs text-muted-foreground">
-            {documents.length <= 1
-              ? 'A Koro is always kept open, so the last one cannot be deleted.'
-              : 'Deleting a Koro removes it from this browser and the shared database.'}
-          </p>
           <Button
             type="button"
             variant="outline"
@@ -628,73 +662,118 @@ export function KoroMakerPage() {
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-5">
           {/* KORO_GRID */}
-          {document.tables.map((table, tableIndex) => (
-            <KoroTableCard
-              key={table.id}
-              table={table}
-              tableIndex={tableIndex}
-              canRemoveTable={document.tables.length > 1}
-              members={availableMembers}
-              voices={voices}
-              placedSeats={placedSeats}
-              dropTarget={dropTarget}
-              swapMode={swapMode}
-              swapSource={
-                swapSource?.tableId === table.id
-                  ? {
-                      rowIndex: swapSource.rowIndex,
-                      columnIndex: swapSource.columnIndex,
-                    }
-                  : null
-              }
-              onSwapSeat={(rowIndex, columnIndex) =>
-                handleSwapSeat(table.id, rowIndex, columnIndex)
-              }
-              onFillByVoice={() => fillTableByVoice(table.id)}
-              onTitleChange={(title) => patchTable(table.id, { title })}
-              onAddRow={() => updateTable(table.id, addKoroRow)}
-              onAddSeat={(rowId) =>
-                updateTable(table.id, (current) => addKoroSeat(current, rowId))
-              }
-              onRemoveSeat={(rowId) =>
-                updateTable(table.id, (current) =>
-                  removeKoroSeat(current, rowId),
-                )
-              }
-              onRemoveRow={(rowId) =>
-                updateTable(table.id, (current) =>
-                  removeKoroRow(current, rowId),
-                )
-              }
-              onRemoveTable={() =>
-                updateDocument(document.id, {
-                  tables: document.tables.filter(
-                    (entry) => entry.id !== table.id,
-                  ),
-                })
-              }
-              onSeatSelect={(rowIndex, columnIndex, member) =>
-                patchCell(table, rowIndex, columnIndex, {
-                  memberId: member?.id ?? null,
-                  firstName: member?.firstName ?? '',
-                  voicePosition: member?.voicePosition ?? '',
-                })
-              }
-              onDropSeat={(rowIndex, columnIndex, memberId) =>
-                dropMember(table, rowIndex, columnIndex, memberId)
-              }
-              onDragSeatChange={setDropTarget}
-            />
-          ))}
+          {document.tables.map((table, tableIndex) => {
+            const isDropTarget =
+              dragTableId !== null &&
+              dropTableId === table.id &&
+              dragTableId !== table.id
+            return (
+              <div
+                key={table.id}
+                onDragOver={(event) => {
+                  if (
+                    !event.dataTransfer.types.includes('application/x-koro-table')
+                  )
+                    return
+                  event.preventDefault()
+                  setDropTableId(table.id)
+                }}
+                onDragLeave={() =>
+                  setDropTableId((current) =>
+                    current === table.id ? null : current,
+                  )
+                }
+                onDrop={(event) => {
+                  const from = event.dataTransfer.getData(
+                    'application/x-koro-table',
+                  )
+                  if (!from) return
+                  event.preventDefault()
+                  reorderTables(from, table.id)
+                  setDragTableId(null)
+                  setDropTableId(null)
+                }}
+                className={cn(
+                  'rounded-xl',
+                  isDropTarget &&
+                    'outline-2 outline-offset-4 outline-dashed outline-primary',
+                )}
+              >
+                <KoroTableCard
+                  table={table}
+                  tableIndex={tableIndex}
+                  canRemoveTable={document.tables.length > 1}
+                  members={availableMembers}
+                  voices={voices}
+                  placedSeats={placedSeats}
+                  dropTarget={dropTarget}
+                  swapMode={swapMode}
+                  dragging={dragTableId === table.id}
+                  canReorder={document.tables.length > 1}
+                  onTableDragStart={() => setDragTableId(table.id)}
+                  onTableDragEnd={() => {
+                    setDragTableId(null)
+                    setDropTableId(null)
+                  }}
+                  swapSource={
+                    swapSource?.tableId === table.id
+                      ? {
+                          rowIndex: swapSource.rowIndex,
+                          columnIndex: swapSource.columnIndex,
+                        }
+                      : null
+                  }
+                  onSwapSeat={(rowIndex, columnIndex) =>
+                    handleSwapSeat(table.id, rowIndex, columnIndex)
+                  }
+                  onFillByVoice={() => fillTableByVoice(table.id)}
+                  onTitleChange={(title) => patchTable(table.id, { title })}
+                  onAddRow={() => updateTable(table.id, addKoroRow)}
+                  onAddSeat={(rowId) =>
+                    updateTable(table.id, (current) =>
+                      addKoroSeat(current, rowId),
+                    )
+                  }
+                  onRemoveSeat={(rowId) =>
+                    updateTable(table.id, (current) =>
+                      removeKoroSeat(current, rowId),
+                    )
+                  }
+                  onRemoveRow={(rowId) =>
+                    updateTable(table.id, (current) =>
+                      removeKoroRow(current, rowId),
+                    )
+                  }
+                  onRemoveTable={() =>
+                    updateDocument(document.id, {
+                      tables: document.tables.filter(
+                        (entry) => entry.id !== table.id,
+                      ),
+                    })
+                  }
+                  onSeatSelect={(rowIndex, columnIndex, member) =>
+                    patchCell(table, rowIndex, columnIndex, {
+                      memberId: member?.id ?? null,
+                      firstName: member?.firstName ?? '',
+                      voicePosition: member?.voicePosition ?? '',
+                    })
+                  }
+                  onDropSeat={(rowIndex, columnIndex, memberId) =>
+                    dropMember(table, rowIndex, columnIndex, memberId)
+                  }
+                  onSwapSeats={(fromRow, fromCol, toRow, toCol) =>
+                    swapDroppedSeats(table.id, fromRow, fromCol, toRow, toCol)
+                  }
+                  onDragSeatChange={setDropTarget}
+                />
+              </div>
+            )
+          })}
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" onClick={addTable}>
           <Grid2X2 className="size-4" />
           Add another table
         </Button>
-        <p className="max-w-prose text-xs text-muted-foreground">
-          Voice colours print with the chart, so the seating stays readable on
-          paper.
-        </p>
       </div>
 
       {availableMembers.length === 0 && (
@@ -834,10 +913,6 @@ export function KoroMakerPage() {
               <span className="tabular-nums">({selectedCount})</span>
             )}
           </Button>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Tap a name to select it, then place it into the empty seats. You can
-            also drag a name onto a seat. Already-placed seats are dimmed.
-          </p>
         </aside>
       </div>
 

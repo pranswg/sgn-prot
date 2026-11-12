@@ -3,7 +3,7 @@ import type { KoroRosterEntry } from '@/lib/koro'
 import type { VoicePosition } from '@/core/types/suguan'
 import { FONT_SIZE_PRESETS, docPaperDimensionsMm } from '@/lib/suguanUtils'
 import { fitFontSizePt } from '@/lib/suguanExport'
-import { formatKoroTime, koroDayLabel, koroVoiceColor } from '@/lib/koro'
+import { formatKoroTime, koroDayLabel, koroVoiceColor, KORO_ORGAN_COLOR } from '@/lib/koro'
 import { formatDateLongDate } from '@/lib/format'
 import { exportFileName } from '@/lib/exportNaming'
 
@@ -30,8 +30,9 @@ export interface KoroTableExportOptions {
  * table carries its own date, day and time), an organist line, then a bordered
  * grid where **each row divides the full width by its own seat count** — a
  * 14-seat front row therefore prints as narrower cells than a 10-seat row,
- * exactly like the sample. Seats print the singer's given name only; a long
- * name wraps and the row grows rather than the font collapsing.
+ * exactly like the sample. Seats print the singer's given name only; a reserved
+ * seat (e.g. "Organ") prints its label instead, and a long name wraps and the
+ * row grows rather than the font collapsing.
  * A vertical colour key closes the sheet.
  *
  * The sample's highlight fills behind the weekday and the table name are
@@ -160,19 +161,23 @@ export async function exportKoroTablePdf(
 
     const prepared = row.cells.map((cell) => {
       const member = cell.memberId ? memberById.get(cell.memberId) : undefined
-      // The seating chart prints given names only, never surnames.
+      // The seating chart prints given names only, never surnames. A reserved
+      // seat (e.g. "Organ") prints its label in place of a name.
       const first = (member?.firstName ?? cell.firstName).trim()
-      if (!first) return { cell, lines: [] as string[], size: 0 }
+      const label = (cell.label ?? '').trim()
+      const text = first || label
+      if (!text) return { cell, lines: [] as string[], size: 0, isLabel: false }
+      const isLabel = !first
       let size = Math.max(
         5.5,
         Math.min(fontPreset.bodyFontSize, maxTextWidth * 0.62),
       )
       let lines: string[] = []
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        pdf.setFont('times', 'normal')
+        pdf.setFont('times', isLabel ? 'bolditalic' : 'normal')
         pdf.setFontSize(size)
         lines = pdf
-          .splitTextToSize(first, maxTextWidth)
+          .splitTextToSize(text, maxTextWidth)
           .filter((line: string) => line.trim().length > 0)
         if (lines.length <= 2 || size <= 5.5) break
         size -= 0.5
@@ -181,6 +186,7 @@ export async function exportKoroTablePdf(
         cell,
         lines: lines.slice(0, 2),
         size,
+        isLabel,
       }
     })
 
@@ -197,17 +203,21 @@ export async function exportKoroTablePdf(
     if (y + rowHeight > pageBottom) newPage(table)
 
     let x = margin
-    for (const { cell, lines, size } of prepared) {
+    for (const { cell, lines, size, isLabel } of prepared) {
       const member = cell.memberId ? memberById.get(cell.memberId) : undefined
       const voice = cell.voicePosition || member?.voicePosition || ''
-      const fill = cell.memberId ? koroVoiceColor(voice, voices) : '#ffffff'
+      const fill = cell.memberId
+        ? koroVoiceColor(voice, voices)
+        : cell.label?.trim()
+          ? KORO_ORGAN_COLOR
+          : '#ffffff'
       pdf.setFillColor(...hexToRgb(fill))
       pdf.setDrawColor(0, 0, 0)
       pdf.setLineWidth(0.25)
       pdf.rect(x, y, cellWidth, rowHeight, 'FD')
 
       if (lines.length > 0 && size > 0) {
-        pdf.setFont('times', 'normal')
+        pdf.setFont('times', isLabel ? 'bolditalic' : 'normal')
         pdf.setFontSize(size)
         const step = lineHeight(size)
         const blockHeight = lines.length * step

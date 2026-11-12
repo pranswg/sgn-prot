@@ -92,6 +92,18 @@ test('table export prints given names only and the voice key', async () => {
   assert.match(text, /\(TENOR\)/)
 })
 
+test('a reserved seat prints its label instead of a name', async () => {
+  const document = documentWithSeats()
+  document.tables[0].rows[0].cells[1] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const text = await pdfText(document)
+  assert.match(text, /\(Organ\)/)
+})
+
 test('an empty date and title still produce a printable sheet', async () => {
   const document = createKoroDocument()
   document.title = ''

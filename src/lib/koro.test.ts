@@ -262,6 +262,23 @@ test('filling a table seats candidates in empty seats only, skipping placed memb
   assert.equal(filled.rows[0].cells[2].memberId, null)
 })
 
+test('filling a table leaves a reserved labelled seat untouched', () => {
+  const document = createKoroDocument()
+  const table = document.tables[0]
+  table.rows[0].cells[0] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const candidates: Member[] = [{ ...member, id: 'ana', firstName: 'Ana' }]
+  const filled = fillKoroTable(table, candidates, new Set())
+  assert.equal(filled.rows[0].cells[0].label, 'Organ')
+  assert.equal(filled.rows[0].cells[0].memberId, null)
+  // The candidate lands in the next empty seat instead of the organ seat.
+  assert.equal(filled.rows[0].cells[1].memberId, 'ana')
+})
+
 test('filling a document stops once the candidates run out', () => {
   const document = createKoroDocument()
   const candidates: Member[] = [{ ...member, id: 'ana', firstName: 'Ana' }]

@@ -4,6 +4,11 @@ export interface KoroCell {
   memberId: string | null
   firstName: string
   voicePosition: string
+  /**
+   * A reserved, non-member seat such as "Organ". It prints in place of a name
+   * and is never filled by a member; blank means an ordinary seat.
+   */
+  label?: string
 }
 
 export interface KoroRow {

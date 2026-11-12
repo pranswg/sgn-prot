@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, Plus, Search, X } from 'lucide-react'
+import { AlertTriangle, Check, Music2, Plus, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile'
 import { koroVoiceColor } from '@/lib/koro'
 import type { KoroRosterEntry } from '@/lib/koro'
-import { koroIsSeated } from '@/lib/koroLayout'
+import { koroIsLabeled, koroIsSeated } from '@/lib/koroLayout'
 import type { KoroCell } from '@/core/types/koro'
 import type { VoicePosition } from '@/core/types/suguan'
 
@@ -38,6 +38,11 @@ interface KoroSeatPickerProps {
   duplicatedIds: Set<string>
   voices: VoicePosition[]
   onSelect: (member: KoroRosterEntry | null) => void
+  /**
+   * Mark this seat with a reserved label such as "Organ", or clear it with
+   * `null`. A labelled seat is not a member seat and prints its label instead.
+   */
+  onSetLabel: (label: string | null) => void
   /**
    * When set the seat no longer opens the picker; it reports the tap instead.
    * The table card uses this for swap mode, where a seat tap picks an endpoint.
@@ -63,11 +68,14 @@ export function KoroSeatPicker({
   duplicatedIds,
   voices,
   onSelect,
+  onSetLabel,
   onActivate,
 }: KoroSeatPickerProps) {
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
   const seated = koroIsSeated(cell)
+  const labeled = koroIsLabeled(cell)
+  const label = (cell.label ?? '').trim()
   const current = cell.memberId
     ? members.find((member) => member.id === cell.memberId)
     : undefined
@@ -79,6 +87,7 @@ export function KoroSeatPicker({
   const fullName = current
     ? `${current.lastName.trim()}, ${current.firstName.trim()}`.replace(/^, /, '')
     : cell.firstName.trim()
+  const displayName = labeled ? label : fullName
   const duplicated = cell.memberId ? duplicatedIds.has(cell.memberId) : false
   // Every seat this occupant holds, for the exclamation tooltip.
   const occupantLocations = cell.memberId
@@ -96,7 +105,7 @@ export function KoroSeatPicker({
   const trigger = (
     <button
       type="button"
-      aria-label={`${seatLabel}: ${fullName || 'empty'}${
+      aria-label={`${seatLabel}: ${displayName || 'empty'}${
         duplicated ? ' (seated in more than one table)' : ''
       }`}
       aria-haspopup={onActivate ? undefined : 'dialog'}
@@ -104,8 +113,8 @@ export function KoroSeatPicker({
       title={
         duplicated
           ? `${seatLabel} · ${fullName} — also seated in ${occupantLocations.join(', ')}`
-          : fullName
-            ? `${seatLabel} · ${fullName}`
+          : displayName
+            ? `${seatLabel} · ${displayName}`
             : `${seatLabel} · choose member`
       }
       onClick={openSeat}
@@ -113,7 +122,9 @@ export function KoroSeatPicker({
         'relative flex h-16 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-center transition-colors',
         seated
           ? 'border-black/20 text-black'
-          : 'border-dashed border-foreground/25 bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground',
+          : labeled
+            ? 'border-orange-400 bg-orange-200 text-orange-950'
+            : 'border-dashed border-foreground/25 bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground',
       )}
       style={seated ? { backgroundColor: koroVoiceColor(voice, voices) } : undefined}
     >
@@ -122,7 +133,7 @@ export function KoroSeatPicker({
           aria-hidden
           className={cn(
             'absolute top-0.5 left-1 text-[0.6rem] leading-none font-semibold tabular-nums',
-            seated ? 'text-black/50' : 'text-muted-foreground',
+            seated ? 'text-black/50' : labeled ? 'text-orange-900/60' : 'text-muted-foreground',
           )}
         >
           {seatNumber}
@@ -136,7 +147,11 @@ export function KoroSeatPicker({
           <AlertTriangle className="size-3" />
         </span>
       )}
-      {seated ? (
+      {labeled ? (
+        <span className="w-full truncate text-[0.72rem] leading-tight font-semibold">
+          {label}
+        </span>
+      ) : seated ? (
         <>
           <span
             className={cn(
@@ -187,20 +202,49 @@ export function KoroSeatPicker({
               <SheetTitle>{seatLabel}</SheetTitle>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-              {cell.memberId && (
+              {labeled ? (
                 <Button
                   variant="outline"
-                  className="mb-3 min-h-11 w-full justify-start text-destructive"
+                  className="min-h-11 w-full justify-start text-destructive"
                   onClick={() => {
-                    onSelect(null)
+                    onSetLabel(null)
                     setOpen(false)
                   }}
                 >
                   <X className="size-4" />
-                  Clear this seat
+                  Remove {label}
                 </Button>
+              ) : (
+                <>
+                  {cell.memberId && (
+                    <Button
+                      variant="outline"
+                      className="mb-3 min-h-11 w-full justify-start text-destructive"
+                      onClick={() => {
+                        onSelect(null)
+                        setOpen(false)
+                      }}
+                    >
+                      <X className="size-4" />
+                      Clear this seat
+                    </Button>
+                  )}
+                  {!seated && (
+                    <Button
+                      variant="outline"
+                      className="mb-3 min-h-11 w-full justify-start"
+                      onClick={() => {
+                        onSetLabel('Organ')
+                        setOpen(false)
+                      }}
+                    >
+                      <Music2 className="size-4" />
+                      Mark as Organ
+                    </Button>
+                  )}
+                  {list}
+                </>
               )}
-              {list}
             </div>
             <div className="border-t border-border/70 px-4 pt-3">
               <Button
@@ -221,23 +265,55 @@ export function KoroSeatPicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="start" className="w-72 gap-0 p-2">
-        {cell.memberId && (
+        {labeled ? (
+          <button
+            type="button"
+            onClick={() => {
+              onSetLabel(null)
+              setOpen(false)
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive select-none hover:bg-accent hover:text-accent-foreground"
+          >
+            <X className="size-4 shrink-0" />
+            Remove {label}
+          </button>
+        ) : (
           <>
-            <button
-              type="button"
-              onClick={() => {
-                onSelect(null)
-                setOpen(false)
-              }}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive select-none hover:bg-accent hover:text-accent-foreground"
-            >
-              <X className="size-4 shrink-0" />
-              Clear this seat
-            </button>
-            <div className="pointer-events-none mx-2 my-1 h-px bg-border" />
+            {cell.memberId && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(null)
+                    setOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive select-none hover:bg-accent hover:text-accent-foreground"
+                >
+                  <X className="size-4 shrink-0" />
+                  Clear this seat
+                </button>
+                <div className="pointer-events-none mx-2 my-1 h-px bg-border" />
+              </>
+            )}
+            {!seated && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSetLabel('ORGAN')
+                    setOpen(false)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm select-none hover:bg-accent hover:text-accent-foreground"
+                >
+                  <Music2 className="size-4 shrink-0" />
+                  Mark as Organ
+                </button>
+                <div className="pointer-events-none mx-2 my-1 h-px bg-border" />
+              </>
+            )}
+            {list}
           </>
         )}
-        {list}
       </PopoverContent>
     </Popover>
   )

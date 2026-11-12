@@ -275,6 +275,9 @@ export function KoroMakerPage() {
     rowIndex: number,
     columnIndex: number,
   ) => {
+    // A reserved seat (e.g. the organ) holds no member, so it cannot swap.
+    const target = document.tables.find((entry) => entry.id === tableId)
+    if (target?.rows[rowIndex]?.cells[columnIndex]?.label?.trim()) return
     if (!swapSource) {
       setSwapSource({ tableId, rowIndex, columnIndex })
       return
@@ -322,6 +325,8 @@ export function KoroMakerPage() {
     columnIndex: number,
     member: KoroRosterEntry | null,
   ) => {
+    // A reserved seat (e.g. the organ) is not a member seat; never overwrite it.
+    if (table.rows[rowIndex]?.cells[columnIndex]?.label?.trim()) return
     if (!member) {
       placeMember(table.id, rowIndex, columnIndex, null)
       return
@@ -357,6 +362,25 @@ export function KoroMakerPage() {
       return
     }
     placeMember(table.id, rowIndex, columnIndex, member)
+  }
+
+  // Mark a seat with a reserved label such as "Organ" (clearing any member in
+  // it), or clear the label back to an ordinary empty seat.
+  const labelSeat = (
+    table: KoroTable,
+    rowIndex: number,
+    columnIndex: number,
+    label: string | null,
+  ) => {
+    const trimmed = (label ?? '').trim()
+    patchCell(
+      table,
+      rowIndex,
+      columnIndex,
+      trimmed
+        ? { memberId: null, firstName: '', voicePosition: '', label: trimmed }
+        : { label: undefined },
+    )
   }
 
   // Dragging one occupied seat onto another exchanges the two occupants. It
@@ -820,6 +844,9 @@ export function KoroMakerPage() {
                   }
                   onSeatSelect={(rowIndex, columnIndex, member) =>
                     seatMember(table, rowIndex, columnIndex, member)
+                  }
+                  onSetSeatLabel={(rowIndex, columnIndex, label) =>
+                    labelSeat(table, rowIndex, columnIndex, label)
                   }
                   onDropSeat={(rowIndex, columnIndex, memberId) => {
                     const member = availableMembers.find(

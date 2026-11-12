@@ -28,6 +28,11 @@ export function koroIsSeated(cell: KoroCell): boolean {
   return Boolean(cell.memberId && cell.firstName.trim())
 }
 
+/** A reserved non-member seat, e.g. the organ, carrying a label instead of a name. */
+export function koroIsLabeled(cell: KoroCell): boolean {
+  return Boolean(cell.label && cell.label.trim())
+}
+
 export function koroCellFirstName(cell: KoroCell): string {
   return cell.firstName.trim()
 }

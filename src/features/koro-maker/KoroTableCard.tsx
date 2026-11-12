@@ -44,6 +44,12 @@ interface KoroTableCardProps {
     columnIndex: number,
     member: KoroRosterEntry | null,
   ) => void
+  /** Mark a seat with a reserved label such as "Organ", or clear it with null. */
+  onSetSeatLabel: (
+    rowIndex: number,
+    columnIndex: number,
+    label: string | null,
+  ) => void
   onSwapSeat: (rowIndex: number, columnIndex: number) => void
   onDropSeat: (rowIndex: number, columnIndex: number, memberId: string) => void
   /** Drag one occupied seat onto another to exchange their occupants, even
@@ -130,6 +136,7 @@ export function KoroTableCard({
   onDuplicateTable,
   onFillByVoice,
   onSeatSelect,
+  onSetSeatLabel,
   onSwapSeat,
   onDropSeat,
   onSwapSeats,
@@ -226,6 +233,9 @@ export function KoroTableCard({
               swapSource?.rowIndex === rowIndex &&
               swapSource?.columnIndex === columnIndex
             const occupied = koroIsSeated(cell)
+            // A reserved seat (e.g. the organ) is not a member seat: it cannot
+            // be dragged from or dropped onto.
+            const reserved = Boolean(cell.label && cell.label.trim())
             // An occupied seat can be picked up and dropped on another seat to
             // exchange them, except in tap-swap mode where the tap owns the
             // gesture.
@@ -250,6 +260,7 @@ export function KoroTableCard({
                   event.dataTransfer.effectAllowed = 'move'
                 }}
                 onDragOver={(event) => {
+                  if (reserved) return
                   // Only a member/seat drag (text/plain) can target a seat; a
                   // table-reorder drag passes through to the card wrapper.
                   if (!event.dataTransfer.types.includes('text/plain')) return
@@ -260,6 +271,7 @@ export function KoroTableCard({
                   onDragSeatChange(dropTarget === seatKey ? null : dropTarget)
                 }
                 onDrop={(event) => {
+                  if (reserved) return
                   event.preventDefault()
                   onDragSeatChange(null)
                   const payload = event.dataTransfer.getData('text/plain')
@@ -294,6 +306,9 @@ export function KoroTableCard({
                   voices={voices}
                   onSelect={(member) =>
                     onSeatSelect(rowIndex, columnIndex, member)
+                  }
+                  onSetLabel={(label) =>
+                    onSetSeatLabel(rowIndex, columnIndex, label)
                   }
                   onActivate={
                     swapMode ? () => onSwapSeat(rowIndex, columnIndex) : undefined

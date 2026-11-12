@@ -51,6 +51,9 @@ export const KORO_VOICE_COLORS: Record<string, string> = {
   bass: '#C2E1FA',
 }
 
+/** The orange a reserved seat (e.g. the organ) prints in, distinct from voices. */
+export const KORO_ORGAN_COLOR = '#f4b183'
+
 const EXTRA_VOICE_COLORS = ['#d9eaf7', '#e4dfec', '#f4cccc', '#d9ead3']
 
 export function koroVoiceColor(
@@ -252,6 +255,8 @@ export function fillKoroTable(
   const rows = table.rows.map((row) => ({
     ...row,
     cells: row.cells.map((cell) => {
+      // A labelled seat (e.g. "Organ") is reserved, never filled by a member.
+      if (cell.label && cell.label.trim()) return cell
       if (cell.memberId && cell.firstName.trim()) return cell
       const member = queue[next]
       if (!member) return cell

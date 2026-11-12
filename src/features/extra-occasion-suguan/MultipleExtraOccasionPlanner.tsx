@@ -29,6 +29,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useExtraOccasionBatchStore } from '@/store/extraOccasionBatchStore'
 import { useNavStore } from '@/store/navStore'
+import { showProblems } from '@/store/problemStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   exportFileName,
@@ -218,8 +219,9 @@ export function MultipleExtraOccasionPlanner() {
       }
       if (other.savedId) {
         if (!can('edit-suguan')) {
-          toast.error(
-            'You need permission to edit Suguan to move this member off a saved record.',
+          showProblems(
+            ['You need permission to edit Suguan to move this member off a saved record.'],
+            { title: 'You cannot move this member' },
           )
           return false
         }
@@ -294,7 +296,9 @@ export function MultipleExtraOccasionPlanner() {
     if (!selected) return
     if (selected.savedId) {
       if (!can('delete-suguan')) {
-        toast.error('You do not have permission to delete a Suguan.')
+        showProblems(['You do not have permission to delete a Suguan.'], {
+          title: 'You cannot delete this Suguan',
+        })
         return
       }
       setConfirmRemove(true)
@@ -314,23 +318,38 @@ export function MultipleExtraOccasionPlanner() {
   }
 
   const saveSession = () => {
+    // Report every incomplete occasion at once, then jump to the first one,
+    // instead of stopping at the first failure and hiding the rest.
+    const problems: string[] = []
+    let firstInvalidId: string | null = null
     for (let index = 0; index < session.occasions.length; index += 1) {
       const occasion = session.occasions[index]
       const problem = validateOccasion(occasion.state)
       if (problem) {
-        toast.error(`${plannerOccasionLabel(occasion, index)}: ${problem}`)
-        setSelectedLocalId(occasion.localId)
-        return
+        problems.push(`${plannerOccasionLabel(occasion, index)}: ${problem}`)
+        if (!firstInvalidId) firstInvalidId = occasion.localId
       }
+    }
+    if (problems.length > 0) {
+      if (firstInvalidId) setSelectedLocalId(firstInvalidId)
+      showProblems(problems, {
+        title: 'Fix these occasions before saving',
+        description: 'Each occasion below still has a problem.',
+      })
+      return
     }
     const needsCreate = session.occasions.some((occasion) => !occasion.savedId)
     const needsEdit = session.occasions.some((occasion) => occasion.savedId)
     if (needsCreate && !can('create-suguan')) {
-      toast.error('You do not have permission to save a Suguan.')
+      showProblems(['You do not have permission to save a Suguan.'], {
+        title: 'You cannot save this session',
+      })
       return
     }
     if (needsEdit && !can('edit-suguan')) {
-      toast.error('You do not have permission to update a Suguan.')
+      showProblems(['You do not have permission to update a Suguan.'], {
+        title: 'You cannot update this session',
+      })
       return
     }
     setSaving(true)
@@ -377,7 +396,7 @@ export function MultipleExtraOccasionPlanner() {
     if (!selected) return
     const problem = validateOccasion(selected.state)
     if (problem) {
-      toast.error(problem)
+      showProblems([problem], { title: 'Cannot export yet' })
       return
     }
     const occasionName = plannerOccasionLabel(selected, Math.max(selectedIndex, 0))
@@ -410,7 +429,7 @@ export function MultipleExtraOccasionPlanner() {
     if (!selected) return
     const problem = validateOccasion(selected.state)
     if (problem) {
-      toast.error(problem)
+      showProblems([problem], { title: 'Cannot preview yet' })
       return
     }
     const previewWindow = openPdfPreviewWindow()

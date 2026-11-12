@@ -11,6 +11,7 @@ import { useAdminStore } from '@/store/adminStore'
 import { useServerDataStore } from '@/store/serverDataStore'
 import { setWriteNotifier } from '@/lib/writeThrough'
 import { ThemeProvider } from '@/components/sidebar/ThemeProvider'
+import { ProblemDialogHost } from '@/components/ProblemDialogHost'
 
 // Stores report a failed server write through this notifier instead of importing
 // `sonner` themselves, which keeps the store graph (and the node test runner)
@@ -133,6 +134,7 @@ function App() {
       <TooltipProvider delayDuration={0}>
         {content}
         <Toaster richColors position="top-center" />
+        <ProblemDialogHost />
       </TooltipProvider>
     </ThemeProvider>
   )

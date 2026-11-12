@@ -9,6 +9,7 @@ import { membersOf } from '@/lib/choirs'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useSuguanStore } from '@/store/suguanStore'
 import { useNavStore } from '@/store/navStore'
+import { showProblems } from '@/store/problemStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   exportFileName,
@@ -112,8 +113,9 @@ export function ExtraOccasionSingleMaker() {
     memberConflicts: MemberConflict[],
   ): boolean => {
     if (!can('edit-suguan')) {
-      toast.error(
-        'You need permission to edit Suguan to move this member off a saved record.',
+      showProblems(
+        ['You need permission to edit Suguan to move this member off a saved record.'],
+        { title: 'You cannot move this member' },
       )
       return false
     }
@@ -152,7 +154,7 @@ export function ExtraOccasionSingleMaker() {
   ) => {
     const problem = validateOccasion(state)
     if (problem) {
-      toast.error(problem)
+      showProblems([problem], { title: 'Cannot export yet' })
       return
     }
     const filename = exportFileName(
@@ -186,7 +188,7 @@ export function ExtraOccasionSingleMaker() {
   const previewPdf = () => {
     const problem = validateOccasion(state)
     if (problem) {
-      toast.error(problem)
+      showProblems([problem], { title: 'Cannot preview yet' })
       return
     }
     const previewWindow = openPdfPreviewWindow()
@@ -211,12 +213,14 @@ export function ExtraOccasionSingleMaker() {
 
   const saveRecord = () => {
     if (!can(existingRecord ? 'edit-suguan' : 'create-suguan')) {
-      toast.error('You do not have permission to save this Suguan.')
+      showProblems(['You do not have permission to save this Suguan.'], {
+        title: 'You cannot save this Suguan',
+      })
       return
     }
     const problem = validateOccasion(state)
     if (problem) {
-      toast.error(problem)
+      showProblems([problem], { title: 'Fix these before saving' })
       return
     }
     const extraOccasion = occasionToConfig(state)

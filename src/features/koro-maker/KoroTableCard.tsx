@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Minus, Plus, GripVertical, Rows3, Trash2, Wand2 } from 'lucide-react'
+import { Copy, Minus, Plus, GripVertical, Rows3, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,18 +17,27 @@ interface KoroTableCardProps {
   canRemoveTable: boolean
   members: KoroRosterEntry[]
   voices: VoicePosition[]
-  /** Where each seated member sits, so a repeat can be confirmed first. */
-  placedSeats: Map<string, string>
+  /**
+   * Every seat each member holds, so a seat can name the tables a duplicated
+   * occupant appears in.
+   */
+  seatLocations: Map<string, string[]>
+  /** Member ids seated more than once anywhere in the document. */
+  duplicatedIds: Set<string>
   dropTarget: string | null
   /** Swap mode is a page-level mode: tap one seat, then another. */
   swapMode: boolean
   swapSource: { rowIndex: number; columnIndex: number } | null
   onTitleChange: (title: string) => void
+  onDateChange: (date: string) => void
+  onTimeChange: (time: string) => void
   onAddRow: () => void
   onRemoveRow: (rowId: string) => void
   onAddSeat: (rowId: string) => void
   onRemoveSeat: (rowId: string) => void
   onRemoveTable: () => void
+  /** Copy this table — formation and seated members — into a new one below it. */
+  onDuplicateTable: () => void
   onFillByVoice: () => void
   onSeatSelect: (
     rowIndex: number,
@@ -37,8 +46,10 @@ interface KoroTableCardProps {
   ) => void
   onSwapSeat: (rowIndex: number, columnIndex: number) => void
   onDropSeat: (rowIndex: number, columnIndex: number, memberId: string) => void
-  /** Drag one occupied seat onto another to exchange their occupants. */
+  /** Drag one occupied seat onto another to exchange their occupants, even
+   * across tables — the source is named by its table id. */
   onSwapSeats: (
+    fromTableId: string,
     fromRowIndex: number,
     fromColumnIndex: number,
     toRowIndex: number,
@@ -63,20 +74,29 @@ const KEY_DELTAS: Record<string, [number, number]> = {
 /** A seated member being dragged carries this instead of a bare member id. */
 const SEAT_DRAG_PREFIX = 'koro-seat:'
 
-function seatDragPayload(rowIndex: number, columnIndex: number): string {
-  return `${SEAT_DRAG_PREFIX}${rowIndex}:${columnIndex}`
+// The payload names the source table so a seat can be dragged into a different
+// table, not only swapped within its own. nanoid ids contain no ':', so the
+// table id is everything before the last two segments.
+function seatDragPayload(
+  tableId: string,
+  rowIndex: number,
+  columnIndex: number,
+): string {
+  return `${SEAT_DRAG_PREFIX}${tableId}:${rowIndex}:${columnIndex}`
 }
 
 function parseSeatDragPayload(
   value: string,
-): { rowIndex: number; columnIndex: number } | null {
+): { tableId: string; rowIndex: number; columnIndex: number } | null {
   if (!value.startsWith(SEAT_DRAG_PREFIX)) return null
-  const [row, column] = value
-    .slice(SEAT_DRAG_PREFIX.length)
-    .split(':')
-    .map(Number)
-  if (Number.isNaN(row) || Number.isNaN(column)) return null
-  return { rowIndex: row, columnIndex: column }
+  const parts = value.slice(SEAT_DRAG_PREFIX.length).split(':')
+  const columnIndex = Number(parts.pop())
+  const rowIndex = Number(parts.pop())
+  const tableId = parts.join(':')
+  if (!tableId || Number.isNaN(rowIndex) || Number.isNaN(columnIndex)) {
+    return null
+  }
+  return { tableId, rowIndex, columnIndex }
 }
 
 /**
@@ -94,16 +114,20 @@ export function KoroTableCard({
   canRemoveTable,
   members,
   voices,
-  placedSeats,
+  seatLocations,
+  duplicatedIds,
   dropTarget,
   swapMode,
   swapSource,
   onTitleChange,
+  onDateChange,
+  onTimeChange,
   onAddRow,
   onRemoveRow,
   onAddSeat,
   onRemoveSeat,
   onRemoveTable,
+  onDuplicateTable,
   onFillByVoice,
   onSeatSelect,
   onSwapSeat,
@@ -221,7 +245,7 @@ export function KoroTableCard({
                   if (!draggableSeat) return
                   event.dataTransfer.setData(
                     'text/plain',
-                    seatDragPayload(rowIndex, columnIndex),
+                    seatDragPayload(table.id, rowIndex, columnIndex),
                   )
                   event.dataTransfer.effectAllowed = 'move'
                 }}
@@ -242,6 +266,7 @@ export function KoroTableCard({
                   const source = parseSeatDragPayload(payload)
                   if (source) {
                     onSwapSeats(
+                      source.tableId,
                       source.rowIndex,
                       source.columnIndex,
                       rowIndex,
@@ -264,7 +289,8 @@ export function KoroTableCard({
                   seatLabel={`${tier.label} seat ${columnIndex + 1}`}
                   seatNumber={columnIndex + 1}
                   members={members}
-                  placedSeats={placedSeats}
+                  seatLocations={seatLocations}
+                  duplicatedIds={duplicatedIds}
                   voices={voices}
                   onSelect={(member) =>
                     onSeatSelect(rowIndex, columnIndex, member)
@@ -339,6 +365,16 @@ export function KoroTableCard({
             <Rows3 className="size-4" />
             Add row
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onDuplicateTable}
+            title="Copy this table, with its seated members, below it"
+          >
+            <Copy className="size-4" />
+            Duplicate
+          </Button>
           {canRemoveTable && (
             <Button
               type="button"
@@ -351,6 +387,37 @@ export function KoroTableCard({
               <Trash2 className="size-4 text-destructive" />
             </Button>
           )}
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label
+            htmlFor={`koro-table-date-${table.id}`}
+            className="text-xs text-muted-foreground"
+          >
+            Date
+          </Label>
+          <Input
+            id={`koro-table-date-${table.id}`}
+            type="date"
+            value={table.date}
+            onChange={(event) => onDateChange(event.target.value)}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label
+            htmlFor={`koro-table-time-${table.id}`}
+            className="text-xs text-muted-foreground"
+          >
+            Time
+          </Label>
+          <Input
+            id={`koro-table-time-${table.id}`}
+            type="time"
+            value={table.time}
+            onChange={(event) => onTimeChange(event.target.value)}
+          />
         </div>
       </div>
 

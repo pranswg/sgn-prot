@@ -23,6 +23,7 @@ import { membersOf } from '@/lib/choirs'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
+import { showProblems } from '@/store/problemStore'
 import type { Suguan } from '@/core/types/suguan'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/format'
@@ -125,12 +126,17 @@ export function SuguanBuilderPage() {
 
   const handleSave = () => {
     if (existing ? !can('edit-suguan') : !can('create-suguan')) {
-      toast.error('You do not have permission to save this Suguan.')
+      showProblems(['You do not have permission to save this Suguan.'], {
+        title: 'You cannot save this Suguan',
+      })
       return
     }
     const blockers = saveBlockers(draft)
     if (blockers.length > 0) {
-      toast.error(blockers[0])
+      showProblems(blockers, {
+        title: 'Fix these before saving',
+        description: 'Resolve every item below, then save again.',
+      })
       return
     }
 

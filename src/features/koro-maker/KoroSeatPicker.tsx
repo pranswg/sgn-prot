@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, Plus, Search, X } from 'lucide-react'
+import { AlertTriangle, Check, Plus, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,8 +28,14 @@ interface KoroSeatPickerProps {
   /** Seat number within its row, printed in the tile corner. */
   seatNumber?: number
   members: KoroRosterEntry[]
-  /** Where each already-seated member sits, e.g. "Table 2 · Row 1 seat 3". */
-  placedSeats: Map<string, string>
+  /**
+   * Every seat each member holds, e.g. `["Table 1 · Row 2 seat 3", …]`. Used to
+   * name the tables a duplicated seat belongs to and to mark members already
+   * seated in the picker list.
+   */
+  seatLocations: Map<string, string[]>
+  /** Member ids seated more than once anywhere in the document. */
+  duplicatedIds: Set<string>
   voices: VoicePosition[]
   onSelect: (member: KoroRosterEntry | null) => void
   /**
@@ -42,16 +48,19 @@ interface KoroSeatPickerProps {
 /**
  * One seat's member picker. A searchable popover on desktop and a searchable
  * bottom sheet on phones, so seating a singer is a two-tap job instead of
- * scrolling a native select of the whole roster. Members already seated
- * elsewhere are hidden; the current occupant stays listed so the seat can be
- * cleared from the same window.
+ * scrolling a native select of the whole roster. Picking a member never warns
+ * here: the page owns the "already seated, are you sure?" confirmation so the
+ * pick, drag-and-drop, and any future path prompt the same way. A seat whose
+ * occupant is duplicated across the chart carries an amber name and a
+ * warning badge.
  */
 export function KoroSeatPicker({
   cell,
   seatLabel,
   seatNumber,
   members,
-  placedSeats,
+  seatLocations,
+  duplicatedIds,
   voices,
   onSelect,
   onActivate,
@@ -70,6 +79,11 @@ export function KoroSeatPicker({
   const fullName = current
     ? `${current.lastName.trim()}, ${current.firstName.trim()}`.replace(/^, /, '')
     : cell.firstName.trim()
+  const duplicated = cell.memberId ? duplicatedIds.has(cell.memberId) : false
+  // Every seat this occupant holds, for the exclamation tooltip.
+  const occupantLocations = cell.memberId
+    ? seatLocations.get(cell.memberId) ?? []
+    : []
 
   const openSeat = () => {
     if (onActivate) {
@@ -82,10 +96,18 @@ export function KoroSeatPicker({
   const trigger = (
     <button
       type="button"
-      aria-label={`${seatLabel}: ${fullName || 'empty'}`}
+      aria-label={`${seatLabel}: ${fullName || 'empty'}${
+        duplicated ? ' (seated in more than one table)' : ''
+      }`}
       aria-haspopup={onActivate ? undefined : 'dialog'}
       aria-expanded={onActivate ? undefined : open}
-      title={fullName ? `${seatLabel} · ${fullName}` : `${seatLabel} · choose member`}
+      title={
+        duplicated
+          ? `${seatLabel} · ${fullName} — also seated in ${occupantLocations.join(', ')}`
+          : fullName
+            ? `${seatLabel} · ${fullName}`
+            : `${seatLabel} · choose member`
+      }
       onClick={openSeat}
       className={cn(
         'relative flex h-16 w-full flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-center transition-colors',
@@ -106,9 +128,24 @@ export function KoroSeatPicker({
           {seatNumber}
         </span>
       )}
+      {duplicated && (
+        <span
+          aria-hidden
+          className="absolute top-0.5 right-0.5 grid size-4 place-items-center rounded-full bg-amber-400 text-amber-950 shadow-sm"
+        >
+          <AlertTriangle className="size-3" />
+        </span>
+      )}
       {seated ? (
         <>
-          <span className="w-full truncate text-[0.72rem] leading-tight font-medium">
+          <span
+            className={cn(
+              'w-full truncate text-[0.72rem] leading-tight',
+              duplicated
+                ? 'rounded-sm bg-amber-300/90 px-1 font-semibold text-amber-950'
+                : 'font-medium',
+            )}
+          >
             {cell.firstName.trim()}
           </span>
           <span className="text-[0.62rem] leading-tight text-black/60">
@@ -126,7 +163,7 @@ export function KoroSeatPicker({
   const list = (
     <SeatOptions
       members={members}
-      placedSeats={placedSeats}
+      seatLocations={seatLocations}
       currentId={cell.memberId}
       voices={voices}
       voiceLabel={voiceLabel}
@@ -209,26 +246,25 @@ export function KoroSeatPicker({
 /**
  * The single searchable list shared by both presentations: name, voice, a tick
  * for the seat's current occupant, and a note when that member already sits
- * somewhere else. Picking an already-seated member asks first instead of
- * hiding them, so the same singer can still be placed twice on purpose.
+ * somewhere else. Choosing a member always calls `onPick`; the page decides
+ * whether the seat is a duplicate and, if so, confirms before placing.
  */
 function SeatOptions({
   members,
-  placedSeats,
+  seatLocations,
   currentId,
   voices,
   voiceLabel,
   onPick,
 }: {
   members: KoroRosterEntry[]
-  placedSeats: Map<string, string>
+  seatLocations: Map<string, string[]>
   currentId: string | null
   voices: VoicePosition[]
   voiceLabel: (voicePosition: string) => string
   onPick: (member: KoroRosterEntry | null) => void
 }) {
   const [query, setQuery] = useState('')
-  const [pending, setPending] = useState<KoroRosterEntry | null>(null)
 
   const options = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -246,38 +282,7 @@ function SeatOptions({
   }, [members, query])
 
   const pick = (member: KoroRosterEntry) => {
-    const elsewhere = placedSeats.get(member.id)
-    if (elsewhere && member.id !== currentId) {
-      setPending(member)
-      return
-    }
     onPick(member)
-  }
-
-  if (pending) {
-    const elsewhere = placedSeats.get(pending.id) ?? 'another table'
-    return (
-      <div className="grid gap-2 rounded-lg border border-amber-300/70 bg-amber-50/70 p-3 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100">
-        <p>
-          <span className="font-semibold">
-            {pending.firstName} {pending.lastName}
-          </span>{' '}
-          is already seated in {elsewhere}. Add them to this seat as well?
-        </p>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setPending(null)}
-          >
-            Cancel
-          </Button>
-          <Button size="sm" onClick={() => onPick(pending)}>
-            Add anyway
-          </Button>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -322,7 +327,7 @@ function SeatOptions({
                 <span className="min-w-0 flex-1 truncate">
                   {member.lastName.trim()}, {member.firstName.trim()}
                 </span>
-                {placedSeats.has(member.id) && member.id !== currentId && (
+                {seatLocations.has(member.id) && member.id !== currentId && (
                   <span className="shrink-0 rounded-sm bg-amber-100 px-1 text-[0.62rem] text-amber-900 dark:bg-amber-400/20 dark:text-amber-100">
                     seated
                   </span>

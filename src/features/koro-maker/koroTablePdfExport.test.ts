@@ -39,10 +39,10 @@ const members: Member[] = [
 function documentWithSeats(): KoroDocument {
   const document = createKoroDocument()
   document.title = 'Anniversary Thanksgiving 2026'
-  document.date = '2026-07-25'
-  document.serviceTime = '6:00 AM'
   document.organistMemberId = 'francis'
   document.tables[0].title = 'PRINCIPAL CHOIR GROUP'
+  document.tables[0].date = '2026-07-25'
+  document.tables[0].time = '06:00'
   document.tables[0].rows[2].cells[0] = {
     memberId: 'kim',
     firstName: 'Kim',
@@ -71,7 +71,7 @@ test('table export prints the heading block, occasion and organist', async () =>
   assert.match(text, /ORGANIST: Francis William Garcia/)
 })
 
-test('table export prints one service line per table with its date and title', async () => {
+test('table export prints one service line per table with its own date, day and time', async () => {
   const document = documentWithSeats()
   document.tables.push({
     ...document.tables[0],
@@ -79,17 +79,15 @@ test('table export prints one service line per table with its date and title', a
     title: 'SECONDARY CHOIR GROUP',
   })
   const text = await pdfText(document)
-  assert.match(text, /JULY 25, 2026/)
-  assert.match(text, /SABADO/)
-  assert.match(text, /6:00 AM/)
+  assert.match(text, /July 25, 2026 - SABADO 6:00AM/)
   assert.match(text, /PRINCIPAL CHOIR GROUP/)
   assert.match(text, /SECONDARY CHOIR GROUP/)
 })
 
-test('table export prints names given-name-over-surname and the voice key', async () => {
+test('table export prints given names only and the voice key', async () => {
   const text = await pdfText(documentWithSeats())
   assert.match(text, /\(Kim\)/)
-  assert.match(text, /\(Arancillo\)/)
+  assert.doesNotMatch(text, /\(Arancillo\)/)
   assert.match(text, /\(ALTO\)/)
   assert.match(text, /\(TENOR\)/)
 })

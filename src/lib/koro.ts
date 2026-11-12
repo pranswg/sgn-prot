@@ -27,6 +27,22 @@ export function koroDayLabel(date: string): string {
   return FILIPINO_WEEKDAYS[weekdayOf(date)] ?? ''
 }
 
+/**
+ * The printed service time for a Koro table. A table's `time` is a 24-hour
+ * `HH:MM` chosen with the native time picker, but the sheet keeps the choir's
+ * compact 12-hour style (`6:00AM`). A value that is not `HH:MM` — a legacy
+ * string saved before the picker — is uppercased and printed as typed.
+ */
+export function formatKoroTime(time: string): string {
+  const trimmed = time.trim()
+  const match = /^(\d{1,2}):(\d{2})$/.exec(trimmed)
+  if (!match) return trimmed.toUpperCase()
+  const hour = Number(match[1]) % 24
+  const period = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${hour12}:${match[2]}${period}`
+}
+
 export const KORO_VOICE_COLORS: Record<string, string> = {
   'soprano-1': '#fff2cc',
   'soprano-2': '#fce4d6',
@@ -58,13 +74,21 @@ export function createKoroRow(columns = KORO_DEFAULT_COLUMNS): KoroRow {
   }
 }
 
+export interface KoroTableMeta {
+  date?: string
+  time?: string
+}
+
 export function createKoroTable(
   title = 'PRINCIPAL CHOIR GROUP',
   rowColumns: number[] = KORO_DEFAULT_ROW_COLUMNS,
+  meta: KoroTableMeta = {},
 ): KoroTable {
   return {
     id: nanoid(),
     title,
+    date: meta.date ?? '',
+    time: meta.time ?? '',
     rows: rowColumns.map((count) => createKoroRow(count)),
   }
 }
@@ -120,9 +144,67 @@ export function duplicateKoroDocument(document: KoroDocument): KoroDocument {
   }
 }
 
+/**
+ * A deep copy of one table under fresh ids, keeping its formation and every
+ * seated member. The title gains a `(copy)` marker so the two are distinguish-
+ * able. Useful for repeating a proven arrangement into a second group.
+ */
+export function duplicateKoroTable(table: KoroTable): KoroTable {
+  return {
+    ...table,
+    id: nanoid(),
+    title: `${table.title.trim() || 'Choir Group'} (copy)`,
+    rows: table.rows.map((row) => ({
+      ...row,
+      id: nanoid(),
+      cells: row.cells.map((cell) => ({ ...cell })),
+    })),
+  }
+}
+
 export interface KoroSeatRef {
   rowIndex: number
   columnIndex: number
+}
+
+/** A seat named by the table it lives in, so a move can cross tables. */
+export interface KoroSeatLocation extends KoroSeatRef {
+  tableId: string
+}
+
+/**
+ * Exchange two seats' occupants, within one table or across two. Dropping onto
+ * an empty seat moves the member there and frees the source seat; dropping onto
+ * a filled seat trades the two singers. Returns a new tables array; the source
+ * is left untouched when either seat is missing or the two are the same.
+ */
+export function moveKoroSeat(
+  tables: readonly KoroTable[],
+  from: KoroSeatLocation,
+  to: KoroSeatLocation,
+): KoroTable[] {
+  if (
+    from.tableId === to.tableId &&
+    from.rowIndex === to.rowIndex &&
+    from.columnIndex === to.columnIndex
+  ) {
+    return tables.map((table) => table)
+  }
+  const sourceIndex = tables.findIndex((table) => table.id === from.tableId)
+  const targetIndex = tables.findIndex((table) => table.id === to.tableId)
+  if (sourceIndex < 0 || targetIndex < 0) return tables.map((table) => table)
+  const next = tables.map((table) => ({
+    ...table,
+    rows: table.rows.map((row) => ({ ...row, cells: [...row.cells] })),
+  }))
+  const source = next[sourceIndex]
+  const target = next[targetIndex]
+  const fromCell = source.rows[from.rowIndex]?.cells[from.columnIndex]
+  const toCell = target.rows[to.rowIndex]?.cells[to.columnIndex]
+  if (!fromCell || !toCell) return tables.map((table) => table)
+  source.rows[from.rowIndex].cells[from.columnIndex] = toCell
+  target.rows[to.rowIndex].cells[to.columnIndex] = fromCell
+  return next
 }
 
 /** Exchange two seats' occupants; their voice arrangement travels with them. */
@@ -219,19 +301,38 @@ export function addKoroRow(table: KoroTable): KoroTable {
   return { ...table, rows: [...table.rows, createKoroRow(columns)] }
 }
 
+/**
+ * Backfill the per-table service fields on a document loaded from storage.
+ * Documents persisted before every table owned its own date and time — and the
+ * whole JSONB rows hydrated from Supabase — can carry tables with `date`/`time`
+ * absent, so the exports would read `undefined`. Falling back to the
+ * document-level fields keeps every table printable.
+ */
+export function normalizeKoroDocument(document: KoroDocument): KoroDocument {
+  const tables = document.tables.map((table) => {
+    const loose = table as KoroTable & { date?: string; time?: string }
+    return {
+      ...loose,
+      date: loose.date ?? document.date ?? '',
+      time: loose.time ?? document.serviceTime ?? '',
+    }
+  })
+  return { ...document, tables }
+}
+
 export function createKoroDocument(): KoroDocument {
   const now = new Date().toISOString()
   const date = todayPHT()
   return {
     id: nanoid(),
-    title: 'Special Occasion Koro',
+    title: '',
     date,
     serviceDay: koroDayLabel(date),
-    serviceTime: '6:00AM',
+    serviceTime: '06:00',
     organistMemberId: '',
     exportFontSize: 'large',
     group: 'mixed',
-    tables: [createKoroTable()],
+    tables: [createKoroTable('PRINCIPAL CHOIR GROUP', KORO_DEFAULT_ROW_COLUMNS, { date, time: '06:00' })],
     createdAt: now,
     updatedAt: now,
   }
@@ -278,15 +379,13 @@ export interface KoroSuguanVoiceSection {
   members: string[]
 }
 
-export function buildKoroSuguanVoiceSections(
-  document: KoroDocument,
+function collectNamesByVoice(
+  tables: readonly KoroTable[],
   members: readonly KoroRosterEntry[],
-  voices: VoicePosition[],
-): KoroSuguanVoiceSection[] {
+): Map<string, string[]> {
   const memberById = new Map(members.map((member) => [member.id, member]))
   const namesByVoice = new Map<string, string[]>()
-
-  for (const table of document.tables) {
+  for (const table of tables) {
     for (const row of table.rows) {
       for (const cell of row.cells) {
         if (!cell.memberId || !cell.firstName.trim()) continue
@@ -294,13 +393,18 @@ export function buildKoroSuguanVoiceSections(
           cell.voicePosition || memberById.get(cell.memberId)?.voicePosition || ''
         if (!voicePosition) continue
         const names = namesByVoice.get(voicePosition) ?? []
-        const member = memberById.get(cell.memberId)
-        names.push(koroMemberName(member, cell))
+        names.push(koroMemberName(memberById.get(cell.memberId), cell))
         namesByVoice.set(voicePosition, names)
       }
     }
   }
+  return namesByVoice
+}
 
+function orderSections(
+  namesByVoice: Map<string, string[]>,
+  voices: VoicePosition[],
+): KoroSuguanVoiceSection[] {
   const isSoprano = (voice: VoicePosition) =>
     /soprano/i.test(`${voice.id} ${voice.name}`)
   const sopranoVoices = voices.filter(isSoprano)
@@ -328,6 +432,26 @@ export function buildKoroSuguanVoiceSections(
     ({ SOPRANO: 0, ALTO: 1, BASS: 2, TENOR: 3 })[label] ?? 4
   return sections.sort(
     (left, right) => order(left.label) - order(right.label),
+  )
+}
+
+/** The voice sections for one table, so the Suguan sheet can print per table. */
+export function buildKoroTableVoiceSections(
+  table: KoroTable,
+  members: readonly KoroRosterEntry[],
+  voices: VoicePosition[],
+): KoroSuguanVoiceSection[] {
+  return orderSections(collectNamesByVoice([table], members), voices)
+}
+
+export function buildKoroSuguanVoiceSections(
+  document: KoroDocument,
+  members: readonly KoroRosterEntry[],
+  voices: VoicePosition[],
+): KoroSuguanVoiceSection[] {
+  return orderSections(
+    collectNamesByVoice(document.tables, members),
+    voices,
   )
 }
 

@@ -8,6 +8,8 @@ import {
   koroPlacedSeatLabels,
   koroRosterByVoice,
   koroSeatKey,
+  koroSeatLabelsByService,
+  koroSeatLocationsByMember,
   koroTableCounts,
   koroTierLabel,
 } from './koroLayout.ts'
@@ -103,6 +105,57 @@ test('placed seat labels name the table, row and seat of each seated member', ()
   // Row 1 is the bottom row, so the top row of a three-row table is Row 3.
   assert.equal(labels.get('kim'), 'Table 2 · Row 3 seat 3')
   assert.equal(labels.size, 1)
+})
+
+test('seat locations list every table a duplicated member sits in', () => {
+  const document = createKoroDocument()
+  document.tables.push({ ...document.tables[0], id: 'second-table', rows: document.tables[0].rows.map((row) => ({ ...row, id: `${row.id}-b`, cells: row.cells.map((cell) => ({ ...cell })) })) })
+  seat(document, 0, 0, 'kim')
+  document.tables[1].rows[0].cells[2] = {
+    memberId: 'kim',
+    firstName: 'kim',
+    voicePosition: 'alto',
+  }
+  document.tables[1].rows[1].cells[1] = {
+    memberId: 'joan',
+    firstName: 'joan',
+    voicePosition: 'tenor',
+  }
+  const locations = koroSeatLocationsByMember(document)
+  assert.deepEqual(locations.get('kim'), [
+    'Table 1 · Row 3 seat 1',
+    'Table 2 · Row 3 seat 3',
+  ])
+  assert.deepEqual(locations.get('joan'), ['Table 2 · Row 2 seat 2'])
+})
+
+test('seats split by service block a same date-and-time repeat and only flag a different one', () => {
+  const document = createKoroDocument()
+  const cloneRows = () =>
+    document.tables[0].rows.map((row) => ({
+      ...row,
+      id: `${row.id}-copy`,
+      cells: row.cells.map((cell) => ({ ...cell })),
+    }))
+  // Table 1 and Table 2 share the same date and time; Table 3 is a different service.
+  document.tables[0].date = '2026-07-25'
+  document.tables[0].time = '06:00'
+  document.tables.push({ ...document.tables[0], id: 'same-service', rows: cloneRows() })
+  document.tables.push({ ...document.tables[0], id: 'other-service', date: '2026-07-25', time: '18:00', rows: cloneRows() })
+
+  // Kim already sits in Table 1 (same service as the target) and Table 3 (different service).
+  document.tables[0].rows[0].cells[0] = { memberId: 'kim', firstName: 'Kim', voicePosition: 'alto' }
+  document.tables[2].rows[1].cells[1] = { memberId: 'kim', firstName: 'Kim', voicePosition: 'alto' }
+
+  const labels = koroSeatLabelsByService(document, 'same-service', 'kim')
+  assert.deepEqual(labels.sameService, ['Table 1 · Row 3 seat 1'])
+  assert.deepEqual(labels.otherService, ['Table 3 · Row 2 seat 2'])
+})
+
+test('a member seated nowhere has no service labels', () => {
+  const document = createKoroDocument()
+  const labels = koroSeatLabelsByService(document, document.tables[0].id, 'kim')
+  assert.deepEqual(labels, { sameService: [], otherService: [] })
 })
 
 test('roster counts skip members without a voice', () => {

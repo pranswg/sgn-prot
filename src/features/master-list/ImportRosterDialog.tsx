@@ -17,6 +17,7 @@ import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useAuthStore } from '@/store/authStore'
 import { useAdminStore } from '@/store/adminStore'
+import { showProblems } from '@/store/problemStore'
 import type { Choir, MemberInput, TraineeInput } from '@/core/types/member'
 import {
   CHOIRS,
@@ -150,7 +151,9 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
   const handleFile = async (file: File | undefined) => {
     if (!file) return
     if (!canImport) {
-      toast.error('Only an active Admin can import the Master List.')
+      showProblems(['Only an active Admin can import the Master List.'], {
+        title: 'You cannot import the Master List',
+      })
       return
     }
     const spreadsheet = isSpreadsheetFile(file)
@@ -225,7 +228,9 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
   const runImport = () => {
     if (!candidates) return
     if (!canImport || !account) {
-      toast.error('Only an active Admin can import the Master List.')
+      showProblems(['Only an active Admin can import the Master List.'], {
+        title: 'You cannot import the Master List',
+      })
       return
     }
     const picked = candidates.filter((c) => c.selected)
@@ -286,7 +291,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       importedTrainees,
     )
     if ('error' in result) {
-      toast.error(result.error)
+      showProblems([result.error], { title: 'The import could not be completed' })
       return
     }
     addAuditLog({

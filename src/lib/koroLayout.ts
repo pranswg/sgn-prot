@@ -135,6 +135,75 @@ export function koroPlacedSeatLabels(
   return labels
 }
 
+/**
+ * Every seat a member holds, keyed by member id, e.g.
+ * `["Table 1 · Row 2 seat 3", "Table 3 · Row 1 seat 5"]`. A member listed in
+ * more than one place is a duplicate across tables. Unlike
+ * {@link koroPlacedSeatLabels}, this keeps every location, so the grid can both
+ * confirm a cross-table repeat before placing it and name every table a seated
+ * member appears in once placed.
+ */
+export function koroSeatLocationsByMember(
+  document: KoroDocument,
+): Map<string, string[]> {
+  const locations = new Map<string, string[]>()
+  document.tables.forEach((table, tableIndex) => {
+    table.rows.forEach((row, rowIndex) => {
+      row.cells.forEach((cell, columnIndex) => {
+        if (!cell.memberId || !koroIsSeated(cell)) return
+        const label = `Table ${tableIndex + 1} · ${koroTierLabel(rowIndex, table.rows.length)} seat ${columnIndex + 1}`
+        const list = locations.get(cell.memberId)
+        if (list) list.push(label)
+        else locations.set(cell.memberId, [label])
+      })
+    })
+  })
+  return locations
+}
+
+/** Two tables share a service when their date and time are identical. */
+function koroServiceKey(table: KoroTable): string {
+  return `${table.date.trim()}|${table.time.trim()}`
+}
+
+/** A member's seats split by whether each table shares the target table's service. */
+export interface KoroServiceSeatLabels {
+  /** Seats in tables at the *same* date and time as the target (the target itself included). */
+  sameService: string[]
+  /** Seats in tables at a *different* date and time. */
+  otherService: string[]
+}
+
+/**
+ * Where a member already sits, separated by whether each seat is in a table
+ * sharing the target table's date and time. Seating a singer twice within one
+ * service — the same table or a sibling table at that date and time — is a
+ * mistake, so those seats block the add; a seat in a different service is only
+ * worth a confirmation.
+ */
+export function koroSeatLabelsByService(
+  document: KoroDocument,
+  targetTableId: string,
+  memberId: string,
+): KoroServiceSeatLabels {
+  const target = document.tables.find((table) => table.id === targetTableId)
+  const result: KoroServiceSeatLabels = { sameService: [], otherService: [] }
+  if (!target) return result
+  const targetKey = koroServiceKey(target)
+  document.tables.forEach((table, tableIndex) => {
+    table.rows.forEach((row, rowIndex) => {
+      row.cells.forEach((cell, columnIndex) => {
+        if (!cell.memberId || cell.memberId !== memberId) return
+        if (!koroIsSeated(cell)) return
+        const label = `Table ${tableIndex + 1} · ${koroTierLabel(rowIndex, table.rows.length)} seat ${columnIndex + 1}`
+        if (koroServiceKey(table) === targetKey) result.sameService.push(label)
+        else result.otherService.push(label)
+      })
+    })
+  })
+  return result
+}
+
 /** How many active members each configured voice position can supply. */
 export function koroRosterByVoice(
   members: readonly { voicePosition: string }[],

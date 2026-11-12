@@ -9,11 +9,17 @@ import {
   assignmentsFromKoro,
   balanceKoroVoiceSections,
   buildKoroSuguanVoiceSections,
+  buildKoroTableVoiceSections,
   createKoroDocument,
+  createKoroTable,
   duplicateKoroDocument,
+  duplicateKoroTable,
   fillKoroDocument,
   fillKoroTable,
+  formatKoroTime,
   koroDayLabel,
+  moveKoroSeat,
+  normalizeKoroDocument,
   removeKoroRow,
   removeKoroSeat,
   suguanFromKoro,
@@ -65,6 +71,69 @@ test('Koro documents default to Mixed on three tiers of 10/10/14 seats, back to 
     [10, 10, 14],
   )
   assert.ok(table.rows.flatMap((row) => row.cells).every((cell) => !cell.memberId))
+})
+
+test('duplicating a table copies its formation and every seated member under fresh ids', () => {
+  const document = documentWithMember()
+  const source = document.tables[0]
+  const copy = duplicateKoroTable(source)
+  assert.notEqual(copy.id, source.id)
+  assert.equal(copy.title, 'PRINCIPAL CHOIR GROUP (copy)')
+  assert.deepEqual(
+    copy.rows.map((row) => row.cells.length),
+    source.rows.map((row) => row.cells.length),
+  )
+  assert.notEqual(copy.rows[0].id, source.rows[0].id)
+  assert.deepEqual(copy.rows[0].cells[0], source.rows[0].cells[0])
+  assert.equal(copy.rows[0].cells[0].memberId, member.id)
+})
+
+test('dragging a seated member onto an empty seat in another table moves them there', () => {
+  const first = createKoroTable('Table 1')
+  const second = createKoroTable('Table 2')
+  first.rows[0].cells[0] = {
+    memberId: member.id,
+    firstName: member.firstName,
+    voicePosition: 'soprano-1',
+  }
+  const next = moveKoroSeat(
+    [first, second],
+    { tableId: first.id, rowIndex: 0, columnIndex: 0 },
+    { tableId: second.id, rowIndex: 1, columnIndex: 2 },
+  )
+  assert.equal(next[0].rows[0].cells[0].memberId, null)
+  assert.equal(next[1].rows[1].cells[2].memberId, member.id)
+})
+
+test('dragging a member onto a filled seat in another table trades the two', () => {
+  const first = createKoroTable('Table 1')
+  const second = createKoroTable('Table 2')
+  first.rows[0].cells[0] = { memberId: 'a', firstName: 'Ann', voicePosition: 'alto' }
+  second.rows[2].cells[3] = { memberId: 'b', firstName: 'Bea', voicePosition: 'alto' }
+  const next = moveKoroSeat(
+    [first, second],
+    { tableId: first.id, rowIndex: 0, columnIndex: 0 },
+    { tableId: second.id, rowIndex: 2, columnIndex: 3 },
+  )
+  assert.equal(next[0].rows[0].cells[0].memberId, 'b')
+  assert.equal(next[1].rows[2].cells[3].memberId, 'a')
+})
+
+test('dragging a seat onto itself and onto a missing seat leave the tables unchanged', () => {
+  const first = createKoroTable('Table 1')
+  first.rows[0].cells[0] = { memberId: 'a', firstName: 'Ann', voicePosition: 'alto' }
+  const same = moveKoroSeat(
+    [first],
+    { tableId: first.id, rowIndex: 0, columnIndex: 0 },
+    { tableId: first.id, rowIndex: 0, columnIndex: 0 },
+  )
+  assert.equal(same[0].rows[0].cells[0].memberId, 'a')
+  const missing = moveKoroSeat(
+    [first],
+    { tableId: 'nope', rowIndex: 0, columnIndex: 0 },
+    { tableId: first.id, rowIndex: 0, columnIndex: 1 },
+  )
+  assert.equal(missing[0].rows[0].cells[0].memberId, 'a')
 })
 
 test('Koro derives a Filipino weekday from the service date', () => {
@@ -212,4 +281,96 @@ test('direct Suguan conversion carries date, choir group, tables, and full names
   assert.equal(suguan.schedules[0].scheduleLabel, 'PRINCIPAL CHOIR GROUP')
   assert.equal(suguan.schedules[0].assignments[0].memberName, 'Santos, Maria')
   assert.equal(suguan.schedules[0].assignments[0].voicePosition, 'soprano-1')
+})
+
+test('a new table seeds its own date and time and a fresh table leaves them blank', () => {
+  const seeded = createKoroTable('G1', [2], {
+    date: '2026-11-11',
+    time: '6:00AM',
+  })
+  assert.equal(seeded.date, '2026-11-11')
+  assert.equal(seeded.time, '6:00AM')
+  const fresh = createKoroTable('G2', [2])
+  assert.deepEqual({ date: fresh.date, time: fresh.time }, { date: '', time: '' })
+})
+
+test('a new document defaults to no occasion title and its first table carries the service date', () => {
+  const document = createKoroDocument()
+  assert.equal(document.title, '')
+  assert.equal(document.tables[0].date, document.date)
+  assert.equal(document.tables[0].time, '06:00')
+})
+
+test('formatKoroTime renders the picker value in the sheet 12-hour style', () => {
+  assert.equal(formatKoroTime('06:00'), '6:00AM')
+  assert.equal(formatKoroTime('12:00'), '12:00PM')
+  assert.equal(formatKoroTime('18:30'), '6:30PM')
+  assert.equal(formatKoroTime('00:15'), '12:15AM')
+  assert.equal(formatKoroTime(''), '')
+  // A legacy free-text value is printed uppercased, not parsed.
+  assert.equal(formatKoroTime('6:00AM'), '6:00AM')
+})
+
+test('normalizing a legacy document backfills each table date and time', () => {
+  const legacy = {
+    id: 'd',
+    title: 'T',
+    date: '2026-07-25',
+    serviceTime: '6:00AM',
+    group: 'mixed',
+    createdAt: '',
+    updatedAt: '',
+    tables: [
+      {
+        id: 't1',
+        title: 'PRINCIPAL',
+        // The date and time fields are absent, as they were before version 2.
+        rows: [],
+      },
+    ],
+  } as unknown as KoroDocument
+  const normalized = normalizeKoroDocument(legacy)
+  assert.equal(normalized.tables[0].date, '2026-07-25')
+  assert.equal(normalized.tables[0].time, '6:00AM')
+})
+
+test('normalizing keeps a table that already owns its date and time', () => {
+  const document = createKoroDocument()
+  document.tables[0].date = '2026-01-01'
+  document.tables[0].time = '7:30PM'
+  const normalized = normalizeKoroDocument(document)
+  assert.equal(normalized.tables[0].date, '2026-01-01')
+  assert.equal(normalized.tables[0].time, '7:30PM')
+})
+
+test('per-table voice sections only read that table', () => {
+  const document = createKoroDocument()
+  const first = document.tables[0]
+  first.rows[0].cells[0] = {
+    memberId: 'kim',
+    firstName: 'Kim',
+    voicePosition: 'alto',
+  }
+  const second = createKoroTable('G2', [2])
+  second.rows[0].cells[0] = {
+    memberId: 'ana',
+    firstName: 'Ana',
+    voicePosition: 'alto',
+  }
+  const alto: VoicePosition = {
+    id: 'alto',
+    name: 'Alto',
+    shortName: 'A',
+    gender: 'female',
+  }
+  const firstSections = buildKoroTableVoiceSections(first, [], [alto])
+  const secondSections = buildKoroTableVoiceSections(second, [], [alto])
+  assert.deepEqual(
+    firstSections.find((section) => section.label === 'ALTO')?.members,
+    ['Kim'],
+  )
+  assert.deepEqual(
+    secondSections.find((section) => section.label === 'ALTO')?.members,
+    ['Ana'],
+  )
 })

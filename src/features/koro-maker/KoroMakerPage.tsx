@@ -24,10 +24,12 @@ import {
   addKoroRow,
   addKoroSeat,
   createKoroTable,
+  duplicateKoroTable,
   fillKoroDocument,
   fillKoroTable,
   koroDayLabel,
   koroVoiceColor,
+  moveKoroSeat,
   removeKoroRow,
   removeKoroSeat,
   swapKoroSeats,
@@ -36,8 +38,9 @@ import type { KoroRosterEntry } from '@/lib/koro'
 import {
   koroDocumentCounts,
   koroPlacedMemberIds,
-  koroPlacedSeatLabels,
   koroRosterByVoice,
+  koroSeatLabelsByService,
+  koroSeatLocationsByMember,
 } from '@/lib/koroLayout'
 import {
   AlertDialog,
@@ -112,6 +115,15 @@ export function KoroMakerPage() {
     rowIndex: number
     columnIndex: number
   } | null>(null)
+  // A seat placement (pick or drag) of a member already seated somewhere else,
+  // held until the user confirms it, so every duplicate add prompts the same way.
+  const [pendingDuplicate, setPendingDuplicate] = useState<{
+    member: KoroRosterEntry
+    tableId: string
+    rowIndex: number
+    columnIndex: number
+    others: string[]
+  } | null>(null)
   const { exportPreview, requestExport } = useExportPreview()
   const [createNewKoro, creatingKoro] = useAsyncAction(createDocument)
   const document =
@@ -125,9 +137,10 @@ export function KoroMakerPage() {
     ? koroPlacedMemberIds(document)
     : new Set<string>()
   const counts = document ? koroDocumentCounts(document) : null
-  const placedSeats = document
-    ? koroPlacedSeatLabels(document)
-    : new Map<string, string>()
+  const seatLocations = document
+    ? koroSeatLocationsByMember(document)
+    : new Map<string, string[]>()
+  const duplicatedIds = new Set(counts?.duplicatedMemberIds ?? [])
   const rosterByVoice = koroRosterByVoice(availableMembers)
   const unplacedCount = availableMembers.length - placedMemberIds.size
   const selectedCount = selectedMemberIds.size
@@ -283,37 +296,88 @@ export function KoroMakerPage() {
     setSwapSource(null)
   }
 
-  const dropMember = (
-    table: KoroTable,
+  const placeMember = (
+    tableId: string,
     rowIndex: number,
     columnIndex: number,
-    memberId: string,
+    member: KoroRosterEntry | null,
   ) => {
-    const member = availableMembers.find((entry) => entry.id === memberId)
-    if (!member) return
+    const table = document.tables.find((entry) => entry.id === tableId)
+    if (!table) return
     patchCell(table, rowIndex, columnIndex, {
-      memberId: member.id,
-      firstName: member.firstName,
-      voicePosition: member.voicePosition,
+      memberId: member?.id ?? null,
+      firstName: member?.firstName ?? '',
+      voicePosition: member?.voicePosition ?? '',
     })
   }
 
-  // Dragging one occupied seat onto another exchanges the two, the same
-  // primitive the tap-swap flow uses, but resolved in a single drop.
-  const swapDroppedSeats = (
-    tableId: string,
+  // The one path every single-seat add takes, whether the member was picked in
+  // the seat's own popover/sheet or dragged from the Members panel. Placing a
+  // member who already sits in another seat holds the change until the user
+  // confirms it in the "are you sure?" window, so a duplicate is never added
+  // silently. Clearing a seat and re-picking its current occupant commit directly.
+  const seatMember = (
+    table: KoroTable,
+    rowIndex: number,
+    columnIndex: number,
+    member: KoroRosterEntry | null,
+  ) => {
+    if (!member) {
+      placeMember(table.id, rowIndex, columnIndex, null)
+      return
+    }
+    const occupant = table.rows[rowIndex]?.cells[columnIndex]?.memberId ?? null
+    if (occupant === member.id) {
+      placeMember(table.id, rowIndex, columnIndex, member)
+      return
+    }
+    // Two tables at the same date and time are the same service, so a member
+    // already seated in any of them — including this table — cannot be seated
+    // again. Only a seat in a *different* service earns the "are you sure?".
+    const { sameService, otherService } = koroSeatLabelsByService(
+      document,
+      table.id,
+      member.id,
+    )
+    if (sameService.length > 0) {
+      const name = `${member.firstName} ${member.lastName}`.trim()
+      toast.error(
+        `Cannot add ${name} — they are already seated in a group at this same date and time.`,
+      )
+      return
+    }
+    if (otherService.length > 0) {
+      setPendingDuplicate({
+        member,
+        tableId: table.id,
+        rowIndex,
+        columnIndex,
+        others: otherService,
+      })
+      return
+    }
+    placeMember(table.id, rowIndex, columnIndex, member)
+  }
+
+  // Dragging one occupied seat onto another exchanges the two occupants. It
+  // works within a table and across tables: dropping onto an empty seat moves
+  // the member there (their old seat empties), dropping onto a filled seat
+  // trades the two singers.
+  const moveDroppedSeat = (
+    fromTableId: string,
     fromRowIndex: number,
     fromColumnIndex: number,
+    toTableId: string,
     toRowIndex: number,
     toColumnIndex: number,
   ) => {
-    updateTable(tableId, (table) =>
-      swapKoroSeats(
-        table,
-        { rowIndex: fromRowIndex, columnIndex: fromColumnIndex },
-        { rowIndex: toRowIndex, columnIndex: toColumnIndex },
+    updateDocument(document.id, {
+      tables: moveKoroSeat(
+        document.tables,
+        { tableId: fromTableId, rowIndex: fromRowIndex, columnIndex: fromColumnIndex },
+        { tableId: toTableId, rowIndex: toRowIndex, columnIndex: toColumnIndex },
       ),
-    )
+    })
   }
 
   // Dropping one table onto another moves it to that table's position, keeping
@@ -339,12 +403,19 @@ export function KoroMakerPage() {
     updateDocument(document.id, { tables: [...document.tables, table] })
   }
 
+  // Copy a table (formation and every seated member) into a fresh one placed
+  // right below the original, so a proven arrangement can be repeated.
+  const duplicateTable = (tableId: string) => {
+    const index = document.tables.findIndex((entry) => entry.id === tableId)
+    const source = document.tables[index]
+    if (!source) return
+    const next = [...document.tables]
+    next.splice(index + 1, 0, duplicateKoroTable(source))
+    updateDocument(document.id, { tables: next })
+  }
+
   const handleExport = (kind: 'table' | 'suguan') => {
-    if (!document.title.trim() || !document.date) {
-      toast.error('Enter an occasion title and date before exporting.')
-      return
-    }
-    const title = document.title.trim()
+    const title = document.title.trim() || 'Koro'
     const fileName =
       kind === 'table'
         ? exportFileName(`${title} - Koro`, 'pdf')
@@ -376,10 +447,6 @@ export function KoroMakerPage() {
   }
 
   const handlePreviewTable = async () => {
-    if (!document.title.trim() || !document.date) {
-      toast.error('Enter an occasion title and date before previewing.')
-      return
-    }
     const previewWindow = openPdfPreviewWindow()
     if (!previewWindow) {
       toast.error('Allow pop-ups to preview the table.')
@@ -409,10 +476,6 @@ export function KoroMakerPage() {
   }
 
   const handlePreviewSuguan = async () => {
-    if (!document.title.trim() || !document.date) {
-      toast.error('Enter an occasion title and date before previewing.')
-      return
-    }
     const previewWindow = openPdfPreviewWindow()
     if (!previewWindow) {
       toast.error('Allow pop-ups to preview the Suguan PDF.')
@@ -529,11 +592,11 @@ export function KoroMakerPage() {
           <Label htmlFor="koro-service-time">Service time</Label>
           <Input
             id="koro-service-time"
+            type="time"
             value={document.serviceTime ?? ''}
             onChange={(event) =>
               updateDocument(document.id, { serviceTime: event.target.value })
             }
-            placeholder="6:00AM"
           />
         </div>
         <div className="grid gap-2">
@@ -705,7 +768,8 @@ export function KoroMakerPage() {
                   canRemoveTable={document.tables.length > 1}
                   members={availableMembers}
                   voices={voices}
-                  placedSeats={placedSeats}
+                  seatLocations={seatLocations}
+                  duplicatedIds={duplicatedIds}
                   dropTarget={dropTarget}
                   swapMode={swapMode}
                   dragging={dragTableId === table.id}
@@ -727,7 +791,10 @@ export function KoroMakerPage() {
                     handleSwapSeat(table.id, rowIndex, columnIndex)
                   }
                   onFillByVoice={() => fillTableByVoice(table.id)}
+                  onDuplicateTable={() => duplicateTable(table.id)}
                   onTitleChange={(title) => patchTable(table.id, { title })}
+                  onDateChange={(date) => patchTable(table.id, { date })}
+                  onTimeChange={(time) => patchTable(table.id, { time })}
                   onAddRow={() => updateTable(table.id, addKoroRow)}
                   onAddSeat={(rowId) =>
                     updateTable(table.id, (current) =>
@@ -752,17 +819,24 @@ export function KoroMakerPage() {
                     })
                   }
                   onSeatSelect={(rowIndex, columnIndex, member) =>
-                    patchCell(table, rowIndex, columnIndex, {
-                      memberId: member?.id ?? null,
-                      firstName: member?.firstName ?? '',
-                      voicePosition: member?.voicePosition ?? '',
-                    })
+                    seatMember(table, rowIndex, columnIndex, member)
                   }
-                  onDropSeat={(rowIndex, columnIndex, memberId) =>
-                    dropMember(table, rowIndex, columnIndex, memberId)
-                  }
-                  onSwapSeats={(fromRow, fromCol, toRow, toCol) =>
-                    swapDroppedSeats(table.id, fromRow, fromCol, toRow, toCol)
+                  onDropSeat={(rowIndex, columnIndex, memberId) => {
+                    const member = availableMembers.find(
+                      (entry) => entry.id === memberId,
+                    )
+                    if (member)
+                      seatMember(table, rowIndex, columnIndex, member)
+                  }}
+                  onSwapSeats={(fromTableId, fromRow, fromCol, toRow, toCol) =>
+                    moveDroppedSeat(
+                      fromTableId,
+                      fromRow,
+                      fromCol,
+                      table.id,
+                      toRow,
+                      toCol,
+                    )
                   }
                   onDragSeatChange={setDropTarget}
                 />
@@ -934,6 +1008,45 @@ export function KoroMakerPage() {
               }}
             >
               Delete Koro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={pendingDuplicate !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingDuplicate(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {`Seat ${pendingDuplicate?.member.firstName.trim() ?? ''} ${pendingDuplicate?.member.lastName.trim() ?? ''} here as well?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDuplicate && (
+                <>
+                  {`${pendingDuplicate.member.firstName.trim()} ${pendingDuplicate.member.lastName.trim()} is already seated in ${pendingDuplicate.others.join(', ')}. Adding them here lists this member more than once. Are you sure?`}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!pendingDuplicate) return
+                placeMember(
+                  pendingDuplicate.tableId,
+                  pendingDuplicate.rowIndex,
+                  pendingDuplicate.columnIndex,
+                  pendingDuplicate.member,
+                )
+                setPendingDuplicate(null)
+              }}
+            >
+              Yes, add anyway
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

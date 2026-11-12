@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import type { KoroDocument } from '@/core/types/koro'
 import { deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
-import { createKoroDocument, duplicateKoroDocument } from '@/lib/koro'
+import { createKoroDocument, duplicateKoroDocument, normalizeKoroDocument } from '@/lib/koro'
 
 interface KoroState {
   documents: KoroDocument[]
@@ -32,11 +32,12 @@ export const useKoroStore = create<KoroState>()(
         importData: (documents) => {
           const list = Array.isArray(documents) ? documents : []
           if (list.length === 0) return
+          const normalized = list.map(normalizeKoroDocument)
           set((state) => ({
-            documents: list,
-            activeDocumentId: list.some((d) => d.id === state.activeDocumentId)
+            documents: normalized,
+            activeDocumentId: normalized.some((d) => d.id === state.activeDocumentId)
               ? state.activeDocumentId
-              : list[0].id,
+              : normalized[0].id,
           }))
         },
 
@@ -126,10 +127,15 @@ export const useKoroStore = create<KoroState>()(
     },
     {
       name: 'choir-koro-documents',
-      version: 1,
+      version: 2,
       migrate: (persisted) => {
         const state = (persisted ?? {}) as Partial<KoroState>
-        const documents = Array.isArray(state.documents) ? state.documents : []
+        const rawDocuments = Array.isArray(state.documents)
+          ? (state.documents as KoroDocument[])
+          : []
+        // Version 2 gave every table its own date and time; older persisted
+        // documents had neither, so backfill them before anything reads them.
+        const documents = rawDocuments.map(normalizeKoroDocument)
         const initial = documents[0] ?? createKoroDocument()
         const activeDocumentId = documents.some(
           (document) => document.id === state.activeDocumentId,

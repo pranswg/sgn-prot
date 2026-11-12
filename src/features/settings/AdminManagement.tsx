@@ -82,6 +82,7 @@ import {
   useAuthStore,
   type CreateManagedAccountInput,
 } from '@/store/authStore'
+import { showProblems } from '@/store/problemStore'
 
 /**
  * Phase 5 flips the Administration screens live: account and role writes go
@@ -547,7 +548,9 @@ function UserProfileDialog({
       customPermissions: nextPermissions,
     })
     if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
+      showProblems(result.problems.map((problem) => problem.message), {
+        title: 'Could not save the account',
+      })
       return
     }
     toast.success('User account updated.')
@@ -588,7 +591,9 @@ function UserProfileDialog({
       statusReason: reason,
     })
     if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
+      showProblems(result.problems.map((problem) => problem.message), {
+        title: 'Could not change the account status',
+      })
       return
     }
     toast.success(`Account ${status === 'active' ? 'reactivated' : status}.`)
@@ -1047,14 +1052,18 @@ export function AdminManagement({ actorId }: { actorId: string }) {
       : before.filter((item) => item !== permission)
     const result = await updateManagedRolePermissions(actorId, role, after)
     if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
+      showProblems(result.problems.map((problem) => problem.message), {
+        title: 'Could not update the role permissions',
+      })
     }
   }
 
   const terminateSession = (id: string) => {
     const result = terminateManagedSession(actorId, id)
     if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
+      showProblems(result.problems.map((problem) => problem.message), {
+        title: 'Could not end the session',
+      })
       return
     }
     toast.success(`Session for ${result.session.userName} ended.`)
@@ -1078,7 +1087,9 @@ export function AdminManagement({ actorId }: { actorId: string }) {
     if (!rolePendingDelete) return
     const result = await deleteManagedRole(actorId, rolePendingDelete.id)
     if ('problems' in result) {
-      toast.error(result.problems.map((problem) => problem.message).join(' '))
+      showProblems(result.problems.map((problem) => problem.message), {
+        title: 'Could not delete the role',
+      })
     } else {
       toast.success(`${rolePendingDelete.label} role deleted.`)
     }

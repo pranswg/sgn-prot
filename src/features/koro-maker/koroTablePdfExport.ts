@@ -3,8 +3,8 @@ import type { KoroRosterEntry } from '@/lib/koro'
 import type { VoicePosition } from '@/core/types/suguan'
 import { FONT_SIZE_PRESETS, docPaperDimensionsMm } from '@/lib/suguanUtils'
 import { fitFontSizePt } from '@/lib/suguanExport'
-import { koroDayLabel, koroVoiceColor } from '@/lib/koro'
-import { formatDateLong } from '@/lib/format'
+import { formatKoroTime, koroDayLabel, koroVoiceColor } from '@/lib/koro'
+import { formatDateLongDate } from '@/lib/format'
 import { exportFileName } from '@/lib/exportNaming'
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -26,11 +26,12 @@ export interface KoroTableExportOptions {
  * The printed seating chart.
  *
  * Styled after the choir's own reference sheet: a serif heading block (choir
- * name, occasion in italic), one bold date/service/table line per table, an
- * organist line, then a bordered grid where **each row divides the full width
- * by its own seat count** — a 14-seat front row therefore prints as narrower
- * cells than a 10-seat row, exactly like the sample. Names wrap onto two lines
- * (given name over surname) and the row grows rather than the font collapsing.
+ * name, occasion in italic), one bold date/service/table line per table (each
+ * table carries its own date, day and time), an organist line, then a bordered
+ * grid where **each row divides the full width by its own seat count** — a
+ * 14-seat front row therefore prints as narrower cells than a 10-seat row,
+ * exactly like the sample. Seats print the singer's given name only; a long
+ * name wraps and the row grows rather than the font collapsing.
  * A vertical colour key closes the sheet.
  *
  * The sample's highlight fills behind the weekday and the table name are
@@ -63,11 +64,6 @@ export async function exportKoroTablePdf(
   const localeLabel = (options.localeName ?? '').trim()
   const heading = localeLabel ? `${localeLabel} CHOIR`.toUpperCase() : 'CHOIR'
   const occasion = document.title.trim()
-  const serviceDate = document.date
-    ? formatDateLong(document.date).toUpperCase()
-    : ''
-  const serviceDay = koroDayLabel(document.date)
-  const serviceTime = (document.serviceTime ?? '').trim().toUpperCase()
   const organist = members.find(
     (member) => member.id === document.organistMemberId,
   )
@@ -114,15 +110,16 @@ export async function exportKoroTablePdf(
   }
 
   const drawServiceLine = (table: KoroTable, continued: boolean) => {
-    const tableTitle = (table.title.trim() || 'KORO').toUpperCase()
-    const label = [
-      serviceDate ? `${serviceDate}:` : '',
-      serviceDay,
-      serviceTime,
-      `- ${tableTitle}`,
-    ]
-      .filter(Boolean)
-      .join('  ')
+    // Each table prints its own service line, e.g.
+    // "November 11, 2026 - SATURDAY 6:00AM (Principal Choir)". The weekday is
+    // derived from the table's date, so there is no separate day field.
+    const tableTitle = (table.title ?? '').trim() || 'KORO'
+    const day = koroDayLabel(table.date).toUpperCase()
+    const time = formatKoroTime(table.time ?? '')
+    const dateLabel = table.date ? formatDateLongDate(table.date) : ''
+    const dated = [dateLabel, day].filter(Boolean).join(' - ')
+    const when = [dated, time].filter(Boolean).join(' ')
+    const label = `${when ? `${when} ` : ''}(${tableTitle})`
     const fullLabel = continued ? `${label}  (CONTINUED)` : label
     const size = fitLine(
       fullLabel,
@@ -164,9 +161,9 @@ export async function exportKoroTablePdf(
 
     const prepared = row.cells.map((cell) => {
       const member = cell.memberId ? memberById.get(cell.memberId) : undefined
+      // The seating chart prints given names only, never surnames.
       const first = (member?.firstName ?? cell.firstName).trim()
-      const last = (member?.lastName ?? '').trim()
-      if (!first && !last) return { cell, lines: [] as string[], size: 0 }
+      if (!first) return { cell, lines: [] as string[], size: 0 }
       let size = Math.max(
         5.5,
         Math.min(fontPreset.bodyFontSize, maxTextWidth * 0.62),
@@ -175,10 +172,9 @@ export async function exportKoroTablePdf(
       for (let attempt = 0; attempt < 6; attempt += 1) {
         pdf.setFont('times', 'normal')
         pdf.setFontSize(size)
-        lines = [
-          ...(first ? pdf.splitTextToSize(first, maxTextWidth) : []),
-          ...(last ? pdf.splitTextToSize(last, maxTextWidth) : []),
-        ].filter((line: string) => line.trim().length > 0)
+        lines = pdf
+          .splitTextToSize(first, maxTextWidth)
+          .filter((line: string) => line.trim().length > 0)
         if (lines.length <= 2 || size <= 5.5) break
         size -= 0.5
       }

@@ -14,6 +14,9 @@ export interface KoroRow {
 export interface KoroTable {
   id: string
   title: string
+  /** This table's own service date (`YYYY-MM-DD`) and time; the weekday is derived from the date. */
+  date: string
+  time: string
   rows: KoroRow[]
 }
 

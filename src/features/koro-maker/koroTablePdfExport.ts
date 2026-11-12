@@ -219,7 +219,7 @@ export async function exportKoroTablePdf(
       }
       x += cellWidth
     }
-    y += rowHeight + 4 * fontScale
+    y += rowHeight
   }
 
   const drawLegend = () => {

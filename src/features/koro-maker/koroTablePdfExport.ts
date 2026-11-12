@@ -109,7 +109,7 @@ export async function exportKoroTablePdf(
     y += 3
   }
 
-  const drawServiceLine = (table: KoroTable, continued: boolean) => {
+  const drawServiceLine = (table: KoroTable) => {
     // Each table prints its own service line, e.g.
     // "November 11, 2026 - SATURDAY 6:00AM (Principal Choir)". The weekday is
     // derived from the table's date, so there is no separate day field.
@@ -120,15 +120,14 @@ export async function exportKoroTablePdf(
     const dated = [dateLabel, day].filter(Boolean).join(' - ')
     const when = [dated, time].filter(Boolean).join(' ')
     const label = `${when ? `${when} ` : ''}(${tableTitle})`
-    const fullLabel = continued ? `${label}  (CONTINUED)` : label
     const size = fitLine(
-      fullLabel,
+      label,
       Math.max(8, Math.min(12, 10.5 * fontScale)),
       contentWidth,
     )
     pdf.setFont('times', 'bold')
     pdf.setFontSize(size)
-    pdf.text(fullLabel, pageWidth / 2, y + size * 0.34, { align: 'center' })
+    pdf.text(label, pageWidth / 2, y + size * 0.34, { align: 'center' })
     y += Math.max(6, size * 0.54)
 
     // The organist belongs to the document, so it prints once, under the first
@@ -150,7 +149,7 @@ export async function exportKoroTablePdf(
     pdf.addPage([pageWidth, pageHeight], 'landscape')
     y = margin
     drawHeading()
-    drawServiceLine(table, true)
+    drawServiceLine(table)
   }
 
   const drawRow = (row: KoroRow, table: KoroTable) => {
@@ -249,7 +248,7 @@ export async function exportKoroTablePdf(
 
   drawHeading()
   for (const table of document.tables) {
-    drawServiceLine(table, false)
+    drawServiceLine(table)
     for (const row of table.rows) drawRow(row, table)
     y += 4
   }

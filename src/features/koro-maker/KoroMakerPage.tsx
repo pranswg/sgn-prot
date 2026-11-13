@@ -4,6 +4,7 @@ import {
   Check,
   Eye,
   FileDown,
+  FileText,
   Grid2X2,
   Plus,
   Trash2,
@@ -67,6 +68,7 @@ import type { Member } from '@/core/types/member'
 import type { DocFontSize, SuguanGroup } from '@/core/types/suguan'
 import { exportKoroAsSuguanPdf } from './koroPdfExport'
 import { exportKoroTablePdf } from './koroTablePdfExport'
+import { exportKoroTableDocx } from './koroTableDocxExport'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
@@ -95,7 +97,7 @@ export function KoroMakerPage() {
   const updateDocument = useKoroStore((state) => state.updateDocument)
   const deleteDocument = useKoroStore((state) => state.deleteDocument)
   const [exporting, setExporting] = useState<
-    'table' | 'suguan' | 'preview' | 'table-preview' | null
+    'table' | 'table-word' | 'suguan' | 'preview' | 'table-preview' | null
   >(null)
   const [memberQuery, setMemberQuery] = useState('')
   const [memberVoice, setMemberVoice] = useState('')
@@ -438,19 +440,24 @@ export function KoroMakerPage() {
     updateDocument(document.id, { tables: next })
   }
 
-  const handleExport = (kind: 'table' | 'suguan') => {
+  const handleExport = (kind: 'table' | 'table-word' | 'suguan') => {
     const title = document.title.trim() || 'Koro'
     const fileName =
       kind === 'table'
         ? exportFileName(`${title} - Koro`, 'pdf')
-        : exportFileName(`${title} - Suguan`, 'pdf')
+        : kind === 'table-word'
+          ? exportFileName(`${title} - Koro`, 'docx')
+          : exportFileName(`${title} - Suguan`, 'pdf')
     requestExport({
       filename: fileName,
       onConfirm: () => void runExport(kind, fileName),
     })
   }
 
-  const runExport = async (kind: 'table' | 'suguan', fileName: string) => {
+  const runExport = async (
+    kind: 'table' | 'table-word' | 'suguan',
+    fileName: string,
+  ) => {
     setExporting(kind)
     try {
       if (kind === 'table') {
@@ -458,13 +465,24 @@ export function KoroMakerPage() {
           localeName,
         })
         toast.success('Koro table exported as PDF.')
+      } else if (kind === 'table-word') {
+        await exportKoroTableDocx(document, members, voices, fileName, {
+          localeName,
+        })
+        toast.success('Koro table exported as Word.')
       } else {
         await exportKoroAsSuguanPdf(document, members, voices, 'download', fileName)
         toast.success('Suguan PDF exported.')
       }
     } catch (error) {
       console.error(error)
-      toast.error(kind === 'table' ? 'Could not export the Koro table.' : 'Could not export the Suguan PDF.')
+      toast.error(
+        kind === 'table'
+          ? 'Could not export the Koro table.'
+          : kind === 'table-word'
+            ? 'Could not export the Koro table to Word.'
+            : 'Could not export the Suguan PDF.',
+      )
     } finally {
       setExporting(null)
     }
@@ -556,6 +574,15 @@ export function KoroMakerPage() {
             >
               <FileDown className="size-4" />
               Export Table
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleExport('table-word')}
+              loading={exporting === 'table-word'}
+              disabled={exporting !== null}
+            >
+              <FileText className="size-4" />
+              Export Word
             </Button>
             <Button
               variant="outline"

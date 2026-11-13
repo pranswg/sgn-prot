@@ -4,6 +4,12 @@ import type { VoicePosition } from '@/core/types/suguan'
 import { FONT_SIZE_PRESETS, docPaperDimensionsMm } from '@/lib/suguanUtils'
 import { fitFontSizePt } from '@/lib/suguanExport'
 import { formatKoroTime, koroDayLabel, koroVoiceColor, KORO_ORGAN_COLOR } from '@/lib/koro'
+import {
+  koroColumnWidthsMm,
+  koroMergedSeats,
+  koroReservedColumns,
+} from '@/lib/koroLayout'
+import type { KoroMergedSeat } from '@/lib/koroLayout'
 import { formatDateLongDate } from '@/lib/format'
 import { exportFileName } from '@/lib/exportNaming'
 
@@ -32,7 +38,9 @@ export interface KoroTableExportOptions {
  * 14-seat front row therefore prints as narrower cells than a 10-seat row,
  * exactly like the sample. Seats print the singer's given name only; a reserved
  * seat (e.g. "Organ") prints its label instead, and a long name wraps and the
- * row grows rather than the font collapsing.
+ * row grows rather than the font collapsing. A reserved seat takes two seats'
+ * width and fuses with the blank seats above and below it into one tall gold
+ * block, and a table holding one prints with taller rows throughout.
  * A vertical colour key closes the sheet.
  *
  * The sample's highlight fills behind the weekday and the table name are
@@ -153,20 +161,47 @@ export async function exportKoroTablePdf(
     drawServiceLine(table)
   }
 
-  const drawRow = (row: KoroRow, table: KoroTable) => {
-    const columns = Math.max(1, row.cells.length)
-    const cellWidth = contentWidth / columns
-    const padding = 1.3
-    const maxTextWidth = Math.max(6, cellWidth - padding * 2)
+  const lineHeight = (sizePt: number) => sizePt * 0.3528 * 1.1
 
-    const prepared = row.cells.map((cell) => {
+  /**
+   * The largest bold size that fits a reserved seat's block. The block itself
+   * keeps its own size; only this label is allowed to grow, and it stays close
+   * to the body size so the organ reads as a label, not a poster.
+   */
+  const fitBlockLabel = (text: string, maxWidthMm: number, maxHeightMm: number) => {
+    pdf.setFont('times', 'bold')
+    const largest = fontPreset.bodyFontSize * 1.5
+    let wrapped: { lines: string[]; size: number } | null = null
+    for (let size = largest; size >= 5.5; size -= 0.5) {
+      pdf.setFontSize(size)
+      const lines = pdf
+        .splitTextToSize(text, maxWidthMm)
+        .filter((line: string) => line.trim().length > 0)
+      if (lines.length === 0) continue
+      if (lines.length * lineHeight(size) + 2.6 > maxHeightMm) continue
+      // A short label stays on one line; splitting "ORGAN" into "ORG / AN"
+      // reads as a typo, so a single line wins over a larger wrapped one.
+      if (lines.length === 1) return { lines, size }
+      wrapped ??= { lines, size }
+    }
+    return wrapped ?? { lines: [text], size: 5.5 }
+  }
+
+  /** Measure one row's text without drawing, so heights are known up front. */
+  const prepareRow = (row: KoroRow, widths: number[]) => {
+    const padding = 1.3
+
+    return row.cells.map((cell, columnIndex) => {
+      const maxTextWidth = Math.max(6, (widths[columnIndex] ?? 0) - padding * 2)
       const member = cell.memberId ? memberById.get(cell.memberId) : undefined
       // The seating chart prints given names only, never surnames. A reserved
       // seat (e.g. "Organ") prints its label in place of a name.
       const first = (member?.firstName ?? cell.firstName).trim()
       const label = (cell.label ?? '').trim()
-      const text = first || label
-      if (!text) return { cell, lines: [] as string[], size: 0, isLabel: false }
+      const text = first || (label ? label.toUpperCase() : '')
+      if (!text) {
+        return { cell, text, lines: [] as string[], size: 0, isLabel: false }
+      }
       const isLabel = !first
       let size = Math.max(
         5.5,
@@ -174,7 +209,7 @@ export async function exportKoroTablePdf(
       )
       let lines: string[] = []
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        pdf.setFont('times', isLabel ? 'bolditalic' : 'normal')
+        pdf.setFont('times', isLabel ? 'bold' : 'normal')
         pdf.setFontSize(size)
         lines = pdf
           .splitTextToSize(text, maxTextWidth)
@@ -184,13 +219,16 @@ export async function exportKoroTablePdf(
       }
       return {
         cell,
+        text,
         lines: lines.slice(0, 2),
         size,
         isLabel,
       }
     })
+  }
 
-    const lineHeight = (sizePt: number) => sizePt * 0.3528 * 1.1
+  const rowHeightOf = (prepared: ReturnType<typeof prepareRow>) => {
+    const padding = 1.3
     const tallest = prepared.reduce((height, entry) => {
       if (entry.lines.length === 0) return height
       return Math.max(
@@ -198,38 +236,114 @@ export async function exportKoroTablePdf(
         entry.lines.length * lineHeight(entry.size) + padding * 2,
       )
     }, 0)
-    const rowHeight = Math.max(8.5 * fontScale, tallest)
+    return Math.max(8.5 * fontScale, tallest)
+  }
 
-    if (y + rowHeight > pageBottom) newPage(table)
+  const drawTable = (table: KoroTable) => {
+    // A reserved seat takes the width of two ordinary seats, so the organ block
+    // is larger in both directions, like the choir's reference sheet.
+    const reservedColumns = koroReservedColumns(table.rows)
+    const widthsByRow = table.rows.map((row) =>
+      koroColumnWidthsMm(row, reservedColumns, contentWidth),
+    )
+    const prepared = table.rows.map((row, index) =>
+      prepareRow(row, widthsByRow[index]),
+    )
 
-    let x = margin
-    for (const { cell, lines, size, isLabel } of prepared) {
-      const member = cell.memberId ? memberById.get(cell.memberId) : undefined
-      const voice = cell.voicePosition || member?.voicePosition || ''
-      const fill = cell.memberId
-        ? koroVoiceColor(voice, voices)
-        : cell.label?.trim()
-          ? KORO_ORGAN_COLOR
-          : '#ffffff'
-      pdf.setFillColor(...hexToRgb(fill))
-      pdf.setDrawColor(0, 0, 0)
-      pdf.setLineWidth(0.25)
-      pdf.rect(x, y, cellWidth, rowHeight, 'FD')
+    // A table holding a reserved seat (the organ) prints a little larger than
+    // the rest, so the organ reads as the dominant block on the page.
+    const hasReservedSeat = prepared.some((row) =>
+      row.some((seat) => seat.isLabel),
+    )
+    const reservedRowHeight = 8.5 * fontScale * 1.25
+    const heights = prepared.map((row) =>
+      hasReservedSeat
+        ? Math.max(rowHeightOf(row), reservedRowHeight)
+        : rowHeightOf(row),
+    )
 
-      if (lines.length > 0 && size > 0) {
-        pdf.setFont('times', isLabel ? 'bolditalic' : 'normal')
-        pdf.setFontSize(size)
-        const step = lineHeight(size)
-        const blockHeight = lines.length * step
-        let textY = y + (rowHeight - blockHeight) / 2 + step * 0.78
-        for (const line of lines) {
-          pdf.text(line, x + cellWidth / 2, textY, { align: 'center' })
-          textY += step
+    // Reserved seats fused with the blank seats around them draw as one block,
+    // starting at the topmost row the run covers.
+    const spans = koroMergedSeats(table.rows)
+    const blocks = new Map<string, KoroMergedSeat>()
+    // Seats a taller reserved block already covers; they must not draw again.
+    const absorbed = new Set<string>()
+    for (const span of spans) {
+      blocks.set(`${span.startRow}:${span.columnIndex}`, span)
+      for (let covered = span.startRow; covered <= span.endRow; covered += 1) {
+        if (covered !== span.startRow) {
+          absorbed.add(`${covered}:${span.columnIndex}`)
         }
       }
-      x += cellWidth
     }
-    y += rowHeight
+
+    table.rows.forEach((_row, rowIndex) => {
+      if (y + heights[rowIndex] > pageBottom) newPage(table)
+      const widths = widthsByRow[rowIndex]
+      let x = margin
+
+      prepared[rowIndex].forEach((seat, columnIndex) => {
+        const cellWidth = widths[columnIndex]
+        if (absorbed.has(`${rowIndex}:${columnIndex}`)) {
+          x += cellWidth
+          return
+        }
+        const maxTextWidth = Math.max(6, cellWidth - 1.3 * 2)
+
+        // The block starts at the top of its run, which may be a blank seat
+        // above the label, and grows over every row it still fits on.
+        const span = blocks.get(`${rowIndex}:${columnIndex}`)
+        let height = heights[rowIndex]
+        if (span) {
+          let total = heights[rowIndex]
+          let endRow = rowIndex
+          for (let next = rowIndex + 1; next <= span.endRow; next += 1) {
+            if (y + total + heights[next] > pageBottom) break
+            total += heights[next]
+            endRow = next
+          }
+          if (endRow > rowIndex) {
+            height = total
+            for (let covered = rowIndex + 1; covered <= endRow; covered += 1) {
+              absorbed.add(`${covered}:${columnIndex}`)
+            }
+          }
+        }
+
+        const cell = span ? table.rows[span.rowIndex].cells[columnIndex] : seat.cell
+        const labelSeat = span ? prepared[span.rowIndex][columnIndex] : seat
+        const member = cell.memberId ? memberById.get(cell.memberId) : undefined
+        const voice = cell.voicePosition || member?.voicePosition || ''
+        const fill = cell.memberId
+          ? koroVoiceColor(voice, voices)
+          : cell.label?.trim()
+            ? KORO_ORGAN_COLOR
+            : '#ffffff'
+        pdf.setFillColor(...hexToRgb(fill))
+        pdf.setDrawColor(0, 0, 0)
+        pdf.setLineWidth(0.25)
+        pdf.rect(x, y, cellWidth, height, 'FD')
+
+        // A reserved seat takes a label sized to its block, so it reads as the
+        // large organ seat the reference sheet shows.
+        const label = labelSeat.isLabel
+          ? fitBlockLabel(labelSeat.text, maxTextWidth * 0.92, height)
+          : { lines: labelSeat.lines, size: labelSeat.size }
+        if (label.lines.length > 0 && label.size > 0) {
+          pdf.setFont('times', labelSeat.isLabel ? 'bold' : 'normal')
+          pdf.setFontSize(label.size)
+          const step = lineHeight(label.size)
+          const blockHeight = label.lines.length * step
+          let textY = y + (height - blockHeight) / 2 + step * 0.78
+          for (const line of label.lines) {
+            pdf.text(line, x + cellWidth / 2, textY, { align: 'center' })
+            textY += step
+          }
+        }
+        x += cellWidth
+      })
+      y += heights[rowIndex]
+    })
   }
 
   const drawLegend = () => {
@@ -259,7 +373,7 @@ export async function exportKoroTablePdf(
   drawHeading()
   for (const table of document.tables) {
     drawServiceLine(table)
-    for (const row of table.rows) drawRow(row, table)
+    drawTable(table)
     y += 4
   }
   drawLegend()

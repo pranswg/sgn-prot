@@ -53,8 +53,8 @@ export const KORO_VOICE_COLORS: Record<string, string> = {
   bass: '#bdd7ee',
 }
 
-/** The orange a reserved seat (e.g. the organ) prints in, distinct from voices. */
-export const KORO_ORGAN_COLOR = '#f4b183'
+/** The golden yellow-orange a reserved seat (e.g. the organ) prints in. */
+export const KORO_ORGAN_COLOR = '#ffc000'
 
 const EXTRA_VOICE_COLORS = ['#d9eaf7', '#e4dfec', '#f4cccc', '#d9ead3']
 

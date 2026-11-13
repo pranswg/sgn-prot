@@ -101,7 +101,94 @@ test('a reserved seat prints its label instead of a name', async () => {
     label: 'Organ',
   }
   const text = await pdfText(document)
-  assert.match(text, /\(Organ\)/)
+  assert.match(text, /\(ORGAN\)/)
+})
+
+test('a reserved seat expands over a blank seat above it in the same column', async () => {
+  const document = documentWithSeats()
+  // The organ sits on the second row with a blank seat above it, so the block
+  // starts at the top row and covers both.
+  document.tables[0].rows[1].cells[1] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const text = await pdfText(document)
+  const heights = [...text.matchAll(/^[\d.]+ [\d.]+ [\d.]+ (-?[\d.]+) re$/gm)].map(
+    (match) => Math.abs(Number(match[1])),
+  )
+  assert.ok(heights.length > 0)
+  assert.ok(
+    heights.some((height) => heights.some((base) => Math.abs(height - base * 2) < 0.01)),
+    'expected one seat cell to be twice a normal row tall',
+  )
+})
+
+test('a merged organ seat prints larger than the names around it', async () => {
+  const document = documentWithSeats()
+  document.tables[0].rows[1].cells[1] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const text = await pdfText(document)
+  const sizeBefore = (marker: string) => {
+    const markerAt = text.indexOf(`(${marker}) Tj`)
+    assert.ok(markerAt >= 0, `expected ${marker} in the PDF`)
+    // The last font-size operator before the text is the one that drew it.
+    const matches = [...text.slice(0, markerAt).matchAll(/\/F\d+ ([\d.]+) Tf/g)]
+    assert.ok(matches.length > 0)
+    return Number(matches[matches.length - 1][1])
+  }
+  const organSize = sizeBefore('ORGAN')
+  const nameSize = sizeBefore('Kim')
+  assert.ok(
+    organSize > nameSize * 1.4,
+    `expected the organ label (${organSize}pt) to be much larger than a name (${nameSize}pt)`,
+  )
+})
+
+test('a table holding the organ prints with taller rows than a plain table', async () => {
+  const heightsOf = async (document: KoroDocument) => {
+    const text = await pdfText(document)
+    return [...text.matchAll(/^[\d.]+ [\d.]+ [\d.]+ (-?[\d.]+) re$/gm)].map(
+      (match) => Math.abs(Number(match[1])),
+    )
+  }
+  const plain = await heightsOf(documentWithSeats())
+  const organ = documentWithSeats()
+  organ.tables[0].rows[0].cells[1] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const withOrgan = await heightsOf(organ)
+  assert.ok(Math.max(...withOrgan) > Math.max(...plain) * 2)
+})
+
+test('a reserved seat takes two seats of width', async () => {
+  const document = documentWithSeats()
+  document.tables[0].rows[0].cells[1] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const text = await pdfText(document)
+  const widths = [
+    ...text.matchAll(/^[\d.]+ [\d.]+ ([\d.]+) -?[\d.]+ re$/gm),
+  ]
+    .map((match) => Number(match[1]))
+    // Over ~21mm keeps the legend swatches out of the comparison.
+    .filter((width) => width > 60)
+  assert.ok(widths.length > 0)
+  assert.ok(
+    Math.max(...widths) > Math.min(...widths) * 1.5,
+    'expected one seat cell to be wider than the rest',
+  )
 })
 
 test('an empty date and title still produce a printable sheet', async () => {

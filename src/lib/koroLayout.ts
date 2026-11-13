@@ -1,4 +1,4 @@
-import type { KoroCell, KoroDocument, KoroTable } from '@/core/types/koro'
+import type { KoroCell, KoroDocument, KoroRow, KoroTable } from '@/core/types/koro'
 
 /**
  * Derived layout facts for the Koro maker: seat keys, tier labels, and the
@@ -31,6 +31,120 @@ export function koroIsSeated(cell: KoroCell): boolean {
 /** A reserved non-member seat, e.g. the organ, carrying a label instead of a name. */
 export function koroIsLabeled(cell: KoroCell): boolean {
   return Boolean(cell.label && cell.label.trim())
+}
+
+/** A seat that prints nothing: no seated member and no reserved label. */
+export function koroIsBlankSeat(cell: KoroCell): boolean {
+  return !koroIsSeated(cell) && !koroIsLabeled(cell)
+}
+
+/** One reserved seat fused with the blank seats around it in its column. */
+export interface KoroMergedSeat {
+  /** The row that carries the label. */
+  rowIndex: number
+  columnIndex: number
+  /** First and last row the printed block covers, label row included. */
+  startRow: number
+  endRow: number
+}
+
+/**
+ * The reserved seats that print as one tall block, e.g. the organ. A labelled
+ * seat fuses with the contiguous blank seats directly above *and* below it in
+ * the same column, so a blank seat on the row above the organ is absorbed
+ * instead of leaving the label floating under a dead cell. Columns only line up
+ * between rows of the same width, so a wider or narrower row ends the run.
+ *
+ * A run holding more than one label is left alone: two reserved seats cannot
+ * share one block.
+ */
+export function koroMergedSeats(rows: readonly KoroRow[]): KoroMergedSeat[] {
+  const merged: KoroMergedSeat[] = []
+  const widest = rows.reduce((width, row) => Math.max(width, row.cells.length), 0)
+
+  for (let columnIndex = 0; columnIndex < widest; columnIndex += 1) {
+    let index = 0
+    while (index < rows.length) {
+      const width = rows[index].cells.length
+      const cell = rows[index].cells[columnIndex]
+      if (!cell || (!koroIsBlankSeat(cell) && !koroIsLabeled(cell))) {
+        index += 1
+        continue
+      }
+
+      const startRow = index
+      let labels = 0
+      let labelRow = -1
+      while (index < rows.length) {
+        const candidate = rows[index].cells[columnIndex]
+        if (
+          rows[index].cells.length !== width ||
+          !candidate ||
+          (!koroIsBlankSeat(candidate) && !koroIsLabeled(candidate))
+        ) {
+          break
+        }
+        if (koroIsLabeled(candidate)) {
+          labels += 1
+          labelRow = index
+        }
+        index += 1
+      }
+
+      if (labels === 1 && index - 1 > startRow) {
+        merged.push({
+          rowIndex: labelRow,
+          columnIndex,
+          startRow,
+          endRow: index - 1,
+        })
+      }
+    }
+  }
+
+  return merged
+}
+
+/** How many ordinary seats wide a reserved seat (the organ) prints. */
+export const KORO_RESERVED_SEAT_SHARE = 2
+
+/**
+ * Columns that print wider, keyed by row seat count. A reserved seat takes two
+ * shares of its own row, and every row with the same seat count widens that
+ * column too, so the organ block stays lined up down the formation.
+ */
+export function koroReservedColumns(
+  rows: readonly KoroRow[],
+): Map<number, Set<number>> {
+  const reserved = new Map<number, Set<number>>()
+  const reserve = (seatCount: number, columnIndex: number) => {
+    const columns = reserved.get(seatCount) ?? new Set<number>()
+    columns.add(columnIndex)
+    reserved.set(seatCount, columns)
+  }
+  for (const span of koroMergedSeats(rows)) {
+    reserve(rows[span.rowIndex].cells.length, span.columnIndex)
+  }
+  for (const row of rows) {
+    row.cells.forEach((cell, columnIndex) => {
+      if (koroIsLabeled(cell)) reserve(row.cells.length, columnIndex)
+    })
+  }
+  return reserved
+}
+
+/** Each row's printed cell widths in mm, two shares for a reserved column. */
+export function koroColumnWidthsMm(
+  row: KoroRow,
+  reserved: ReadonlyMap<number, ReadonlySet<number>>,
+  contentWidthMm: number,
+): number[] {
+  const columns = reserved.get(row.cells.length)
+  const shares = row.cells.map((_, columnIndex) =>
+    columns?.has(columnIndex) ? KORO_RESERVED_SEAT_SHARE : 1,
+  )
+  const total = shares.reduce((sum, share) => sum + share, 0) || 1
+  return shares.map((share) => (contentWidthMm * share) / total)
 }
 
 export function koroCellFirstName(cell: KoroCell): string {

@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { KoroDocument } from '@/core/types/koro'
-import { createKoroDocument } from './koro.ts'
+import { createKoroDocument, createKoroTable } from './koro.ts'
 import {
+  koroColumnWidthsMm,
   koroDocumentCounts,
+  koroMergedSeats,
   koroPlacedMemberIds,
   koroPlacedSeatLabels,
+  koroReservedColumns,
   koroRosterByVoice,
   koroSeatKey,
   koroSeatLabelsByService,
@@ -167,4 +170,93 @@ test('roster counts skip members without a voice', () => {
     ]),
     { alto: 2 },
   )
+})
+
+test('a reserved seat fuses with the blank seats above and below it', () => {
+  const table = createKoroTable('KORO', [10, 10, 10])
+  table.rows[1].cells[5] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  // Rows 0 and 2 are blank in column 5, so the organ covers all three rows.
+  assert.deepEqual(koroMergedSeats(table.rows), [
+    { rowIndex: 1, columnIndex: 5, startRow: 0, endRow: 2 },
+  ])
+})
+
+test('a reserved seat stops at a filled, labelled, or differently sized row', () => {
+  const table = createKoroTable('KORO', [10, 10, 10])
+  table.rows[1].cells[5] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  table.rows[2].cells[5] = {
+    memberId: 'kim',
+    firstName: 'Kim',
+    voicePosition: 'alto',
+  }
+  assert.deepEqual(koroMergedSeats(table.rows), [
+    { rowIndex: 1, columnIndex: 5, startRow: 0, endRow: 1 },
+  ])
+
+  // Two reserved seats cannot share one block, so neither expands.
+  table.rows[0].cells[5] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Piano',
+  }
+  assert.deepEqual(koroMergedSeats(table.rows), [])
+
+  // The default formation's front row is wider, so the columns no longer line up.
+  const document = createKoroDocument()
+  const rows = document.tables[0].rows
+  rows[1].cells[3] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  assert.deepEqual(koroMergedSeats(rows), [
+    { rowIndex: 1, columnIndex: 3, startRow: 0, endRow: 1 },
+  ])
+})
+
+test('only a labelled seat has a merge span', () => {
+  const document = createKoroDocument()
+  assert.deepEqual(koroMergedSeats(document.tables[0].rows), [])
+})
+
+test('a reserved seat takes two shares of its row and widens matching rows', () => {
+  const table = createKoroTable('KORO', [6, 6, 8])
+  table.rows[1].cells[2] = {
+    memberId: null,
+    firstName: '',
+    voicePosition: '',
+    label: 'Organ',
+  }
+  const reserved = koroReservedColumns(table.rows)
+  assert.deepEqual([...(reserved.get(6) ?? [])], [2])
+  // The wider front row starts its columns differently, so it is untouched.
+  assert.equal(reserved.get(8), undefined)
+
+  const widths = koroColumnWidthsMm(table.rows[0], reserved, 60)
+  assert.equal(widths.length, 6)
+  assert.ok(Math.abs(widths[2] - widths[0] * 2) < 1e-9)
+  assert.ok(Math.abs(widths.reduce((sum, width) => sum + width, 0) - 60) < 1e-9)
+
+  const wideRow = koroColumnWidthsMm(table.rows[2], reserved, 60)
+  assert.ok(wideRow.every((width) => Math.abs(width - 60 / 8) < 1e-9))
+})
+
+test('a formation without reserved seats divides every row evenly', () => {
+  const document = createKoroDocument()
+  const reserved = koroReservedColumns(document.tables[0].rows)
+  assert.equal(reserved.size, 0)
+  const widths = koroColumnWidthsMm(document.tables[0].rows[0], reserved, 100)
+  assert.ok(widths.every((width) => Math.abs(width - 10) < 1e-9))
 })

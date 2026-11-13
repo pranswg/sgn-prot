@@ -102,20 +102,27 @@ export async function createMasterListAttendanceWordBlob(
     1,
     Math.ceil((title.trim().length * 10) / tableWidthPt),
   )
-  const tableTopPt = 34 + titleLines * 23 + 18 + 16 + 16
+  const tableTopPt = 34 + titleLines * 23 + 9 + 16 + 16
+  const continuationTableTopPt = marginPt
   const tableHeaderHeightPt = 42
-  const regularPageHeight = pageHeightPt - tableTopPt - tableHeaderHeightPt - 32
-  const finalPageHeight =
+  const signatureReservePt = 20 + 30 + (choir === 'aws' ? 54 : 0)
+  const firstPageHeight = pageHeightPt - tableTopPt - tableHeaderHeightPt - 32
+  const continuationPageHeight =
+    pageHeightPt - continuationTableTopPt - tableHeaderHeightPt - 32
+  const firstFinalPageHeight =
+    pageHeightPt - signatureReservePt - tableTopPt - tableHeaderHeightPt
+  const continuationFinalPageHeight =
     pageHeightPt -
-    20 -
-    30 -
-    (choir === 'aws' ? 54 : 0) -
-    tableTopPt -
+    signatureReservePt -
+    continuationTableTopPt -
     tableHeaderHeightPt
   const rowPages = paginateMasterListAttendanceRows(
     rows,
-    regularPageHeight,
-    finalPageHeight,
+    continuationPageHeight,
+    continuationFinalPageHeight,
+    26,
+    22,
+    { height: firstPageHeight, finalHeight: firstFinalPageHeight },
   )
   const toTwips = (points: number) => Math.max(1, Math.round(points * 20))
   const border = {
@@ -278,30 +285,34 @@ export async function createMasterListAttendanceWordBlob(
         }),
       ]
 
+      if (pageIndex === 1) {
+        children.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 0, after: 120 },
+            children: [
+              new TextRun({
+                text: title.trim(),
+                bold: true,
+                size: 36,
+                font: 'Book Antiqua',
+              }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 0, after: 320 },
+            children: [
+              new TextRun({
+                text: formatAttendanceDateSummary(dates),
+                size: 24,
+                font: 'Book Antiqua',
+              }),
+            ],
+          }),
+        )
+      }
       children.push(
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 0, after: 240 },
-          children: [
-            new TextRun({
-              text: title.trim(),
-              bold: true,
-              size: 36,
-              font: 'Book Antiqua',
-            }),
-          ],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 0, after: 360 },
-          children: [
-            new TextRun({
-              text: formatAttendanceDateSummary(dates),
-              size: 24,
-              font: 'Book Antiqua',
-            }),
-          ],
-        }),
         new Table({
           width: { size: totalWidth, type: WidthType.DXA },
           columnWidths,
@@ -328,7 +339,10 @@ export async function createMasterListAttendanceWordBlob(
             height + (row.kind === 'section' ? 22 : 26),
           0,
         )
-        const tableBottomPt = tableTopPt + tableHeaderHeightPt + pageRowsHeight
+        const lastPageTableTopPt =
+          pageIndex === 1 ? tableTopPt : continuationTableTopPt
+        const tableBottomPt =
+          lastPageTableTopPt + tableHeaderHeightPt + pageRowsHeight
         const signatureTopPt = Math.max(
           tableBottomPt + 30,
           pageHeightPt - 100,
@@ -391,14 +405,18 @@ export async function createMasterListAttendanceWordBlob(
   })
 
   const marginTwips = toTwips(marginPt)
+  // docx swaps the given width/height for landscape pages, so pass the short
+  // edge as width or Word opens the landscape sheet in portrait.
+  const pageShortEdgePt = Math.min(pageWidthPt, pageHeightPt)
+  const pageLongEdgePt = Math.max(pageWidthPt, pageHeightPt)
   const document = new Document({
     sections: [
       {
         properties: {
           page: {
             size: {
-              width: toTwips(pageWidthPt),
-              height: toTwips(pageHeightPt),
+              width: toTwips(pageShortEdgePt),
+              height: toTwips(pageLongEdgePt),
               orientation:
                 orientation === 'landscape'
                   ? PageOrientation.LANDSCAPE

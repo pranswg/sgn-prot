@@ -140,18 +140,20 @@ export async function exportTraineeAttendancePdf(options: {
   const left = 34
   const tableWidth = pageWidth - left * 2
   const titleTop = 38
-  const tableTop = 105
+  const tableTop = 96
+  const continuationTableTop = 34
   const tableHeaderHeight = 54
   const rowHeight = 28
   const footerReserve = 162
   const numberWidth = 32
   const nameWidth = Math.min(165, tableWidth * 0.29)
-  const rowsPerPage = Math.max(
-    1,
-    Math.floor(
-      (pageHeight - footerReserve - tableTop - tableHeaderHeight) / rowHeight,
-    ),
-  )
+  const rowsPerPage = (top: number) =>
+    Math.max(
+      1,
+      Math.floor((pageHeight - footerReserve - top - tableHeaderHeight) / rowHeight),
+    )
+  const firstPageRows = rowsPerPage(tableTop)
+  const continuationRowsPerPage = rowsPerPage(continuationTableTop)
   const sortedTrainees = sortTraineesForAttendanceSheet(trainees)
   const tableRows = [
     ...sortedTrainees.map((trainee) => traineeFullName(trainee)),
@@ -161,9 +163,17 @@ export async function exportTraineeAttendancePdf(options: {
   ]
   const datePanels = createAttendanceDatePanels(practiceDates)
   const rowPages: string[][] = []
-  for (let index = 0; index < tableRows.length; index += rowsPerPage) {
-    rowPages.push(tableRows.slice(index, index + rowsPerPage))
+  let rowCursor = 0
+  while (rowCursor < tableRows.length) {
+    const take =
+      rowPages.length === 0 ? firstPageRows : continuationRowsPerPage
+    rowPages.push(tableRows.slice(rowCursor, rowCursor + take))
+    rowCursor += take
   }
+  const rowPageOffsets = rowPages.reduce<number[]>(
+    (offsets, page) => [...offsets, offsets[offsets.length - 1] + page.length],
+    [0],
+  )
   const dateRange = dateRangeLabel(startDate, endDate)
   const asOfDate = formatDateKeyLongDate(toDateKeyFromInstant(generatedAt))
   let pageNumber = 0
@@ -175,28 +185,31 @@ export async function exportTraineeAttendancePdf(options: {
       if (pageNumber > 0) doc.addPage()
       pageNumber += 1
       const names = rowPages[rowPageIndex]
+      const pageTableTop = pageNumber === 1 ? tableTop : continuationTableTop
       const finalPage =
         panelIndex === datePanels.length - 1 &&
         rowPageIndex === rowPages.length - 1
       const currentDateWidth =
         (tableWidth - numberWidth - nameWidth) / dates.length
 
-      doc.setFont('BookAntiqua', 'normal')
-      doc.setFontSize(14)
-      doc.text(`Lokal ng ${localeName.trim() || 'Sta. Monica'}`, pageWidth / 2, titleTop, {
-        align: 'center',
-      })
-      doc.setFont('SegoeScript', 'normal')
-      doc.setFontSize(17)
-      doc.text(
-        'ATTENDANCE NG MGA NAGSASANAY SA MANG-AAWIT',
-        pageWidth / 2,
-        titleTop + 23,
-        { align: 'center', maxWidth: pageWidth - 50 },
-      )
-      doc.setFont('BookAntiqua', 'normal')
-      doc.setFontSize(11)
-      doc.text(dateRange, pageWidth / 2, titleTop + 43, { align: 'center' })
+      if (pageNumber === 1) {
+        doc.setFont('BookAntiqua', 'normal')
+        doc.setFontSize(14)
+        doc.text(`Lokal ng ${localeName.trim() || 'Sta. Monica'}`, pageWidth / 2, titleTop, {
+          align: 'center',
+        })
+        doc.setFont('SegoeScript', 'normal')
+        doc.setFontSize(17)
+        doc.text(
+          'ATTENDANCE NG MGA NAGSASANAY SA MANG-AAWIT',
+          pageWidth / 2,
+          titleTop + 23,
+          { align: 'center', maxWidth: pageWidth - 50 },
+        )
+        doc.setFont('BookAntiqua', 'normal')
+        doc.setFontSize(11)
+        doc.text(dateRange, pageWidth / 2, titleTop + 43, { align: 'center' })
+      }
 
       const columns = [
         { label: 'Blg.', width: numberWidth },
@@ -212,23 +225,23 @@ export async function exportTraineeAttendancePdf(options: {
       doc.setFont('BookAntiqua', 'bold')
       doc.setFontSize(Math.min(10, currentDateWidth / 5.1))
       for (const column of columns) {
-        doc.rect(x, tableTop, column.width, tableHeaderHeight)
+        doc.rect(x, pageTableTop, column.width, tableHeaderHeight)
         const centerX = x + column.width / 2
         if (column.label === 'Blg.' || column.label === 'Pangalan') {
-          doc.text(column.label, centerX, tableTop + 23, {
+          doc.text(column.label, centerX, pageTableTop + 23, {
             align: 'center',
             maxWidth: column.width - 4,
           })
         } else {
           const dateLines = doc.splitTextToSize(column.label, column.width - 4)
-          doc.text(dateLines, centerX, tableTop + 11, {
+          doc.text(dateLines, centerX, pageTableTop + 11, {
             align: 'center',
           })
           doc.setFont('BookAntiqua', 'normal')
           doc.text(
             'Lagda',
             centerX,
-            tableTop + Math.max(31, 14 + dateLines.length * 11),
+            pageTableTop + Math.max(31, 14 + dateLines.length * 11),
             {
               align: 'center',
               maxWidth: column.width - 4,
@@ -242,8 +255,8 @@ export async function exportTraineeAttendancePdf(options: {
       doc.setFont('BookAntiqua', 'normal')
       doc.setFontSize(10)
       names.forEach((name, index) => {
-        const rowIndex = rowPageIndex * rowsPerPage + index
-        const y = tableTop + tableHeaderHeight + index * rowHeight
+        const rowIndex = rowPageOffsets[rowPageIndex] + index
+        const y = pageTableTop + tableHeaderHeight + index * rowHeight
         x = left
         columns.forEach((column, columnIndex) => {
           doc.rect(x, y, column.width, rowHeight)
@@ -263,7 +276,8 @@ export async function exportTraineeAttendancePdf(options: {
         })
       })
 
-      lastTableBottom = tableTop + tableHeaderHeight + names.length * rowHeight
+      lastTableBottom =
+        pageTableTop + tableHeaderHeight + names.length * rowHeight
       doc.setFont('BookAntiqua', 'normal')
       doc.setFontSize(10)
       doc.text(`printed as of ${asOfDate}`, left, lastTableBottom + 12)

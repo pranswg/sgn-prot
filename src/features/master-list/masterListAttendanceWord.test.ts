@@ -105,3 +105,35 @@ test('creates a Word attendance sheet with the configured page and signatory', a
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   )
 })
+
+test('prints the sheet title once and keeps the landscape page size correct', async () => {
+  const roster = Array.from({ length: 60 }, (_, index) => ({
+    ...member,
+    id: `member-${index}`,
+    firstName: `Singer${index}`,
+  }))
+  const blob = await createMasterListAttendanceWordBlob({
+    members: roster,
+    trainees: [],
+    voices,
+    dates: ['2026-10-17'],
+    title: 'Attendance Sheet',
+    groupByVoice: true,
+    selectedVoiceIds: ['soprano'],
+    includeNagsasanayMen: false,
+    includeNagsasanayWomen: false,
+    lastNameFirst: false,
+    paperSize: 'letter',
+    orientation: 'landscape',
+    choir: 'pnk',
+    pangulongName: '',
+    filename: 'landscape-attendance.docx',
+  })
+
+  const documentXml = await attendanceDocumentXml(blob)
+  assert.equal(
+    documentXml.match(/<w:t[^>]*>Attendance Sheet<\/w:t>/g)?.length,
+    1,
+  )
+  assert.match(documentXml, /w:w="15840" w:h="12240" w:orient="landscape"/)
+})

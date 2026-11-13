@@ -42,12 +42,18 @@ export function formatAttendanceDateSummary(dates: readonly DateKey[]): string {
     .join('; ')
 }
 
+export interface MasterListAttendanceFirstPage {
+  height: number
+  finalHeight: number
+}
+
 export function paginateMasterListAttendanceRows(
   rows: MasterListAttendanceRow[],
   regularPageHeight: number,
   finalPageHeight: number,
   memberRowHeight = 26,
   sectionRowHeight = 22,
+  firstPage?: MasterListAttendanceFirstPage,
 ): MasterListAttendancePageRow[][] {
   const heightOf = (row: MasterListAttendanceRow) =>
     row.kind === 'section'
@@ -63,6 +69,10 @@ export function paginateMasterListAttendanceRows(
   let currentSection: string | undefined
 
   while (offset < rows.length) {
+    const pageHeight =
+      pages.length === 0 && firstPage ? firstPage.height : regularPageHeight
+    const pageFinalHeight =
+      pages.length === 0 && firstPage ? firstPage.finalHeight : finalPageHeight
     const continuation =
       currentSection &&
       rows[offset].kind !== 'section' &&
@@ -73,7 +83,7 @@ export function paginateMasterListAttendanceRows(
     const hasPageBreak = rows
       .slice(offset)
       .some((row) => row.kind === 'page-break')
-    if (!hasPageBreak && totalHeight(finalPageRows) <= finalPageHeight) {
+    if (!hasPageBreak && totalHeight(finalPageRows) <= pageFinalHeight) {
       pages.push(
         finalPageRows.filter(
           (row): row is MasterListAttendancePageRow =>
@@ -95,7 +105,7 @@ export function paginateMasterListAttendanceRows(
         continue
       }
       const rowHeight = heightOf(row)
-      if (usedHeight + rowHeight > regularPageHeight) break
+      if (usedHeight + rowHeight > pageHeight) break
       pageRows.push(row)
       usedHeight += rowHeight
       offset += 1

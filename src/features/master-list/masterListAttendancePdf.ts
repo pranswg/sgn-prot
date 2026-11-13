@@ -121,26 +121,30 @@ export async function exportMasterListAttendancePdf(
   const numberWidth = 34
   const titleLines = doc.splitTextToSize(title.trim(), tableWidth)
   const titleTop = 34
-  const dateSummaryTop = titleTop + titleLines.length * 23 + 18
-  const tableTop = dateSummaryTop + 16 + 16
+  const dateSummaryTop = titleTop + titleLines.length * 23 + 9
+  const tableTop = dateSummaryTop + 16
+  const continuationTableTop = margin
   const tableHeaderHeight = 42
   const memberRowHeight = 26
   const sectionRowHeight = 22
+  const signatureReserve = 20 + 30 + (choir === 'aws' ? 54 : 0)
   const regularPageHeight =
-    pageHeight - tableTop - tableHeaderHeight - 32
+    pageHeight - continuationTableTop - tableHeaderHeight - 32
   const finalPageHeight =
     pageHeight -
-    20 -
-    30 -
-    (choir === 'aws' ? 54 : 0) -
-    tableTop -
+    signatureReserve -
+    continuationTableTop -
     tableHeaderHeight
+  const firstPageHeight = pageHeight - tableTop - tableHeaderHeight - 32
+  const firstFinalPageHeight =
+    pageHeight - signatureReserve - tableTop - tableHeaderHeight
   const rowPages = paginateMasterListAttendanceRows(
     rows,
     regularPageHeight,
     finalPageHeight,
     memberRowHeight,
     sectionRowHeight,
+    { height: firstPageHeight, finalHeight: firstFinalPageHeight },
   )
 
   let pageNumber = 0
@@ -156,20 +160,23 @@ export async function exportMasterListAttendancePdf(
           ? tableWidth - numberWidth - 64
           : Math.min(180, tableWidth * 0.34)
       const columnWidth = (tableWidth - numberWidth - nameWidth) / columnsInPanel
-      doc.setFont('BookAntiqua', 'bold')
-      doc.setFontSize(18)
-      doc.text(titleLines, pageWidth / 2, titleTop, {
-        align: 'center',
-        baseline: 'top',
-      })
-      doc.setFont('BookAntiqua', 'normal')
-      doc.setFontSize(12)
-      doc.text(dateSummary, pageWidth / 2, dateSummaryTop, {
-        align: 'center',
-        maxWidth: tableWidth,
-      })
+      const firstPage = pageNumber === 1
+      const headerY = firstPage ? tableTop : continuationTableTop
+      if (firstPage) {
+        doc.setFont('BookAntiqua', 'bold')
+        doc.setFontSize(18)
+        doc.text(titleLines, pageWidth / 2, titleTop, {
+          align: 'center',
+          baseline: 'top',
+        })
+        doc.setFont('BookAntiqua', 'normal')
+        doc.setFontSize(12)
+        doc.text(dateSummary, pageWidth / 2, dateSummaryTop, {
+          align: 'center',
+          maxWidth: tableWidth,
+        })
+      }
 
-      const headerY = tableTop
       doc.setFillColor(239, 242, 245)
       doc.rect(margin, headerY, tableWidth, tableHeaderHeight, 'F')
       doc.setDrawColor(60, 60, 60)

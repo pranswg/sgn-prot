@@ -357,6 +357,40 @@ test('uses regular-page space and reserves signatory room only on the final page
   )
 })
 
+test('a shorter first page reserves room for the title block', () => {
+  const rows = Array.from({ length: 7 }, (_, index) => ({
+    kind: 'member' as const,
+    member: member(`m${index}`, `Singer${index}`, 'Zeta', 'female', 'soprano'),
+    name: `Singer${index} Zeta`,
+    number: index + 1,
+  }))
+  const pages = paginateMasterListAttendanceRows(rows, 80, 80, 26, 22, {
+    height: 60,
+    finalHeight: 60,
+  })
+
+  assert.deepEqual(
+    pages.map((page) => page.length),
+    [2, 3, 2],
+  )
+})
+
+test('a single-page sheet uses the first page final height', () => {
+  const rows = Array.from({ length: 3 }, (_, index) => ({
+    kind: 'member' as const,
+    member: member(`m${index}`, `Singer${index}`, 'Zeta', 'female', 'soprano'),
+    name: `Singer${index} Zeta`,
+    number: index + 1,
+  }))
+  const pages = paginateMasterListAttendanceRows(rows, 500, 500, 26, 22, {
+    height: 70,
+    finalHeight: 90,
+  })
+
+  assert.equal(pages.length, 1)
+  assert.equal(pages[0].length, 3)
+})
+
 test('formats attendance dates in a single summary line', () => {
   assert.equal(
     formatAttendanceDateSummary(['2026-10-17']),

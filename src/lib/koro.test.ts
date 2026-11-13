@@ -18,6 +18,7 @@ import {
   fillKoroTable,
   formatKoroTime,
   koroDayLabel,
+  koroVoiceColor,
   moveKoroSeat,
   normalizeKoroDocument,
   removeKoroRow,
@@ -286,6 +287,23 @@ test('filling a document stops once the candidates run out', () => {
   const seated = filled.tables[0].rows[0].cells.filter((cell) => cell.memberId)
   assert.equal(seated.length, 1)
   assert.equal(seated[0].memberId, 'ana')
+})
+
+test('standard voices use the reference palette, with S2 left white', () => {
+  assert.equal(koroVoiceColor('soprano-1', TEST_VOICES), '#ffe699')
+  assert.equal(koroVoiceColor('soprano-2', TEST_VOICES), '#ffffff')
+  assert.equal(koroVoiceColor('alto', TEST_VOICES), '#a9d08e')
+  assert.equal(koroVoiceColor('tenor', TEST_VOICES), '#f8cbad')
+  assert.equal(koroVoiceColor('bass', TEST_VOICES), '#bdd7ee')
+})
+
+test('a standard voice keeps its palette colour when its id is not the default', () => {
+  const voices: VoicePosition[] = [
+    { id: 'v_2', name: 'Soprano 2', shortName: 'S2', gender: 'female' },
+    { id: 'v_t', name: 'Tenor', shortName: 'T', gender: 'male' },
+  ]
+  assert.equal(koroVoiceColor('v_2', voices), '#ffffff')
+  assert.equal(koroVoiceColor('v_t', voices), '#f8cbad')
 })
 
 test('direct Suguan conversion carries date, choir group, tables, and full names', () => {

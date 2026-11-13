@@ -44,11 +44,13 @@ export function formatKoroTime(time: string): string {
 }
 
 export const KORO_VOICE_COLORS: Record<string, string> = {
-  'soprano-1': '#fff2cc',
-  'soprano-2': '#fce4d6',
-  alto: '#c6e0b4',
-  tenor: '#C2E1FA',
-  bass: '#C2E1FA',
+  // Matched to the choir's reference sheet: S1 light yellow, S2 white,
+  // alto light green, tenor a light orange-peach, bass light blue.
+  'soprano-1': '#ffe699',
+  'soprano-2': '#ffffff',
+  alto: '#a9d08e',
+  tenor: '#f8cbad',
+  bass: '#bdd7ee',
 }
 
 /** The orange a reserved seat (e.g. the organ) prints in, distinct from voices. */
@@ -56,12 +58,33 @@ export const KORO_ORGAN_COLOR = '#f4b183'
 
 const EXTRA_VOICE_COLORS = ['#d9eaf7', '#e4dfec', '#f4cccc', '#d9ead3']
 
+/**
+ * Standard voices also resolve by name, so a Soprano 2 saved under a generated
+ * or legacy id still gets the white seat the reference sheet calls for.
+ */
+const VOICE_KEY_BY_NAME: Record<string, keyof typeof KORO_VOICE_COLORS> = {
+  'soprano 1': 'soprano-1',
+  'soprano i': 'soprano-1',
+  s1: 'soprano-1',
+  'soprano 2': 'soprano-2',
+  'soprano ii': 'soprano-2',
+  s2: 'soprano-2',
+  alto: 'alto',
+  tenor: 'tenor',
+  bass: 'bass',
+}
+
 export function koroVoiceColor(
   voicePosition: string,
   voices: VoicePosition[] = [],
 ): string {
   const knownColor = KORO_VOICE_COLORS[voicePosition]
   if (knownColor) return knownColor
+  const entry = voices.find((voice) => voice.id === voicePosition)
+  if (entry) {
+    const key = VOICE_KEY_BY_NAME[entry.name.trim().toLowerCase().replace(/\s+/g, ' ')]
+    if (key) return KORO_VOICE_COLORS[key]
+  }
   const index = voices.findIndex((voice) => voice.id === voicePosition)
   return index < 0 ? '#ffffff' : EXTRA_VOICE_COLORS[index % EXTRA_VOICE_COLORS.length]
 }

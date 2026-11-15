@@ -317,7 +317,9 @@ export async function exportSuguanPdf(
             'bold',
             section.headingType === 'voice'
               ? EXTRA_OCCASION_VOICE_FONT_SIZE_PT
-              : EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT,
+              : isExtraOccasion
+                ? EXTRA_OCCASION_SCHEDULE_FONT_SIZE_PT
+                : headerSz,
           )
           centerText(
             isExtraOccasion && isBandHeading
@@ -366,6 +368,9 @@ export async function exportSuguanPdf(
             x0 + layout.noColWidthMm / 2,
             y + layout.bodyRowH / 2,
           )
+          // The number is drawn at header size, so the name size has to be
+          // re-applied before the name or every roster prints at header size.
+          applyFont('normal', nameSize)
           if (isOic) {
             const baseName = row.name.slice(0, -6)
             leftText(

@@ -8,6 +8,7 @@ import test from 'node:test'
 import {
   EMPTY_HISTORY_FILTERS,
   filterMemberHistory,
+  sortMemberHistoryLatestFirst,
 } from './memberHistoryFilter.ts'
 import type { Member, MemberHistoryEvent } from '@/core/types/member.ts'
 
@@ -114,6 +115,43 @@ test('year filter matches any event year, oldest transfers included', () => {
   assert.deepEqual(
     filterMemberHistory(members, { ...EMPTY_HISTORY_FILTERS, year: 1999 }),
     [],
+  )
+})
+
+test('the archive reads newest activity first', () => {
+  const recentlyBack = member({
+    id: 'z',
+    isActive: true,
+    history: [
+      event('joined', '2023-01-05'),
+      event('transferred-out', '2025-03-10'),
+      event('returned', '2026-06-01'),
+    ],
+  })
+  assert.deepEqual(
+    sortMemberHistoryLatestFirst([
+      transferredOut,
+      returned,
+      recentlyBack,
+    ]).map((m) => m.id),
+    ['z', 'y', 'x'],
+  )
+})
+
+test('members with the same latest date fall back to name order', () => {
+  const abel = member({
+    id: 'a',
+    firstName: 'Abel',
+    history: [event('transferred-out', '2025-03-10')],
+  })
+  const zara = member({
+    id: 'b',
+    firstName: 'Zara',
+    history: [event('transferred-out', '2025-03-10')],
+  })
+  assert.deepEqual(
+    sortMemberHistoryLatestFirst([zara, abel]).map((m) => m.id),
+    ['a', 'b'],
   )
 })
 

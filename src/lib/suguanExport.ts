@@ -15,6 +15,7 @@ import {
   formatEventDate,
   groupLabel,
   normalizeDocFormat,
+  normalizeWriteInRows,
   resolveFontSizePreset,
   resolveSignatureNames,
   suguanFileName,
@@ -25,7 +26,6 @@ import {
 export const EXTRA_OCCASION_FILL = '#FFF2CC'
 const PAGSASANAY_FILL = EXTRA_OCCASION_FILL.slice(1)
 const HEADER_FILL = 'F2F2F2'
-const WRITE_IN_ROWS_PER_SCHEDULE = 2
 
 /**
  * Choir sheets use group-specific accents; Extra Occasion sheets use the
@@ -144,44 +144,46 @@ export function buildSections(
     Array.isArray(suguan.schedules) && suguan.schedules.length > 0
       ? suguan.schedules
       : []
-  const oicMemberId =
-    (Array.isArray(suguan.dutyRoles) ? suguan.dutyRoles : []).find(
-      (d) => d.dutyRoleId === 'oic',
-    )?.memberId ?? ''
+  const dutyRoles = Array.isArray(suguan.dutyRoles) ? suguan.dutyRoles : []
+  // The OIC is set per schedule. A record saved before duties were scoped keeps
+  // one global entry, which still marks the holder wherever they are assigned.
+  const oicForSection = (sectionId: string) =>
+    dutyRoles.find((d) => d.dutyRoleId === 'oic' && d.scheduleId === sectionId)
+      ?.memberId ??
+    dutyRoles.find((d) => d.dutyRoleId === 'oic' && !d.scheduleId)?.memberId ??
+    ''
+  const writeInRows = suguan.extraOccasion
+    ? 0
+    : normalizeWriteInRows(suguan.writeInRows)
   let extraOccasionNumber = 0
-  const mapRows = (assignments: Suguan['assignments']) =>
-    {
-      const rows = sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
-        (a, i) => {
+  const mapRows = (
+    assignments: Suguan['assignments'],
+    oicMemberId: string,
+  ) => {
+    const rows = sortAssignmentsByHiddenVoice(assignments, members, suguan.group).map(
+      (a, i) => {
         const name =
           a.displayName ?? assignmentDisplayName(a.memberName, a.memberId, members)
         return {
           no: suguan.extraOccasion ? ++extraOccasionNumber : i + 1,
           name: a.memberId === oicMemberId ? `${name} - OIC` : name,
         }
-        },
-      )
-      return [
-        ...rows,
-        ...Array.from(
-          {
-            length: suguan.extraOccasion
-              ? 0
-              : WRITE_IN_ROWS_PER_SCHEDULE,
-          },
-          (_, i) => ({
-          no: rows.length + i + 1,
-          name: '',
-          }),
-        ),
-      ]
-    }
+      },
+    )
+    return [
+      ...rows,
+      ...Array.from({ length: writeInRows }, (_, i) => ({
+        no: rows.length + i + 1,
+        name: '',
+      })),
+    ]
+  }
   if (schedules.length > 0) {
     return schedules.map((sec) => ({
       sectionId: sec.id,
       label: sec.scheduleLabel || 'SUGUAN',
       headingType: sec.headingType ?? 'schedule',
-      rows: mapRows(sec.assignments),
+      rows: mapRows(sec.assignments, oicForSection(sec.id)),
     }))
   }
   return [
@@ -189,7 +191,7 @@ export function buildSections(
       sectionId: 'single',
       label: groupLabel(suguan.group),
       headingType: 'schedule',
-      rows: mapRows(suguan.assignments),
+      rows: mapRows(suguan.assignments, oicForSection('single')),
     },
   ]
 }
@@ -332,6 +334,14 @@ export function fitFontSizePt(args: {
   return size
 }
 
+/**
+ * Tightest row compaction allowed when a roster already fits one page but its
+ * signature block would spill onto a second. Rows tighten, never the text, so
+ * this floor only guards against a sheet that would look cramped; a roster that
+ * needs more than this still paginates at full size.
+ */
+export const MIN_ONE_PAGE_ROW_SCALE = 0.8
+
 /** Padding on each side of a name's rule, exported for the renderers. */
 export const SIG_RULE_PAD = SIG_RULE_PAD_MM
 /** Line height for signature text, exported for the renderers. */
@@ -372,6 +382,12 @@ export interface SuguanSheetLayout {
   usableTableH: number
   rowsPerPage: number
   pageCount: number
+  /**
+   * Row compaction applied so a single-page roster and its signature block
+   * share that page. `1` means rows are at their configured height; a smaller
+   * value means only `sectionLabelRowH` / `bodyRowH` were tightened — every
+   * font size, including the signatures, is untouched.
+   */
   scale: number
   sections: SuguanSheetSection[]
   pages: SheetPageBlock[][]
@@ -393,6 +409,13 @@ interface FlowOptions {
   sections: SuguanSheetSection[]
   showSignatures: boolean
 }
+
+/**
+ * Millimetre tolerance for the page-capacity comparison. A one-page fit makes
+ * the rows land exactly on the capacity, and accumulated floating point error
+ * would otherwise reject the final row and add a page.
+ */
+const FLOW_EPSILON_MM = 1e-6
 
 function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
   const pages: SheetPageBlock[][] = []
@@ -418,7 +441,8 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
 
     do {
       if (needsLabel) {
-        if (cursor + opts.sectionLabelRowH > contentCapacity) breakPage()
+        if (cursor + opts.sectionLabelRowH > contentCapacity + FLOW_EPSILON_MM)
+          breakPage()
         blocks.push({ kind: 'section-label', sectionIndex: si })
         cursor += opts.sectionLabelRowH
         needsLabel = false
@@ -426,7 +450,7 @@ function buildPageFlow(opts: FlowOptions): SheetPageBlock[][] {
 
       while (
         rowIndex < section.rows.length &&
-        cursor + opts.bodyRowH <= contentCapacity
+        cursor + opts.bodyRowH <= contentCapacity + FLOW_EPSILON_MM
       ) {
         blocks.push({ kind: 'member', sectionIndex: si, rowIndex })
         cursor += opts.bodyRowH
@@ -498,7 +522,7 @@ export function computeSuguanLayout(
     PT_TO_MM
   const headerRowH = (suguan.extraOccasion ? 15 : fs.headerRowHeight) * PT_TO_MM
   const globalHeaderBlockH = headerRowH * 2
-  const sectionLabelRowH = headerRowH
+  let sectionLabelRowH = headerRowH
   const baseBodyFontSizePt = suguan.extraOccasion
     ? fs.bodyFontSize
     : nameLayout.nameFontSize
@@ -537,18 +561,54 @@ export function computeSuguanLayout(
   const usableTableH =
     Math.max(0, dims.height - margins.top - margins.bottom - topBlockH)
 
-  const scale = 1
   const bodyFontSizePt = nameLayout.nameFontSize
 
-  const pages = buildPageFlow({
-    usableTableH,
-    continuationExtraMm: suguan.extraOccasion ? titleRowH : 0,
-    sectionLabelRowH,
-    bodyRowH,
-    sig,
-    sections,
-    showSignatures,
-  })
+  // A roster whose table already fits one page must not spill onto a second one
+  // only to make room for the signature block. Compacting the rows by the small
+  // factor needed keeps every name at its selected size (only rows tighten)
+  // while the signatures ride on the same page. A roster that needs more than
+  // one page for the table itself still paginates at full size.
+  const baseSectionLabelRowH = sectionLabelRowH
+  const baseBodyRowH = bodyRowH
+  let scale = 1
+  const tableContentH = sections.reduce(
+    (height, section) =>
+      height + baseSectionLabelRowH + section.rows.length * baseBodyRowH,
+    0,
+  )
+  const signatureReserveMm = showSignatures ? sig.totalMm : 0
+  if (
+    tableContentH > usableTableH - signatureReserveMm &&
+    tableContentH <= usableTableH
+  ) {
+    const fit = (usableTableH - signatureReserveMm) / tableContentH
+    if (fit >= MIN_ONE_PAGE_ROW_SCALE) {
+      scale = fit
+      sectionLabelRowH = baseSectionLabelRowH * fit
+      bodyRowH = baseBodyRowH * fit
+    }
+  }
+
+  const flowPages = () =>
+    buildPageFlow({
+      usableTableH,
+      continuationExtraMm: suguan.extraOccasion ? titleRowH : 0,
+      sectionLabelRowH,
+      bodyRowH,
+      sig,
+      sections,
+      showSignatures,
+    })
+
+  let pages = flowPages()
+  if (scale < 1 && pages.length > 1) {
+    // Floating-point guard: if the tightened flow still spills, keep the
+    // full-size pagination instead of a page a hair too tall.
+    scale = 1
+    sectionLabelRowH = baseSectionLabelRowH
+    bodyRowH = baseBodyRowH
+    pages = flowPages()
+  }
 
   const pageCount = pages.length
   const rowsPerPage = Math.max(
@@ -809,7 +869,7 @@ export async function createSuguanExcelBlob(
     for (let col = 1; col <= lastCol; col++) {
       sheet.getCell(rn, col).border = fullBorder()
     }
-    sheet.getRow(rn).height = isExtraOccasion ? 15 : fs.headerRowHeight
+    sheet.getRow(rn).height = layout.sectionLabelRowH / PT_TO_MM
     rn++
 
     for (const row of section.rows) {

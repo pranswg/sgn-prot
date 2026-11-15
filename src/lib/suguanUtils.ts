@@ -493,6 +493,20 @@ export function normalizeCoverage(
   }
 }
 
+/** The most blank write-in rows one schedule may print. */
+export const MAX_WRITE_IN_ROWS = 20
+
+/**
+ * Clamps a blank-row count to a whole number in `0..MAX_WRITE_IN_ROWS`. Garbage
+ * (a cleared input, a stale value) reads as zero, so the sheet never prints a
+ * fractional or runaway number of empty rows.
+ */
+export function normalizeWriteInRows(value: unknown): number {
+  const count = Math.floor(Number(value))
+  if (!Number.isFinite(count) || count <= 0) return 0
+  return Math.min(count, MAX_WRITE_IN_ROWS)
+}
+
 export function normalizeSuguan(
   suguan: Suguan,
   voices: { id: string; gender: 'male' | 'female' }[],
@@ -518,6 +532,7 @@ export function normalizeSuguan(
     assignments: assignmentsFromSchedules(schedules),
     coverage: normalizeCoverage(suguan.coverage),
     docFormat: normalizeDocFormat(suguan.docFormat),
+    writeInRows: normalizeWriteInRows(suguan.writeInRows) || undefined,
   }
 }
 

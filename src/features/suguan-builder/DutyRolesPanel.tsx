@@ -38,6 +38,13 @@ interface DutyRolesPanelProps {
   /** Hide the built-in header, for callers that render their own toggle above it. */
   hideHeader?: boolean
   /**
+   * The schedule section being edited. The OIC is set per schedule, so this
+   * scopes the picker; Destinado stays one value for the whole Suguan.
+   */
+  scheduleId?: string
+  /** The schedule's label, shown on the OIC field so the scope is visible. */
+  scheduleLabel?: string
+  /**
    * Lays the four fields out in two columns. The panel usually lives in a
    * narrow third column, where stacking them is right; the Extra Occasion
    * makers show it across a full-width page, where full-width inputs stacked
@@ -75,6 +82,8 @@ export function DutyRolesPanel({
   title = 'Special Duties',
   scrollClassName = 'h-[460px]',
   hideHeader = false,
+  scheduleId,
+  scheduleLabel,
   wide = false,
   flat = false,
   organista,
@@ -119,25 +128,41 @@ export function DutyRolesPanel({
   // configured, so those members alone are enough to show the field.
   const showOic = Boolean(oicRole) || oicCandidates.length > 0
 
-  const currentOic = dutyRoles.find((d) => d.dutyRoleId === OIC_DUTY_ROLE_ID)
+  // The OIC belongs to one schedule. A record saved before that scoping keeps
+  // its single unscoped entry, which reads as the OIC everywhere until it is
+  // edited (setting one drops that legacy entry).
+  const currentOic =
+    (scheduleId
+      ? dutyRoles.find(
+          (d) => d.dutyRoleId === OIC_DUTY_ROLE_ID && d.scheduleId === scheduleId,
+        )
+      : undefined) ??
+    dutyRoles.find((d) => d.dutyRoleId === OIC_DUTY_ROLE_ID && !d.scheduleId)
   const currentOicMember = currentOic
     ? activeMembers.find((m) => m.id === currentOic.memberId)
     : undefined
 
+  // Drops this schedule's OIC (and the legacy unscoped one) while leaving the
+  // other schedules' choices untouched.
+  const withoutCurrentOic = (roles: SuguanDutyRole[]) =>
+    roles.filter(
+      (d) =>
+        d.dutyRoleId !== OIC_DUTY_ROLE_ID ||
+        Boolean(d.scheduleId && d.scheduleId !== scheduleId),
+    )
+
   const setOic = (member: Member) =>
     onDutyRolesChange([
-      ...dutyRoles.filter((d) => d.dutyRoleId !== OIC_DUTY_ROLE_ID),
+      ...withoutCurrentOic(dutyRoles),
       {
         dutyRoleId: OIC_DUTY_ROLE_ID,
         memberId: member.id,
         memberName: `${member.firstName} ${member.lastName}`,
+        ...(scheduleId ? { scheduleId } : {}),
       },
     ])
 
-  const clearOic = () =>
-    onDutyRolesChange(
-      dutyRoles.filter((d) => d.dutyRoleId !== OIC_DUTY_ROLE_ID),
-    )
+  const clearOic = () => onDutyRolesChange(withoutCurrentOic(dutyRoles))
 
   const handleOicChange = (value: string) => {
     if (value === CLEAR_VALUE) {
@@ -208,8 +233,8 @@ export function DutyRolesPanel({
                 <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   {oicRole?.name ?? 'OIC'}
                 </span>
-                <span className="text-[0.625rem] font-medium tracking-wide text-muted-foreground/70">
-                  {oicRole?.abbreviation ?? 'OIC'}
+                <span className="min-w-0 truncate text-[0.625rem] font-medium tracking-wide text-muted-foreground/70">
+                  {scheduleLabel ?? oicRole?.abbreviation ?? 'OIC'}
                 </span>
               </div>
 
@@ -224,7 +249,11 @@ export function DutyRolesPanel({
                 >
                   <SelectTrigger
                     className="h-9 w-full bg-background"
-                    aria-label={oicRole?.name ?? 'OIC'}
+                    aria-label={
+                      scheduleLabel
+                        ? `${oicRole?.name ?? 'OIC'} for ${scheduleLabel}`
+                        : (oicRole?.name ?? 'OIC')
+                    }
                   >
                     <SelectValue placeholder="Select member…" />
                   </SelectTrigger>

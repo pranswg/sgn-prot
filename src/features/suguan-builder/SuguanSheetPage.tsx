@@ -111,8 +111,9 @@ export function SuguanSheetPage({
     ? '"ExtraOccasionSheet", "Book Antiqua", serif'
     : SHEET_FONT_STACK
 
-  const titlePx = fs.titleFontSize * layout.scale * PT_TO_PX
-  const headerPx = fs.headerFontSize * layout.scale * PT_TO_PX
+  // `layout.scale` tightens rows only; every font size stays as configured.
+  const titlePx = fs.titleFontSize * PT_TO_PX
+  const headerPx = fs.headerFontSize * PT_TO_PX
   const extraHeaderPx = EXTRA_OCCASION_HEADER_FONT_SIZE_PT * PT_TO_PX
   const bodyPx = layout.bodyFontSizePt * PT_TO_PX
   const paragraphOffsetMm =

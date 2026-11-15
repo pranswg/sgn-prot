@@ -216,6 +216,7 @@ export function occasionSuguanInput(
     voiceCapacities: preview.voiceCapacities,
     assignments: preview.assignments,
     dutyRoles: preview.dutyRoles,
+    writeInRows: preview.writeInRows,
     destinadoName: preview.destinadoName,
   }
 }

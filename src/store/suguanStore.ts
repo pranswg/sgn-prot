@@ -23,6 +23,7 @@ export interface SuguanConfigInput {
   assignments?: SuguanAssignment[]
   dutyRoles?: SuguanDutyRole[]
   destinadoName?: string
+  writeInRows?: number
   extraOccasion?: ExtraOccasionSuguanConfig
   /** Links an Extra Occasion to its Multiple planning session, if any. */
   extraOccasionBatchId?: string

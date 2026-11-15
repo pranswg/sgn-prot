@@ -16,6 +16,7 @@ import {
   computeSuguanLayout,
   createSuguanExcelBlob,
   fitFontSizePt,
+  MIN_ONE_PAGE_ROW_SCALE,
   PT_TO_MM,
   SIG_RULE_PAD,
   suguanSheetAccent,
@@ -152,6 +153,105 @@ test('the last page always ends with overlay signature blocks in order', () => {
   }
 })
 
+test('a roster that already fits one page keeps its signatures on that page', () => {
+  // 35 members (plus the two write-in rows) is more than the signature reserve
+  // allows at full row height, but the table itself is well inside one page.
+  const format: SuguanDocFormat = {
+    paperSize: 'letter',
+    orientation: 'portrait',
+    margins: 'normal',
+    scaling: 'auto',
+    fontSize: 'normal',
+  }
+  const members = makeMembers(35)
+  const suguan = makeSuguan(35, format)
+  suguan.writeInRows = 2
+  const layout = computeSuguanLayout(suguan, members, format)
+
+  assert.equal(layout.pages.length, 1, 'signatures must not spill a one-page roster')
+  assert.deepEqual(
+    layout.pages[0].slice(-3).map((block) => block.kind),
+    ['sig-gap', 'sig-name', 'sig-title'],
+  )
+  assert.equal(
+    layout.pages[0].filter((block) => block.kind === 'member').length,
+    37,
+    'no member row may be dropped to make the fit',
+  )
+  assert.ok(layout.scale < 1, 'rows should tighten to make room for the signatures')
+  assert.ok(
+    layout.scale >= MIN_ONE_PAGE_ROW_SCALE,
+    'rows must never tighten past the legibility floor',
+  )
+  // Only rows compact: the selected name size and fixed signatures are untouched.
+  assert.equal(layout.bodyFontSizePt, layout.nameFontSize)
+  assert.equal(
+    layout.sig.totalMm,
+    computeSuguanLayout(makeSuguan(12, format), makeMembers(12), format).sig.totalMm,
+  )
+
+  const fittedHeight =
+    layout.pages[0].reduce(
+      (height, block) =>
+        height +
+        (block.kind === 'section-label'
+          ? layout.sectionLabelRowH
+          : block.kind === 'member'
+            ? layout.bodyRowH
+            : 0),
+      0,
+    ) + layout.sig.totalMm
+  assert.ok(
+    fittedHeight <= layout.usableTableH + 1e-6,
+    `fitted content ${fittedHeight}mm must stay inside ${layout.usableTableH}mm`,
+  )
+})
+
+test('the one-page fit also keeps Extra Occasion signatures on the page', () => {
+  const format: SuguanDocFormat = {
+    paperSize: 'letter',
+    orientation: 'portrait',
+    margins: 'normal',
+    scaling: 'auto',
+    fontSize: 'normal',
+  }
+  const suguan = makeSuguan(35, format)
+  suguan.extraOccasion = { name: 'Kasal' } as NonNullable<Suguan['extraOccasion']>
+  const layout = computeSuguanLayout(suguan, makeMembers(35), format)
+
+  assert.equal(layout.pages.length, 1)
+  assert.ok(layout.scale < 1 && layout.scale >= MIN_ONE_PAGE_ROW_SCALE)
+  assert.deepEqual(
+    layout.pages[0].slice(-3).map((block) => block.kind),
+    ['sig-gap', 'sig-name', 'sig-title'],
+  )
+})
+
+test('a roster whose table alone needs two pages still paginates at full size', () => {
+  const format: SuguanDocFormat = {
+    paperSize: 'letter',
+    orientation: 'portrait',
+    margins: 'normal',
+    scaling: 'auto',
+    fontSize: 'normal',
+  }
+  const members = makeMembers(39)
+  const suguan = makeSuguan(39, format)
+  suguan.writeInRows = 2
+  const layout = computeSuguanLayout(suguan, members, format)
+
+  assert.ok(layout.pages.length > 1, 'the table itself already exceeds one page')
+  assert.equal(layout.scale, 1, 'row compaction is only for signature-driven spill')
+  // Unscaled rows: the preset's row height, or 1.5 lines of the name size.
+  assert.equal(
+    layout.bodyRowH,
+    Math.max(
+      FONT_SIZE_PRESETS.normal.rowHeight * PT_TO_MM,
+      layout.bodyFontSizePt * PT_TO_MM * 1.5,
+    ),
+  )
+})
+
 test('legal portrait pages fit 17 members in each of three compact schedules', () => {
   const legal: SuguanDocFormat = {
     paperSize: 'legal',
@@ -162,6 +262,7 @@ test('legal portrait pages fit 17 members in each of three compact schedules', (
   }
   const members = makeMembers(51)
   const suguan = makeSuguan(51, legal)
+  suguan.writeInRows = 2
   suguan.schedules = Array.from({ length: 3 }, (_, scheduleIndex) => ({
     id: `schedule-${scheduleIndex}`,
     scheduleLabel: `Schedule ${scheduleIndex + 1}`,
@@ -185,8 +286,7 @@ test('legal portrait pages fit 17 members in each of three compact schedules', (
   )
 })
 
-test('each schedule includes exactly two numbered blank write-in rows', () => {
-  const members = makeMembers(3)
+function twoScheduleSuguan(): Suguan {
   const suguan = makeSuguan(3, PRESETS[1])
   suguan.schedules = [
     {
@@ -204,8 +304,27 @@ test('each schedule includes exactly two numbered blank write-in rows', () => {
       assignments: suguan.assignments.slice(1),
     },
   ]
+  return suguan
+}
 
-  const sections = buildSections(suguan, members)
+test('no blank write-in rows are printed unless the Suguan opts in', () => {
+  const sections = buildSections(twoScheduleSuguan(), makeMembers(3))
+  assert.deepEqual(
+    sections.map((section) => section.rows.map((row) => [row.no, row.name])),
+    [
+      [[1, 'Sales, Julie']],
+      [
+        [1, 'Cruz, Ana'],
+        [2, 'Reyes, Maria'],
+      ],
+    ],
+  )
+})
+
+test('an opted-in blank-row count is numbered under every schedule', () => {
+  const suguan = twoScheduleSuguan()
+  suguan.writeInRows = 2
+  const sections = buildSections(suguan, makeMembers(3))
   assert.deepEqual(
     sections.map((section) => section.rows.map((row) => [row.no, row.name])),
     [
@@ -224,6 +343,13 @@ test('each schedule includes exactly two numbered blank write-in rows', () => {
   )
 })
 
+test('a garbage blank-row count prints nothing', () => {
+  const suguan = twoScheduleSuguan()
+  suguan.writeInRows = Number.NaN
+  const sections = buildSections(suguan, makeMembers(3))
+  assert.ok(sections.every((section) => section.rows.every((row) => row.name)))
+})
+
 test('automatic layout preserves normal name size on supported paper sizes', () => {
   for (const paperSize of ['letter', 'a4', 'legal', 'folio'] as const) {
     const format: SuguanDocFormat = {
@@ -235,6 +361,7 @@ test('automatic layout preserves normal name size on supported paper sizes', () 
     }
     const members = makeMembers(51)
     const suguan = makeSuguan(51, format)
+    suguan.writeInRows = 2
     suguan.schedules = Array.from({ length: 3 }, (_, scheduleIndex) => ({
       id: `schedule-${scheduleIndex}`,
       scheduleLabel: `Schedule ${scheduleIndex + 1}`,
@@ -394,10 +521,11 @@ test('a signature name is never squeezed below the column it must fit', () => {
   assert.ok(widthMm <= layout.sig.columnWidthMm - 2 * SIG_RULE_PAD)
 })
 
-test('an empty roster still lays out a full page without a phantom gap', () => {
+test('an empty roster prints no phantom write-in rows or signature gap', () => {
   const layout = computeSuguanLayout(makeSuguan(0), [], PRESETS[1])
-  assert.equal(layout.rowCount, 2)
-  assert.ok(layout.sig.gapMm > 0)
+  assert.equal(layout.rowCount, 0)
+  // With no table rows there is nothing to clear, so no gap is reserved.
+  assert.equal(layout.sig.gapMm, 0)
   assert.equal(layout.pages.length, 1)
   const tail = layout.pages[0].slice(-3).map((b) => b.kind)
   assert.deepEqual(tail, ['sig-gap', 'sig-name', 'sig-title'])
@@ -592,6 +720,75 @@ test('the OIC duty holder is marked "- OIC" on their sheet row', () => {
     'the OIC member should read "Reyes, Maria - OIC"',
   )
   assert.equal(names.filter((n) => n.includes(' - OIC')).length, 1)
+})
+
+test('a schedule-scoped OIC is only marked on that schedule', () => {
+  const members = makeMembers(4)
+  const suguan = makeSuguan(4, PRESETS[1])
+  suguan.schedules = [
+    {
+      id: 'schedule-a',
+      scheduleLabel: 'Schedule A',
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: suguan.assignments.slice(0, 2),
+    },
+    {
+      id: 'schedule-b',
+      scheduleLabel: 'Schedule B',
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: suguan.assignments.slice(2),
+    },
+  ]
+  suguan.dutyRoles = [
+    {
+      dutyRoleId: 'oic',
+      memberId: 'm1',
+      memberName: 'Maria Reyes',
+      scheduleId: 'schedule-a',
+    },
+  ]
+  const sections = buildSections(suguan, members)
+  assert.ok(
+    sections[0].rows.some((row) => row.name === 'Reyes, Maria - OIC'),
+    'the scoped schedule marks its OIC',
+  )
+  assert.ok(
+    !sections[1].rows.some((row) => row.name.includes(' - OIC')),
+    'the other schedule stays unmarked',
+  )
+})
+
+test('a legacy unscoped OIC still marks every schedule', () => {
+  const members = makeMembers(4)
+  const suguan = makeSuguan(4, PRESETS[1])
+  suguan.schedules = [
+    {
+      id: 'schedule-a',
+      scheduleLabel: 'Schedule A',
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: suguan.assignments.slice(0, 2),
+    },
+    {
+      id: 'schedule-b',
+      scheduleLabel: 'Schedule B',
+      scheduleDay: '',
+      scheduleTime: '',
+      assignments: [suguan.assignments[1], suguan.assignments[2]],
+    },
+  ]
+  suguan.dutyRoles = [
+    { dutyRoleId: 'oic', memberId: 'm1', memberName: 'Maria Reyes' },
+  ]
+  const sections = buildSections(suguan, members)
+  assert.equal(
+    sections.flatMap((section) => section.rows).filter((row) =>
+      row.name.includes(' - OIC'),
+    ).length,
+    2,
+  )
 })
 
 test('without an OIC duty role no " - OIC" marker appears', () => {

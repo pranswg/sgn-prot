@@ -788,6 +788,8 @@ export function AssignmentWorkspace({
         destinadoName={draft.destinadoName}
         onDestinadoChange={(destinadoName) => patch({ destinadoName })}
         members={members}
+        scheduleId={section?.id}
+        scheduleLabel={section?.scheduleLabel}
         organista={
           organista ? { ...organista, conflictIds: bookedIds } : undefined
         }
@@ -1486,6 +1488,8 @@ export function AssignmentWorkspace({
             destinadoName={draft.destinadoName}
             onDestinadoChange={(destinadoName) => patch({ destinadoName })}
             members={members}
+            scheduleId={section?.id}
+            scheduleLabel={section?.scheduleLabel}
             scrollClassName="h-full flex-1 min-h-0"
             organista={
               organista ? { ...organista, conflictIds: bookedIds } : undefined

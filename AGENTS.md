@@ -188,6 +188,15 @@ This rule exists because a real bug shipped: the PDF renderer was missing a
 while the preview looked correct. Signature gap is `SIG_GAP_ROWS = 2.5` and
 signatures are never scaled under fit-page mode.
 
+A roster that already fits one page must not spill onto a second one just for
+the signature block. When the table alone fits the page but table + signatures
+do not, `computeSuguanLayout` tightens `sectionLabelRowH` and `bodyRowH` by one
+factor (`layout.scale`, floored at `MIN_ONE_PAGE_ROW_SCALE = 0.8`) so the
+signatures ride on that same page. Only row heights compact: font sizes —
+names, labels, title, and signatures — stay exactly as selected, and
+`layout.bodyFontSizePt` still carries the selected name size. A roster whose
+table needs more than one page still paginates at `scale = 1`.
+
 **Never index `FONT_SIZE_PRESETS[fmt.fontSize]`.** `DocFontSize` includes
 `custom`, which has no static preset, so that index is a lie the type system
 only catches because the record is keyed `Exclude<DocFontSize, 'custom'>`.
@@ -446,7 +455,11 @@ counts, pickers and the Members History archive all read one pool at a time.
   (no eyebrow), desktop rows pair an eye button with one kebab
   (`HistoryRowActions`), and phone cards are tappable and carry only the status
   pill and kebab. Do not bring back the labelled View History/Restore/Delete
-  action strip.
+  action strip. The archive reads **newest activity first**:
+  `sortMemberHistoryLatestFirst` orders by `memberLastActiveDateKey` descending
+  (canonical `YYYY-MM-DD` keys compare lexicographically), with a name
+  tie-break, after `filterMemberHistory` has run — do not re-sort the rows in
+  the component.
 - Duplicate detection is scoped to the choir being edited, and the roster
   import dialog asks which list the file lands in (switching pools clears the
   parsed names, because the duplicate flags were computed against the other
@@ -528,9 +541,27 @@ whose ranks (`memberRankIds`) include that role's id, or who hold a legacy store
 legacy members alone also keep the field visible when no OIC duty role is
 configured. The panel always stores the chosen member under the canonical
 `dutyRoleId: 'oic'`, which is what `suguanExport` and `extraOccasionData` key on
-to suffix the printed row with ` - OIC`. **Destinado is required**: both
-`saveBlockers` (Choir builder) and `validateOccasion` (Extra Occasion) block save
-and export until it is filled.
+to suffix the printed row with ` - OIC`. **OIC is schedule-scoped; only
+Destinado is global.** `AssignmentWorkspace` passes the active tab's
+`scheduleId` / `scheduleLabel`, the panel reads and writes the OIC entry carrying
+that `scheduleId`, and `buildSections` marks the member's row only on that
+schedule — a different OIC per schedule is normal. A record saved before this
+rule has one unscoped OIC entry; `createDraftFromSuguan` expands it onto the
+schedules its holder actually serves (`expandOicDutyRoles`, falling back to the
+first schedule), and both `buildSections` and `extraOccasionData` still print an
+unscoped entry on every schedule until it is re-saved. **Destinado is
+required**: both `saveBlockers` (Choir builder) and `validateOccasion` (Extra
+Occasion) block save and export until it is filled.
+
+**Blank write-in rows are opt-in.** The Suguan stores one count,
+`Suguan.writeInRows` (`writeInRows` on the draft), and `buildSections` prints
+that many empty numbered rows under **every** schedule; there is no automatic
+two-row padding any more. The Schedules step's `BlankRowsControl` is an
+unchecked checkbox by default — checking it restores the last count (2 the first
+time) and the number input is disabled and greyed while unchecked. The count is
+clamped by `normalizeWriteInRows`/`MAX_WRITE_IN_ROWS` (0–20, garbage → 0), and
+an Extra Occasion always prints zero because `buildSections` forces it. An
+empty roster therefore prints no phantom rows and gets no signature gap.
 
 The Choir Suguan builder **never assigns the `organista` or
 `organista-reserve` duty roles** — those duties belong to the Organist Suguan

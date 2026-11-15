@@ -44,6 +44,7 @@ import { CHOIR_LABELS, membersOf } from '@/lib/choirs'
 import {
   EMPTY_HISTORY_FILTERS,
   filterMemberHistory,
+  sortMemberHistoryLatestFirst,
   type HistoryStatusFilter,
 } from '@/lib/memberHistoryFilter'
 import {
@@ -186,7 +187,10 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
     [archivedMembers],
   )
   const historyMembers = useMemo(
-    () => filterMemberHistory(archivedMembers, filters),
+    () =>
+      sortMemberHistoryLatestFirst(
+        filterMemberHistory(archivedMembers, filters),
+      ),
     [archivedMembers, filters],
   )
   const setFilter = <K extends keyof typeof filters>(

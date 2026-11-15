@@ -140,9 +140,14 @@ test('copy carries options, document format, schedules, and voice assignments', 
   assert.deepEqual(copy.docFormat, { ...source.docFormat })
 
   assert.deepEqual(copy.voiceCapacities, { soprano: 4, alto: 3, tenor: 2 })
-  // A copy keeps only the OIC slot: the other duties are re-picked per copy.
+  // A copy keeps only the OIC slot, scoped to the schedule its holder serves.
   assert.deepEqual(copy.dutyRoles, [
-    { memberId: 'm2', memberName: 'OIC Member', dutyRoleId: 'oic' },
+    {
+      memberId: 'm2',
+      memberName: 'OIC Member',
+      dutyRoleId: 'oic',
+      scheduleId: 's2',
+    },
   ])
 
   assert.equal(copy.schedules.length, 2)
@@ -221,6 +226,46 @@ test('organist duty roles are stripped from loaded and copied drafts', () => {
   )
   // Only the draft is cleaned; the saved record keeps what it stored.
   assert.equal(stored.dutyRoles.length, 3)
+})
+
+test('a legacy unscoped OIC loads onto the schedules its holder serves', () => {
+  const draft = createDraftFromSuguan(source, voices)
+  assert.deepEqual(draft.dutyRoles, [
+    {
+      memberId: 'm2',
+      memberName: 'OIC Member',
+      dutyRoleId: 'oic',
+      scheduleId: 's2',
+    },
+  ])
+})
+
+test('a schedule-scoped OIC is left exactly as saved', () => {
+  const stored: Suguan = {
+    ...source,
+    dutyRoles: [
+      {
+        memberId: 'm2',
+        memberName: 'OIC Member',
+        dutyRoleId: 'oic',
+        scheduleId: 's1',
+      },
+    ],
+  }
+  assert.deepEqual(createDraftFromSuguan(stored, voices).dutyRoles, [
+    {
+      memberId: 'm2',
+      memberName: 'OIC Member',
+      dutyRoleId: 'oic',
+      scheduleId: 's1',
+    },
+  ])
+})
+
+test('the blank-row count round-trips through load and copy', () => {
+  const stored: Suguan = { ...source, writeInRows: 4 }
+  assert.equal(createDraftFromSuguan(stored, voices).writeInRows, 4)
+  assert.equal(createCopyDraft(stored, voices).writeInRows, 4)
 })
 
 test('saveBlockers requires a Destinado name', () => {

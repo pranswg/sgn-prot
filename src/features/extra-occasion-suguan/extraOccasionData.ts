@@ -53,9 +53,15 @@ export function buildExtraOccasionSections(
   dutyRoles: readonly DutyRole[] = [],
 ): ExtraOccasionSection[] {
   const memberById = new Map(members.map((member) => [member.id, member]))
-  const oicMemberId = suguan.dutyRoles.find(
-    (role) => role.dutyRoleId === 'oic',
-  )?.memberId
+  // The OIC is scoped to one schedule now; a pre-scoping record's single entry
+  // (no scheduleId) still marks its holder on every section.
+  const oicMemberIdFor = (scheduleId: string) =>
+    suguan.dutyRoles.find(
+      (role) => role.dutyRoleId === 'oic' && role.scheduleId === scheduleId,
+    )?.memberId ??
+    suguan.dutyRoles.find(
+      (role) => role.dutyRoleId === 'oic' && !role.scheduleId,
+    )?.memberId
   const voiceSections = voices.filter((voice) =>
     suguan.group === 'babae'
       ? voice.gender === 'female'
@@ -65,6 +71,7 @@ export function buildExtraOccasionSections(
   )
 
   return suguan.schedules.map((schedule) => {
+    const oicMemberId = oicMemberIdFor(schedule.id)
     const scheduleLabel = schedule.scheduleLabel.trim()
     const scheduleTime = schedule.scheduleTime.trim()
     const label =

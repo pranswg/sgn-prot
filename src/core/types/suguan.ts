@@ -28,6 +28,12 @@ export interface SuguanDutyRole {
   memberId: string
   memberName: string
   dutyRoleId: string
+  /**
+   * The schedule section this duty belongs to. Absent on records saved before
+   * duties were schedule-scoped (the OIC was global there); those still print
+   * on every schedule the member serves.
+   */
+  scheduleId?: string
 }
 
 export type SuguanGroup = 'babae' | 'lalaki' | 'mixed'
@@ -178,6 +184,11 @@ export interface Suguan {
   assignments: SuguanAssignment[]
   dutyRoles: SuguanDutyRole[]
   destinadoName?: string
+  /**
+   * Blank write-in rows printed under each schedule, for members added by hand
+   * on paper. The Choir builder sets it; an Extra Occasion never prints any.
+   */
+  writeInRows?: number
   extraOccasion?: ExtraOccasionSuguanConfig
   /**
    * The planning session (batch) this Extra Occasion belongs to. The inverse —

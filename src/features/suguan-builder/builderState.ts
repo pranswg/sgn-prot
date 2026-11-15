@@ -42,6 +42,8 @@ export interface SuguanDraft {
   assignments: SuguanAssignment[]
   schedules: SuguanScheduleSection[]
   dutyRoles: SuguanDutyRole[]
+  /** Blank rows printed under each schedule; 0 prints none. */
+  writeInRows: number
   destinadoName: string
   copiedFromId?: string | null
 }
@@ -150,6 +152,7 @@ export function createEmptyDraft(
     assignments: [],
     schedules: [],
     dutyRoles: [],
+    writeInRows: 0,
     destinadoName: '',
   }
 }
@@ -196,6 +199,27 @@ export function weekScheduleSections(
   )
 }
 
+/**
+ * A saved record's only duty role is its OIC, which is now set per schedule.
+ * Records written while it was global carry one unscoped entry; expand it onto
+ * the schedules whose roster the holder is on (which is exactly where the old
+ * sheet printed " - OIC"), falling back to the first schedule so the choice is
+ * still visible when they served none.
+ */
+function expandOicDutyRoles(suguan: Suguan): SuguanDutyRole[] {
+  const schedules = suguan.schedules ?? []
+  return (suguan.dutyRoles ?? [])
+    .filter((d) => d.dutyRoleId === OIC_DUTY_ROLE_ID)
+    .flatMap((role) => {
+      if (role.scheduleId || schedules.length === 0) return [{ ...role }]
+      const served = schedules.filter((section) =>
+        (section.assignments ?? []).some((a) => a.memberId === role.memberId),
+      )
+      const targets = served.length > 0 ? served : [schedules[0]]
+      return targets.map((section) => ({ ...role, scheduleId: section.id }))
+    })
+}
+
 export function createDraftFromSuguan(
   suguan: Suguan,
   voices: VoicePosition[],
@@ -225,9 +249,8 @@ export function createDraftFromSuguan(
     // belong to the Organist Suguan, and Pangulong/Kalihim are read from the
     // Master List. Keeping only the OIC slot also clears the legacy organist
     // roles older saved records may carry.
-    dutyRoles: (suguan.dutyRoles ?? [])
-      .filter((d) => d.dutyRoleId === OIC_DUTY_ROLE_ID)
-      .map((d) => ({ ...d })),
+    dutyRoles: expandOicDutyRoles(suguan),
+    writeInRows: suguan.writeInRows ?? 0,
     destinadoName: suguan.destinadoName ?? '',
     copiedFromId: suguan.copiedFromId,
   }
@@ -314,6 +337,7 @@ export function buildPreviewSuguan(draft: SuguanDraft): Suguan {
             },
           ],
     dutyRoles: draft.dutyRoles,
+    writeInRows: draft.writeInRows,
     destinadoName: draft.destinadoName,
     copiedFromId: draft.copiedFromId ?? undefined,
     createdAt: '',

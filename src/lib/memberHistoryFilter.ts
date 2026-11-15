@@ -6,6 +6,7 @@ import type { Member } from '@/core/types/member'
 import {
   belongsInMemberHistory,
   memberHistoryEvents,
+  memberLastActiveDateKey,
   memberLifecycleStatus,
 } from '@/lib/memberHistory'
 
@@ -22,6 +23,13 @@ export const EMPTY_HISTORY_FILTERS: MemberHistoryFilters = {
   query: '',
   status: 'all',
   year: 'all',
+}
+
+function memberFullName(member: Member): string {
+  return [member.firstName, member.middleName, member.lastName, member.suffix]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
 }
 
 /** The members on the Members History page that survive the current filters. */
@@ -43,14 +51,25 @@ export function filterMemberHistory(
       )
       if (!hasEventThatYear) return false
     }
-    if (needle) {
-      const fullName =
-        [member.firstName, member.middleName, member.lastName, member.suffix]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-      if (!fullName.includes(needle)) return false
-    }
+    if (needle && !memberFullName(member).includes(needle)) return false
     return true
+  })
+}
+
+/**
+ * The archive reads newest first: the member whose membership changed most
+ * recently sits at the top. Dates are canonical `YYYY-MM-DD` keys, so a plain
+ * string comparison orders them; equal dates fall back to the name so the list
+ * never reorders between renders.
+ */
+export function sortMemberHistoryLatestFirst(
+  members: readonly Member[],
+): Member[] {
+  return [...members].sort((a, b) => {
+    const byDate = memberLastActiveDateKey(b).localeCompare(
+      memberLastActiveDateKey(a),
+    )
+    if (byDate !== 0) return byDate
+    return memberFullName(a).localeCompare(memberFullName(b))
   })
 }

@@ -74,7 +74,6 @@ export async function exportSuguanPdf(
   const layout = computeSuguanLayout(suguan, members, docFormat)
   const { fmt, fs } = layout
   const m = layout.margins
-  const scale = layout.scale || 1
   const sigGeo = layout.sig
   const accent = suguanSheetAccent(suguan.group)
   const isExtraOccasion = Boolean(suguan.extraOccasion)
@@ -90,9 +89,9 @@ export async function exportSuguanPdf(
   const extraOccasionRgb = hexRgb(EXTRA_OCCASION_FILL)
   const scheduleRgb = hexRgb(accent.scheduleFill)
 
-  const titleSz = fs.titleFontSize * scale
-  const headerSz = fs.headerFontSize * scale
-  // Shared with the preview, including the fit-page clamp.
+  // `layout.scale` tightens rows only; every font size stays as configured.
+  const titleSz = fs.titleFontSize
+  const headerSz = fs.headerFontSize
   const bodySz = layout.bodyFontSizePt
 
   const x0 = m.left

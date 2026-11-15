@@ -154,6 +154,7 @@ export function SuguanBuilderPage() {
       assignments: draft.assignments,
       schedules: draft.schedules,
       dutyRoles: draft.dutyRoles,
+      writeInRows: draft.writeInRows,
       destinadoName: draft.destinadoName.trim() || undefined,
     }
 
@@ -175,6 +176,7 @@ export function SuguanBuilderPage() {
 pagsasanayDate: draft.pagsasanayDate || undefined,
       pagtupadDate: draft.pagtupadDate || undefined,
       copiedFromId: draft.copiedFromId || undefined,
+      writeInRows: draft.writeInRows,
       destinadoName: draft.destinadoName.trim() || undefined,
     })
     updateSuguan(created.id, {
@@ -182,6 +184,7 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
       assignments: draft.assignments,
       schedules: draft.schedules,
       dutyRoles: draft.dutyRoles,
+      writeInRows: draft.writeInRows,
     })
     toast.success('Suguan saved.')
     openSuguanDetail(created.id)

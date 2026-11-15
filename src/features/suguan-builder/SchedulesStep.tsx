@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -42,6 +43,7 @@ import {
 import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
 import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
 import { formatDateKey } from '@/lib/phDate'
+import { MAX_WRITE_IN_ROWS, normalizeWriteInRows } from '@/lib/suguanUtils'
 import { totalAssigned, type SuguanDraft } from './builderState'
 import { cn } from '@/lib/utils'
 
@@ -425,6 +427,8 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
               </div>
             </div>
 
+            <BlankRowsControl draft={draft} patch={patch} />
+
             {scheduleCount > 0 && (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/40 px-4 py-3">
                 <div className="min-w-0">
@@ -682,6 +686,8 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
           </div>
         </section>
 
+        <BlankRowsControl draft={draft} patch={patch} />
+
         <section className="rounded-2xl border border-primary/20 bg-brand-navy-soft/60 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
@@ -749,6 +755,63 @@ export function SchedulesStep({ draft, patch }: SchedulesStepProps) {
         </SheetContent>
       </Sheet>
     </>
+  )
+}
+
+/**
+ * The blank-row opt-in. Unchecked (the default) prints no empty rows; checking
+ * it enables the count field and restores the two rows the export used to add
+ * automatically, and the user chooses the number from there.
+ */
+function BlankRowsControl({
+  draft,
+  patch,
+}: {
+  draft: SuguanDraft
+  patch: (p: Partial<SuguanDraft>) => void
+}) {
+  const rows = draft.writeInRows
+  const enabled = rows > 0
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <Checkbox
+          id="suguan-blank-rows"
+          checked={enabled}
+          onCheckedChange={(checked) =>
+            patch({ writeInRows: checked === true ? (rows > 0 ? rows : 2) : 0 })
+          }
+          className="mt-0.5"
+        />
+        <div className="min-w-0">
+          <label
+            htmlFor="suguan-blank-rows"
+            className="block text-sm font-medium text-foreground"
+          >
+            Blank rows for additional members
+          </label>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            Printed under every schedule for names added on paper.
+          </p>
+        </div>
+      </div>
+      <div className="flex w-[5.5rem] shrink-0 flex-col items-end gap-1">
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={MAX_WRITE_IN_ROWS}
+          value={enabled ? rows : ''}
+          onChange={(e) =>
+            patch({ writeInRows: normalizeWriteInRows(e.target.value) })
+          }
+          disabled={!enabled}
+          aria-label="Blank rows per schedule"
+          className="h-8 w-16 text-center tabular-nums"
+        />
+        <span className="text-[10px] text-muted-foreground">per schedule</span>
+      </div>
+    </div>
   )
 }
 

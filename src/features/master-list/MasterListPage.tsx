@@ -956,6 +956,13 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                       canManageHistory ||
                       canDeleteMembers
                     }
+                    // A tap edits in place; a caller who cannot edit falls
+                    // back to the action sheet the card used to open.
+                    onOpenMember={(member) =>
+                      canEditMembers
+                        ? openEditDialog(member)
+                        : setActionTarget(member)
+                    }
                     onOpenMenu={setActionTarget}
                     onPageChange={(page) =>
                       setMobilePages((current) => ({
@@ -995,7 +1002,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         previewCount={previewCount}
       />
 
-      {/* Member actions, from a card tap or its kebab */}
+      {/* Member actions from a phone card's kebab (a tap opens Edit instead) */}
       <MemberActionDialog
         member={actionTarget}
         reference={

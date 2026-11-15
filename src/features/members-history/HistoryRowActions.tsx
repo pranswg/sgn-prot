@@ -20,7 +20,10 @@ interface HistoryRowActionsProps {
   member: Member
   canRestore: boolean
   canDelete: boolean
-  /** Desktop also shows the eye button; phones reach the timeline by tapping. */
+  /**
+   * Desktop shows the eye button. Rows and phone cards open the timeline on
+   * click too, so this is the explicit affordance rather than the only way in.
+   */
   showView?: boolean
   onView: (member: Member) => void
   onRestore: (member: Member) => void

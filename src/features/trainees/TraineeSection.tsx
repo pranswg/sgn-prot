@@ -89,19 +89,26 @@ export function TraineeSection({
                 key={trainee.id}
                 className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3.5 shadow-sm"
               >
-                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-teal-soft text-[0.8125rem] font-semibold tracking-tight text-brand-teal">
-                  {memberInitials(trainee)}
-                </span>
-                <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-sm font-semibold tracking-tight text-foreground">
-                    {formatMemberName(trainee)}
-                  </p>
-                  <p className="mt-1 truncate text-[0.6875rem] text-muted-foreground">
-                    {getVoiceName(trainee.voicePosition, voices)}
-                    <span aria-hidden> · </span>
-                    Added {formatAddedDate(trainee.dateAdded)}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onEdit(trainee)}
+                  aria-label={`Edit ${formatMemberName(trainee)}`}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-teal-soft text-[0.8125rem] font-semibold tracking-tight text-brand-teal">
+                    {memberInitials(trainee)}
+                  </span>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+                      {formatMemberName(trainee)}
+                    </p>
+                    <p className="mt-1 truncate text-[0.6875rem] text-muted-foreground">
+                      {getVoiceName(trainee.voicePosition, voices)}
+                      <span aria-hidden> · </span>
+                      Added {formatAddedDate(trainee.dateAdded)}
+                    </p>
+                  </div>
+                </button>
                 <div className="flex shrink-0 items-center gap-1">
                   <TraineeStatusBadge status={trainee.status} />
                   <TraineeRowActions trainee={trainee} {...actions} />
@@ -129,7 +136,15 @@ export function TraineeSection({
                 {trainees.map((trainee, index) => (
                   <TableRow
                     key={trainee.id}
-                    className="h-14 border-b border-border transition-colors hover:bg-background"
+                    onClick={() => onEdit(trainee)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onEdit(trainee)
+                      }
+                    }}
+                    tabIndex={0}
+                    className="h-14 cursor-pointer border-b border-border transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none"
                   >
                     <TableCell className="w-14 text-center align-middle">
                       <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
@@ -159,7 +174,13 @@ export function TraineeSection({
                     <TableCell>
                       <TraineeStatusBadge status={trainee.status} />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell
+                      className="text-right"
+                      // Keep the kebab's clicks and keydowns — including those
+                      // from its portalled menu — from opening Edit as well.
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
                       <TraineeRowActions trainee={trainee} {...actions} />
                     </TableCell>
                   </TableRow>

@@ -446,22 +446,26 @@ counts, pickers and the Members History archive all read one pool at a time.
   page cursor and a collapse toggle; there is no Gender column or badge, because
   the section header already names it. `MemberDirectoryTable` and
   `MobileChoirSection` both page with `paginate` per section, and a page-size
-  change resets every section to page 1. Row actions sit behind one kebab menu
-  (`MemberRowActions`); do not restore the always-visible pencil/transfer/delete
-  buttons.
+  change resets every section to page 1. **Clicking a row — or tapping a phone
+  card — opens the member's edit form**, so the kebab is not the only way in;
+  only a caller who can edit gets the clickable row, and the kebab's cell stops
+  its own clicks and keydowns from reaching the row. The kebab
+  (`MemberRowActions`) still carries Transfer out and Delete; do not restore the
+  always-visible pencil/transfer/delete buttons.
 - **Trainees mirrors that shape.** Its Women's/Men's sections are the same tinted
   band plus cards or table (`TraineeSection`), so the page has no gender segment
   filter and no Gender column. Attendance Sheet and Add Trainee live in the page
-  header, and every row's Promote/Restore, Edit, Transfer out, and Remove sit
-  behind one kebab (`TraineeRowActions`). The toolbar prints
-  `12 trainees · 2 promoted`. The add/edit dialog mirrors the Master List
+  header. Clicking a row or tapping a phone card opens the trainee edit form;
+  the kebab (`TraineeRowActions`) keeps Promote/Restore, Transfer out, and
+  Remove, and its cell stops events from opening Edit as well. The toolbar
+  prints `12 trainees · 2 promoted`. The add/edit dialog mirrors the Master List
   member form: flat uppercase section labels, sentence-case field labels, and
   the same segmented Active/Inactive toggle.
 - **Members History is one quiet list.** `MembersHistoryPage` has a single title
-  (no eyebrow), desktop rows pair an eye button with one kebab
-  (`HistoryRowActions`), and phone cards are tappable and carry only the status
-  pill and kebab. Do not bring back the labelled View History/Restore/Delete
-  action strip. The archive reads **newest activity first**:
+  (no eyebrow), desktop rows open the membership timeline on click and pair an
+  eye button with one kebab (`HistoryRowActions`), and phone cards are tappable
+  and carry only the status pill and kebab. Do not bring back the labelled View
+  History/Restore/Delete action strip. The archive reads **newest activity first**:
   `sortMemberHistoryLatestFirst` orders by `memberLastActiveDateKey` descending
   (canonical `YYYY-MM-DD` keys compare lexicographically), with a name
   tie-break, after `filterMemberHistory` has run — do not re-sort the rows in

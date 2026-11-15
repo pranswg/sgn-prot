@@ -20,15 +20,18 @@ interface MobileMemberCardProps {
   /** PNK sings one voice, so its cards carry no voice name. */
   showVoice?: boolean
   sort: MemberSort
+  /** Tapping the card opens the member's edit form. */
+  onOpenMember: (member: Member) => void
+  /** The overflow button opens the action sheet (transfer/delete). */
   onOpenMenu: (member: Member) => void
   hasActions: boolean
 }
 
 /**
- * Compact directory card. The body and the overflow button both open the
- * member's action sheet. The choir section header already names the gender, so
- * the card spends its one metadata line on the reference, voice, and chosen
- * Choir Positions instead of a repeated gender badge.
+ * Compact directory card. The body opens the member's edit form; the overflow
+ * button keeps the remaining actions. The choir section header already names
+ * the gender, so the card spends its one metadata line on the reference,
+ * voice, and chosen Choir Positions instead of a repeated gender badge.
  */
 export function MobileMemberCard({
   member,
@@ -37,6 +40,7 @@ export function MobileMemberCard({
   dutyRoles,
   showVoice = true,
   sort,
+  onOpenMember,
   onOpenMenu,
   hasActions,
 }: MobileMemberCardProps) {
@@ -55,7 +59,7 @@ export function MobileMemberCard({
       <div className="flex items-center gap-3 p-3.5">
         <button
           type="button"
-          onClick={() => onOpenMenu(member)}
+          onClick={() => onOpenMember(member)}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
           <MemberInitialsAvatar

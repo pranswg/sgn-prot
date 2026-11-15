@@ -22,6 +22,7 @@ interface MobileChoirSectionProps {
   sort: MemberSort
   showVoice: boolean
   hasActions: boolean
+  onOpenMember: (member: Member) => void
   onOpenMenu: (member: Member) => void
   onPageChange: (page: number) => void
 }
@@ -44,6 +45,7 @@ export function MobileChoirSection({
   sort,
   showVoice,
   hasActions,
+  onOpenMember,
   onOpenMenu,
   onPageChange,
 }: MobileChoirSectionProps) {
@@ -93,6 +95,7 @@ export function MobileChoirSection({
                 dutyRoles={dutyRoles}
                 showVoice={showVoice}
                 sort={sort}
+                onOpenMember={onOpenMember}
                 onOpenMenu={onOpenMenu}
                 hasActions={hasActions}
               />

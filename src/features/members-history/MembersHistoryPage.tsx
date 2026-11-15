@@ -267,7 +267,15 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
               {historyMembers.map((member, index) => (
                 <TableRow
                   key={member.id}
-                  className="h-14 border-b border-border transition-colors hover:bg-background"
+                  onClick={() => setHistoryTarget(member)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setHistoryTarget(member)
+                    }
+                  }}
+                  tabIndex={0}
+                  className="h-14 cursor-pointer border-b border-border transition-colors hover:bg-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none"
                 >
                   <TableCell className="w-14 text-center align-middle">
                     <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
@@ -298,7 +306,14 @@ export function MembersHistoryPage({ choir = 'aws' }: { choir?: Choir }) {
                       {memberMembershipSummary(member)}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell
+                    className="text-right"
+                    // The menu is portalled but its events still bubble
+                    // through React, so stop them before the row's timeline
+                    // click sees a Restore or Delete.
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <HistoryRowActions
                       member={member}
                       canRestore={isRestorable(member) && canManage}

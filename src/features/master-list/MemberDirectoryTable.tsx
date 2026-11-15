@@ -250,7 +250,26 @@ export function MemberDirectoryTable({
                       {section.page.items.map((member, index) => (
                         <TableRow
                           key={member.id}
-                          className="h-14 border-b border-border transition-colors hover:bg-background"
+                          onClick={canEdit ? () => onEdit(member) : undefined}
+                          onKeyDown={
+                            canEdit
+                              ? (event) => {
+                                  if (
+                                    event.key === 'Enter' ||
+                                    event.key === ' '
+                                  ) {
+                                    event.preventDefault()
+                                    onEdit(member)
+                                  }
+                                }
+                              : undefined
+                          }
+                          tabIndex={canEdit ? 0 : undefined}
+                          className={cn(
+                            'h-14 border-b border-border transition-colors hover:bg-background',
+                            canEdit &&
+                              'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
+                          )}
                         >
                           <TableCell className="w-14 text-center align-middle">
                             <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold tabular-nums text-muted-foreground">
@@ -288,7 +307,14 @@ export function MemberDirectoryTable({
                           <TableCell>
                             <MemberLifecycleBadge member={member} />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell
+                            className="text-right"
+                            // The kebab's menu is portalled, but React events
+                            // still bubble through it, so the cell has to stop
+                            // them before the row's Edit click sees them.
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                          >
                             <MemberRowActions
                               member={member}
                               sort={sort}

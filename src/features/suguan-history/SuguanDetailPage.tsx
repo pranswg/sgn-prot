@@ -4,7 +4,6 @@ import {
   FileDown,
   FileSpreadsheet,
   FileText,
-  MoreHorizontal,
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -14,7 +13,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -198,7 +196,7 @@ export function SuguanDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 pb-10 md:pb-0">
+    <div className="flex flex-col gap-4">
       {exportPreview}
       <MobileSuguanDetailHeader />
 
@@ -225,61 +223,47 @@ export function SuguanDetailPage() {
           </MetaChip>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('suguan-history')}
-          >
-            <ArrowLeft className="size-3.5" />
-            Back to History
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportPdf}
-            loading={exporting === 'pdf'}
-            disabled={exporting !== null}
-          >
-            <FileDown className="size-3.5" />
-            Export PDF
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            loading={exporting === 'excel'}
-            disabled={exporting !== null}
-          >
-            <FileSpreadsheet className="size-3.5" />
-            Export Excel
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon-sm" aria-label="More actions">
-                <MoreHorizontal className="size-4" />
+              <Button
+                variant="outline"
+                size="sm"
+                loading={exporting !== null}
+                disabled={exporting !== null}
+              >
+                <FileDown className="size-3.5" />
+                Export
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={editRecord}>
-                <FileText className="size-4" />
-                Edit Suguan
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuItem onSelect={handleExportPdf}>
+                <FileDown className="size-4" />
+                Export PDF (.pdf)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleExportExcel}>
+                <FileSpreadsheet className="size-4" />
+                Export Excel (.xlsx)
               </DropdownMenuItem>
               {s.extraOccasion && (
-                <DropdownMenuItem onClick={handleExportDocx}>
+                <DropdownMenuItem onSelect={handleExportDocx}>
                   <FileText className="size-4" />
                   Export Word (.docx)
                 </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600"
-                onSelect={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="size-4" />
-                Delete
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button variant="outline" size="sm" onClick={editRecord}>
+            <FileText className="size-3.5" />
+            Edit Suguan
+          </Button>
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            aria-label="Delete Suguan"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-4" />
+          </Button>
         </div>
       </div>
 
@@ -386,37 +370,6 @@ export function SuguanDetailPage() {
             {s.extraOccasion.pagtupad.date}
           </p>
         )}
-      </div>
-
-      {/* Mobile: fixed export bar, parked above the bottom tab bar
-          (63px + safe-area = its height). */}
-      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)_+_63px)] z-30 flex items-center gap-2 border-t border-border/70 bg-background/95 px-4 py-3 backdrop-blur md:hidden">
-        <Button
-          className="flex-1"
-          onClick={handleExportPdf}
-          loading={exporting === 'pdf'}
-          disabled={exporting !== null}
-        >
-          <FileDown className="size-4" />
-          Export PDF
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleExportExcel}
-          loading={exporting === 'excel'}
-          disabled={exporting !== null}
-        >
-          <FileSpreadsheet className="size-4" />
-          Export Excel
-        </Button>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="Edit Suguan"
-          onClick={editRecord}
-        >
-          <FileText className="size-4" />
-        </Button>
       </div>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

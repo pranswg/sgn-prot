@@ -6,6 +6,11 @@ import type { WriteResult } from '@/api/db'
  * an error, the supplied `rollback` restores the previous state and the user is
  * told.
  *
+ * Resolves to whether the server accepted the write. Most callers ignore it, but
+ * an editor that shows its own success message must await it: otherwise it can
+ * report "saved" before the request lands (or after it was rejected and rolled
+ * back), and a reload right after the click can abort the request entirely.
+ *
  * The notifier is injected by `App` (from `sonner`), so the store graph never
  * imports a React library and the `node:test` runner stays DOM-free. Until a
  * notifier is registered, failures fall back to `console.error`.
@@ -28,13 +33,14 @@ export interface PersistOptions {
   failure: string
 }
 
-export function persist({ write, rollback, failure }: PersistOptions) {
+export function persist({ write, rollback, failure }: PersistOptions): Promise<boolean> {
   const writes = Array.isArray(write) ? write : [write]
-  void Promise.all(writes).then((results) => {
+  return Promise.all(writes).then((results) => {
     const failed = results.find((result) => result?.error)
-    if (!failed?.error) return
+    if (!failed?.error) return true
     console.error('Server write failed:', failed.error)
     rollback()
     notify(failure)
+    return false
   })
 }

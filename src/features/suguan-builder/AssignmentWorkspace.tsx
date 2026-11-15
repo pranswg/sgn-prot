@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type HTMLAttributes, type ReactNode } from 'react'
+import { useId, useMemo, useState, type DragEvent, type HTMLAttributes, type ReactNode } from 'react'
 import {
   AlertTriangle,
   ArrowDown,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -57,6 +58,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useAssignmentPresetStore } from '@/store/assignmentPresetStore'
 import { buildMemberReferences, memberInitials } from '@/lib/memberDirectory'
 import { membersBookedAtSameInstant } from './doubleBooking'
+import { MAX_WRITE_IN_ROWS, normalizeWriteInRows } from '@/lib/suguanUtils'
 import { cn } from '@/lib/utils'
 import type { Member } from '@/core/types/member'
 import type { SuguanAssignment, SuguanScheduleSection } from '@/core/types/suguan'
@@ -123,6 +125,14 @@ function assignmentSortKey(
   const live = memberNames.get(a.memberId)
   if (live) return live
   return a.memberName.split(' ').reverse().join(' ')
+}
+
+/** Order-insensitive roster identity, for "does this differ from the preset?". */
+function assignmentSetKey(assignments: readonly SuguanAssignment[]): string {
+  return assignments
+    .map((a) => `${a.memberId}|${a.voicePosition}`)
+    .sort()
+    .join('\n')
 }
 
 const OCCASION_ROW = 'group flex min-h-[52px] items-center gap-2.5 border-b border-border/60 px-3 py-2 last:border-b-0 transition-colors hover:bg-muted/50 xl:min-h-[49px] xl:px-3.5'
@@ -208,6 +218,64 @@ function EmptyState({ children, occasion = false }: { children: ReactNode; occas
   )
 }
 
+/**
+ * The blank-row opt-in: unchecked by default, so a roster prints no empty rows
+ * until the officer asks for them. Checking restores the last count (2 the first
+ * time) and enables the number field.
+ */
+function BlankRowsControl({
+  draft,
+  patch,
+}: {
+  draft: SuguanDraft
+  patch: (p: Partial<SuguanDraft>) => void
+}) {
+  const id = useId()
+  const rows = draft.writeInRows
+  const enabled = rows > 0
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <Checkbox
+          id={id}
+          checked={enabled}
+          onCheckedChange={(checked) =>
+            patch({ writeInRows: checked === true ? (rows > 0 ? rows : 2) : 0 })
+          }
+          className="mt-0.5"
+        />
+        <div className="min-w-0">
+          <label
+            htmlFor={id}
+            className="block cursor-pointer text-sm font-medium text-foreground"
+          >
+            Blank rows for additional members
+          </label>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            Printed under every schedule for names added on paper.
+          </p>
+        </div>
+      </div>
+      <div className="flex w-[5.5rem] shrink-0 flex-col items-end gap-1">
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={MAX_WRITE_IN_ROWS}
+          value={enabled ? rows : ''}
+          onChange={(e) =>
+            patch({ writeInRows: normalizeWriteInRows(e.target.value) })
+          }
+          disabled={!enabled}
+          aria-label="Blank rows per schedule"
+          className="h-8 w-16 text-center tabular-nums"
+        />
+        <span className="text-[10px] text-muted-foreground">per schedule</span>
+      </div>
+    </div>
+  )
+}
+
 export function AssignmentWorkspace({
   draft,
   patch,
@@ -225,6 +293,7 @@ export function AssignmentWorkspace({
   const voices = allVoices()
   const presets = useAssignmentPresetStore((s) => s.presets)
   const savePreset = useAssignmentPresetStore((s) => s.savePreset)
+  const updatePreset = useAssignmentPresetStore((s) => s.updatePreset)
   const deletePreset = useAssignmentPresetStore((s) => s.deletePreset)
   const allSuguan = useSuguanStore((s) => s.suguan)
 
@@ -237,7 +306,9 @@ export function AssignmentWorkspace({
   const [voiceFilter, setVoiceFilter] = useState('all')
   const [presetId, setPresetId] = useState('')
   const [saveOpen, setSaveOpen] = useState(false)
+  const [saveMode, setSaveMode] = useState<'new' | 'update'>('new')
   const [presetName, setPresetName] = useState('')
+  const [presetNameError, setPresetNameError] = useState('')
   const [replaceTarget, setReplaceTarget] = useState<SuguanAssignment | null>(null)
   const [drag, setDrag] = useState<DragPayload | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -465,6 +536,19 @@ export function AssignmentWorkspace({
     setPresetId('')
   }
 
+  const loadedPreset = presets.find((p) => p.id === presetId)
+  const presetChanged = Boolean(
+    loadedPreset &&
+      assignmentSetKey(loadedPreset.assignments) !== assignmentSetKey(assignments),
+  )
+
+  const openSaveDialog = (mode: 'new' | 'update') => {
+    setSaveMode(mode)
+    setPresetName(mode === 'update' ? (loadedPreset?.name ?? '') : '')
+    setPresetNameError('')
+    setSaveOpen(true)
+  }
+
   const loadPreset = (id: string) => {
     const preset = presets.find((p) => p.id === id)
     if (!preset || !section) return
@@ -481,27 +565,41 @@ export function AssignmentWorkspace({
     toast.success(`Preset "${preset.name}" loaded into ${section.scheduleLabel}.`)
   }
 
-  const copyFromSection = (id: string) => {
-    const source = draft.schedules.find((s) => s.id === id)
-    if (!source || !section) return
-    setAssignments(source.assignments.map((a) => ({ ...a })))
-    toast.success(`Copied ${source.assignments.length} members from ${source.scheduleLabel}.`)
-  }
-
   const handleSavePreset = () => {
     const name = presetName.trim()
     if (!name) {
-      toast.error('Give the preset a name first.')
+      setPresetNameError('Give the preset a name first.')
       return
     }
     if (assignments.length === 0) {
       toast.error('Add at least one member before saving a preset.')
       return
     }
-    savePreset(name, assignments, draft.dutyRoles)
+    const updating = saveMode === 'update' && loadedPreset
+    const clash = presets.find(
+      (p) =>
+        p.name.trim().toLowerCase() === name.toLowerCase() &&
+        !(updating && p.id === loadedPreset?.id),
+    )
+    if (clash) {
+      setPresetNameError(
+        updating
+          ? `"${clash.name}" is already used by another preset. Pick a different name.`
+          : `"${clash.name}" already exists. Load it and choose Update to change it.`,
+      )
+      return
+    }
+    if (saveMode === 'update' && loadedPreset) {
+      updatePreset(loadedPreset.id, name, assignments, draft.dutyRoles)
+      toast.success(`Assignment preset "${name}" updated.`)
+    } else {
+      const created = savePreset(name, assignments, draft.dutyRoles)
+      setPresetId(created.id)
+      toast.success(`Assignment preset "${name}" saved.`)
+    }
     setSaveOpen(false)
     setPresetName('')
-    toast.success(`Assignment preset "${name}" saved.`)
+    setPresetNameError('')
   }
 
   /** Empties the active section's roster, whichever layout asked for it. */
@@ -526,7 +624,7 @@ export function AssignmentWorkspace({
 
   const isManual = orderMode === 'manual'
 
-  const isVoiceOpen = (key: string) => openVoices[key] ?? true
+  const isVoiceOpen = (key: string) => openVoices[key] ?? false
   const toggleVoice = (key: string) =>
     setOpenVoices((prev) => ({ ...prev, [key]: !(prev[key] ?? true) }))
 
@@ -546,8 +644,16 @@ export function AssignmentWorkspace({
     >
       <div className="flex flex-col gap-2.5">
         <div className="flex flex-col gap-1.5">
-          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Load preset
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Load preset
+            </span>
+            {loadedPreset && presetChanged && (
+              <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-amber-700 dark:text-amber-400">
+                <span aria-hidden className="size-1.5 rounded-full bg-amber-500" />
+                Changed
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-2">
             <Select
@@ -589,54 +695,76 @@ export function AssignmentWorkspace({
             )}
           </div>
         </div>
-
-        {draft.schedules.length > 1 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Copy from schedule
-            </span>
-            <Select onValueChange={copyFromSection} value="">
-              <SelectTrigger size="sm" className="h-9 w-full bg-background">
-                <SelectValue placeholder="Choose schedule…" />
-              </SelectTrigger>
-              <SelectContent>
-                {draft.schedules
-                  .filter((s) => s.id !== section?.id)
-                  .map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.scheduleLabel} ({s.assignments.length})
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-border/60 pt-2.5">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 sm:flex-none"
-          onClick={() => setSaveOpen(true)}
-        >
-          <Save className="size-4" />
-          Save as preset
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-1 text-muted-foreground hover:text-destructive sm:flex-none"
-          onClick={() => {
-            setAssignments([])
-            setPresetId('')
-            toast.info('Roster cleared for this schedule.')
-          }}
-          disabled={assignments.length === 0}
-        >
-          <Eraser className="size-4" />
-          Clear
-        </Button>
+      <div className="flex flex-col gap-2 border-t border-border/60 pt-2.5">
+        {loadedPreset ? (
+          <>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-w-0 flex-1"
+                title={`Overwrite "${loadedPreset.name}" with this schedule's roster`}
+                onClick={() => openSaveDialog('update')}
+                disabled={assignments.length === 0}
+              >
+                <Save className="size-4 shrink-0" />
+                <span className="truncate">Update preset</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-w-0 flex-1"
+                onClick={() => openSaveDialog('new')}
+                disabled={assignments.length === 0}
+              >
+                <Plus className="size-4 shrink-0" />
+                <span className="truncate">Save as new preset</span>
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground hover:text-destructive"
+              onClick={() => {
+                setAssignments([])
+                setPresetId('')
+                toast.info('Roster cleared for this schedule.')
+              }}
+              disabled={assignments.length === 0}
+            >
+              <Eraser className="size-4" />
+              Clear
+            </Button>
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+              onClick={() => openSaveDialog('new')}
+            >
+              <Save className="size-4" />
+              Save as preset
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1 text-muted-foreground hover:text-destructive sm:flex-none"
+              onClick={() => {
+                setAssignments([])
+                setPresetId('')
+                toast.info('Roster cleared for this schedule.')
+              }}
+              disabled={assignments.length === 0}
+            >
+              <Eraser className="size-4" />
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -660,12 +788,21 @@ export function AssignmentWorkspace({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
+        {loadedPreset && (
+          <DropdownMenuItem
+            disabled={assignments.length === 0}
+            onSelect={() => openSaveDialog('update')}
+          >
+            <Save className="size-4" />
+            <span className="truncate">Update “{loadedPreset.name}”</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           disabled={assignments.length === 0}
-          onSelect={() => setSaveOpen(true)}
+          onSelect={() => openSaveDialog('new')}
         >
           <Save className="size-4" />
-          Save roster as preset
+          {loadedPreset ? 'Save as new preset' : 'Save roster as preset'}
         </DropdownMenuItem>
         {presets.length > 0 && (
           <>
@@ -1073,38 +1210,9 @@ export function AssignmentWorkspace({
           )}
         </div>
 
-        {/* Voice balance chips. The occasion layout skips them: the Assigned
-            panel below already counts every voice group, and a phone does not
-            need the same numbers twice. */}
-        {!isOccasion && (
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
-            {choirVoices.map((v) => {
-              const count = assignments.filter(
-                (a) => a.voicePosition === v.id,
-              ).length
-              return (
-                <div
-                  key={v.id}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-[0_1px_2px_rgba(16,42,67,0.04)]"
-                >
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {v.name}
-                  </span>
-                  <span
-                    className={cn(
-                      'text-sm font-bold tabular-nums',
-                      count > 0
-                        ? 'text-brand-navy'
-                        : 'text-muted-foreground/50',
-                    )}
-                  >
-                    {count}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        {/* Blank write-in rows live with the roster they extend, in the spot
+            the voice-count chips used to occupy. */}
+        {!isOccasion && <BlankRowsControl draft={draft} patch={patch} />}
 
         {/* Assigned members — main area */}
         <div className="rounded-2xl border border-border/70 bg-card shadow-[0_1px_2px_rgba(16,42,67,0.04)]">
@@ -1451,6 +1559,11 @@ export function AssignmentWorkspace({
               </button>
             </div>
           }
+          toolbar={
+            !isOccasion ? (
+              <BlankRowsControl draft={draft} patch={patch} />
+            ) : undefined
+          }
           dropProps={{
             onDragOver: (e: DragEvent) => {
               e.preventDefault()
@@ -1545,10 +1658,20 @@ export function AssignmentWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+      <Dialog
+        open={saveOpen}
+        onOpenChange={(open) => {
+          setSaveOpen(open)
+          if (!open) setPresetNameError('')
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Save assignment preset</DialogTitle>
+            <DialogTitle>
+              {saveMode === 'update'
+                ? 'Update assignment preset'
+                : 'Save assignment preset'}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
@@ -1556,16 +1679,24 @@ export function AssignmentWorkspace({
               <Input
                 id="preset-name"
                 value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
+                onChange={(e) => {
+                  setPresetName(e.target.value)
+                  setPresetNameError('')
+                }}
                 placeholder="e.g. Sunday 10:00 AM Group"
+                aria-invalid={presetNameError ? true : undefined}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSavePreset()
                 }}
               />
+              {presetNameError && (
+                <p className="text-xs text-destructive">{presetNameError}</p>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {assignments.length} members and {draft.dutyRoles.length} duty roles
-              will be stored.
+              {saveMode === 'update' && loadedPreset
+                ? `${loadedPreset.assignments.length} → ${assignments.length} members · ${draft.dutyRoles.length} duty roles. This overwrites "${loadedPreset.name}" wherever it is used.`
+                : `${assignments.length} members and ${draft.dutyRoles.length} duty roles will be stored.`}
             </p>
           </div>
           <DialogFooter>
@@ -1574,7 +1705,7 @@ export function AssignmentWorkspace({
             </Button>
             <Button onClick={handleSavePreset}>
               <Save className="size-4" />
-              Save preset
+              {saveMode === 'update' ? 'Update preset' : 'Save preset'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -276,6 +276,12 @@ Date and layout logic is covered by `src/lib/suguanDates.test.ts` and
 - **Pagtupad** is derived from the worship schedule, either
   Wednesday–Thursday or Saturday–Sunday. See
   `src/core/constants/worshipSchedules.ts`.
+- **A worship schedule's Label is the name the Organist Suguan prints.**
+  `scheduleDisplayLabel` (`organistaSuguanService.ts`) returns
+  `schedule.label`, falling back to day + time only for a label-less record.
+  The picker, the service cards, and the PDF/Word headings all go through it;
+  do not re-derive the heading from `weekday` + `scheduleTime`, or the rows and
+  exports drift from System Configuration.
 - `date-fns` is installed but unused. Leave it alone; do not remove it and do
   not start using it.
 
@@ -556,12 +562,15 @@ Occasion) block save and export until it is filled.
 **Blank write-in rows are opt-in.** The Suguan stores one count,
 `Suguan.writeInRows` (`writeInRows` on the draft), and `buildSections` prints
 that many empty numbered rows under **every** schedule; there is no automatic
-two-row padding any more. The Schedules step's `BlankRowsControl` is an
-unchecked checkbox by default — checking it restores the last count (2 the first
-time) and the number input is disabled and greyed while unchecked. The count is
-clamped by `normalizeWriteInRows`/`MAX_WRITE_IN_ROWS` (0–20, garbage → 0), and
-an Extra Occasion always prints zero because `buildSections` forces it. An
-empty roster therefore prints no phantom rows and gets no signature gap.
+two-row padding any more. The Assign step's `BlankRowsControl` (at the top of
+the Assigned panel, in the spot the mobile voice-count chips used to occupy) is
+an unchecked checkbox by default; checking it restores the last count (2 the
+first time) and the number input is disabled and greyed while unchecked. The
+count is clamped by `normalizeWriteInRows`/`MAX_WRITE_IN_ROWS` (0–20, garbage →
+0), and an Extra Occasion always prints zero because `buildSections` forces it.
+An empty roster therefore prints no phantom rows and gets no signature gap. The
+Assigned panel's voice groups start **collapsed**; an officer expands the voice
+whose names they want to see.
 
 The Choir Suguan builder **never assigns the `organista` or
 `organista-reserve` duty roles** — those duties belong to the Organist Suguan
@@ -579,6 +588,17 @@ and strips every other stored duty role on load/edit, so already-saved records
 keep their data until re-saved. The configured roles themselves stay in Settings
 for the Master List PDF's sections, which resolve through `memberRankIds`, not
 the stored duty-role assignments.
+
+**Assignment presets update in place.** A preset is loaded into the active
+schedule only, so switching schedules clears the selection. Once one is loaded
+the preset card offers **Update preset** — it overwrites that saved preset with
+the current schedule's roster and the draft's duty roles through
+`updatePreset`, keeping the preset's id and `createdAt` — beside **Save as new
+preset**, with an amber "Changed" dot in the card header when the roster no
+longer matches the loaded preset. Saving under a name that another preset
+already uses is blocked inline (load it and update instead); an update may
+rename itself but not collide with another preset. There is deliberately no
+"copy from schedule" preset control; switch tabs instead.
 
 `AssignmentWorkspace` has two layouts, chosen by its `layout` prop and not by a
 fork: `builder` (the default) is the Choir Suguan wizard's step, with the

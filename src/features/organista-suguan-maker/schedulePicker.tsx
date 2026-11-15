@@ -15,7 +15,11 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import type { WorshipSchedule } from '@/core/constants/worshipSchedules'
 import { worshipDayName } from '@/core/constants/worshipSchedules'
 import { useWorshipScheduleCategories } from '@/store/worshipScheduleStore'
-import { categoryLabel, type WorshipScheduleCategory } from './organistaSuguanService'
+import {
+  categoryLabel,
+  scheduleDisplayLabel,
+  type WorshipScheduleCategory,
+} from './organistaSuguanService'
 
 export interface SelectedWorshipSchedule {
   schedule: WorshipSchedule
@@ -72,7 +76,7 @@ export function SchedulePicker({
     const haystack = [
       worshipDayName(schedule.weekday),
       schedule.scheduleTime,
-      schedule.label,
+      scheduleDisplayLabel(schedule),
     ]
       .join(' ')
       .toLowerCase()
@@ -121,6 +125,10 @@ export function SchedulePicker({
                   const id = schedule.id
                   const alreadyTaken = taken.has(id) && id !== currentScheduleId
                   const isSelected = id === selectedId
+                  const label = scheduleDisplayLabel(schedule)
+                  const showTime = !label
+                    .toLowerCase()
+                    .includes(schedule.scheduleTime.toLowerCase())
                   return (
                     <button
                       key={id}
@@ -136,11 +144,13 @@ export function SchedulePicker({
                     >
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-foreground">
-                          {worshipDayName(schedule.weekday)}
+                          {label}
                         </span>
-                        <span className="block truncate text-sm text-muted-foreground">
-                          {schedule.scheduleTime}
-                        </span>
+                        {showTime && (
+                          <span className="block truncate text-sm text-muted-foreground">
+                            {schedule.scheduleTime}
+                          </span>
+                        )}
                       </span>
                       {alreadyTaken ? (
                         <span className="shrink-0 text-xs font-medium text-muted-foreground">

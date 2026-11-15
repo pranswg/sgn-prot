@@ -38,9 +38,24 @@ export function buildServiceHeading(
 }
 
 /**
+ * The name System Configuration gives this schedule. The label is what the
+ * admin typed (or the day-and-time suggestion they kept), so it is the one
+ * string the Organist Suguan prints; the day/time fallback only covers a
+ * schedule stored before labels were editable.
+ */
+export function scheduleDisplayLabel(schedule: WorshipSchedule): string {
+  const label = schedule.label?.trim()
+  if (label) return label
+  return buildServiceHeading(
+    worshipDayName(schedule.weekday),
+    schedule.scheduleTime,
+  )
+}
+
+/**
  * Snapshot a chosen worship schedule into a new service card. The schedule's
- * day, time and category are captured here, so an unsaved card keeps the
- * schedule it was picked with, and a saved record keeps it forever.
+ * label, day, time and category are captured here, so an unsaved card keeps
+ * the schedule it was picked with, and a saved record keeps it forever.
  */
 export function createServiceFromSchedule(
   schedule: WorshipSchedule,
@@ -53,7 +68,7 @@ export function createServiceFromSchedule(
     dayName,
     scheduleTime: schedule.scheduleTime,
     categoryLabel: categoryLabel(category),
-    heading: buildServiceHeading(dayName, schedule.scheduleTime),
+    heading: scheduleDisplayLabel(schedule),
     organist: '',
     reserve: '',
   }

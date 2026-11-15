@@ -18,9 +18,23 @@ interface AssignmentPresetState {
   presets: AssignmentPreset[]
   importData: (presets: AssignmentPreset[]) => void
   savePreset: (name: string, assignments: SuguanAssignment[], dutyRoles: SuguanDutyRole[]) => AssignmentPreset
+  updatePreset: (
+    id: string,
+    name: string,
+    assignments: SuguanAssignment[],
+    dutyRoles: SuguanDutyRole[],
+  ) => AssignmentPreset | null
   deletePreset: (id: string) => void
   clear: () => void
 }
+
+const presetAssignments = (assignments: SuguanAssignment[]) =>
+  assignments.map((a) => ({
+    memberId: a.memberId,
+    memberName: a.memberName,
+    voicePosition: a.voicePosition,
+    assignedAt: '',
+  }))
 
 export const useAssignmentPresetStore = create<AssignmentPresetState>()(
   persist(
@@ -34,12 +48,7 @@ export const useAssignmentPresetStore = create<AssignmentPresetState>()(
         const preset: AssignmentPreset = {
           id: nanoid(),
           name: name.trim(),
-          assignments: assignments.map((a) => ({
-            memberId: a.memberId,
-            memberName: a.memberName,
-            voicePosition: a.voicePosition,
-            assignedAt: '',
-          })),
+          assignments: presetAssignments(assignments),
           dutyRoles: dutyRoles.map((d) => ({ ...d })),
           createdAt: new Date().toISOString(),
         }
@@ -54,6 +63,30 @@ export const useAssignmentPresetStore = create<AssignmentPresetState>()(
           })
         }
         return preset
+      },
+
+      updatePreset: (id, name, assignments, dutyRoles) => {
+        const previous = get().presets
+        const current = previous.find((preset) => preset.id === id)
+        if (!current) return null
+        const updated: AssignmentPreset = {
+          ...current,
+          name: name.trim(),
+          assignments: presetAssignments(assignments),
+          dutyRoles: dutyRoles.map((d) => ({ ...d })),
+        }
+        set((s) => ({
+          presets: s.presets.map((preset) => (preset.id === id ? updated : preset)),
+        }))
+        const ownerId = useAuthStore.getState().currentAccountId
+        if (ownerId) {
+          persistWrite({
+            write: upsertOwnedRow('assignment_presets', id, updated, ownerId),
+            rollback: () => set({ presets: previous }),
+            failure: 'Could not update the preset. It was left unchanged.',
+          })
+        }
+        return updated
       },
 
       deletePreset: (id) => {

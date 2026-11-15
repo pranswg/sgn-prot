@@ -51,10 +51,11 @@ export function applySettingsRow(doc: ServerSettingsData) {
 
 /**
  * Persists the current row and rolls both stores back to `previous` if the
- * write fails.
+ * write fails. Resolves to whether the server accepted it so an editor can wait
+ * for the outcome before reporting success.
  */
-export function persistSettingsRow(previous: ServerSettingsData) {
-  persist({
+export function persistSettingsRow(previous: ServerSettingsData): Promise<boolean> {
+  return persist({
     write: upsertSettingsRow(snapshotSettingsRow()),
     rollback: () => applySettingsRow(previous),
     failure: 'Could not save settings. Your change was reverted.',

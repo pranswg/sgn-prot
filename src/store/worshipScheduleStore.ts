@@ -32,16 +32,14 @@ interface WorshipScheduleState {
   addSchedule: (
     category: WorshipScheduleCategory,
     input: WorshipScheduleInput,
-  ) => void
+  ) => Promise<boolean>
   updateSchedule: (
     category: WorshipScheduleCategory,
     id: string,
     patch: Partial<Pick<StoredWorshipSchedule, 'weekday' | 'scheduleTime' | 'label' | 'disabled'>>,
-  ) => void
-  removeSchedule: (category: WorshipScheduleCategory, id: string) => void
-  toggleSchedule: (category: WorshipScheduleCategory, id: string) => void
-  /** Batch-commit the whole config, used by the Settings editor's Save. */
-  setSchedules: (midweek: StoredWorshipSchedule[], weekend: StoredWorshipSchedule[]) => void
+  ) => Promise<boolean>
+  removeSchedule: (category: WorshipScheduleCategory, id: string) => Promise<boolean>
+  toggleSchedule: (category: WorshipScheduleCategory, id: string) => Promise<boolean>
   importData: (
     midweek?: StoredWorshipSchedule[],
     weekend?: StoredWorshipSchedule[],
@@ -66,14 +64,16 @@ export const useWorshipScheduleStore = create<WorshipScheduleState>()(
       /**
        * Applies a schedule change and persists the shared settings row (worship
        * schedules are half of that document). The row is captured first so a
-       * failed write rolls the whole thing back.
+       * failed write rolls the whole thing back. Resolves to whether the server
+       * accepted the write, so the editor can wait for it before reporting
+       * success.
        */
       const commit = (
         mutate: (state: WorshipScheduleState) => Partial<WorshipScheduleState>,
-      ) => {
+      ): Promise<boolean> => {
         const previous = snapshotSettingsRow()
         set(mutate)
-        persistSettingsRow(previous)
+        return persistSettingsRow(previous)
       }
 
       return {
@@ -89,7 +89,7 @@ export const useWorshipScheduleStore = create<WorshipScheduleState>()(
             presetHint: '',
             custom: true,
           }
-          commit((s) =>
+          return commit((s) =>
             category === 'midweek'
               ? { midweek: [...s.midweek, record] }
               : { weekend: [...s.weekend, record] },
@@ -129,9 +129,6 @@ export const useWorshipScheduleStore = create<WorshipScheduleState>()(
             const next = list.filter((item) => item.id !== id)
             return category === 'midweek' ? { midweek: next } : { weekend: next }
           }),
-
-        setSchedules: (midweek, weekend) =>
-          commit(() => ({ midweek, weekend })),
 
         // Local-only: server hydration on load, and the rollback half of the
         // shared settings row in `settingsSync`. Server-writing changes go

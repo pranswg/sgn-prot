@@ -101,13 +101,8 @@ export function OrganistaServiceCard({
             className="flex min-h-6 w-full items-center gap-2 rounded-md text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span className="min-w-0 truncate text-sm font-semibold text-foreground">
-              {service.dayName || service.heading}
+              {service.heading || service.dayName || label}
             </span>
-            {service.scheduleTime && (
-              <span className="shrink-0 text-sm font-semibold text-foreground">
-                {service.scheduleTime}
-              </span>
-            )}
             <Pencil
               className="size-3.5 shrink-0 text-muted-foreground"
               aria-hidden="true"

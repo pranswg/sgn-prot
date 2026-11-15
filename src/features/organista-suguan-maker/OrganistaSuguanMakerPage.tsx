@@ -40,6 +40,7 @@ import {
 } from './schedulePicker'
 import {
   createServiceFromSchedule,
+  scheduleDisplayLabel,
   servicesFromCategories,
 } from './organistaSuguanService'
 import { buildOrganistaSuguanDocx } from './organistaSuguanDocx'
@@ -479,7 +480,7 @@ export function OrganistaSuguanMakerPage() {
       setServices((current) => [...current, service])
       setNewServiceId(service.id)
       setSchedulePicker(null)
-      toast.success(`Added ${selection.schedule.scheduleTime} service.`)
+      toast.success(`Added “${scheduleDisplayLabel(selection.schedule)}”.`)
       return
     }
     setServices((current) =>

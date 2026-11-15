@@ -9,15 +9,15 @@ test('persist leaves state alone when the write succeeds', async () => {
   const notifications: string[] = []
   setWriteNotifier((message) => notifications.push(message))
 
-  persist({
+  const accepted = await persist({
     write: Promise.resolve({ error: null }),
     rollback: () => {
       rolledBack = true
     },
     failure: 'nope',
   })
-  await flush()
 
+  assert.equal(accepted, true)
   assert.equal(rolledBack, false)
   assert.deepEqual(notifications, [])
 })
@@ -27,15 +27,15 @@ test('persist rolls back and notifies when the write fails', async () => {
   const notifications: string[] = []
   setWriteNotifier((message) => notifications.push(message))
 
-  persist({
+  const accepted = await persist({
     write: Promise.resolve({ error: 'permission denied' }),
     rollback: () => {
       rolledBack = true
     },
     failure: 'Could not save settings.',
   })
-  await flush()
 
+  assert.equal(accepted, false)
   assert.equal(rolledBack, true)
   assert.deepEqual(notifications, ['Could not save settings.'])
 })

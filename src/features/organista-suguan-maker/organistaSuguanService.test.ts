@@ -7,6 +7,7 @@ import {
   createServiceFromSchedule,
   memberSubtitle,
   organistPrivilegeLabel,
+  scheduleDisplayLabel,
   servicesFromCategories,
 } from './organistaSuguanService.ts'
 
@@ -25,7 +26,7 @@ test('heading is the day and time the schedule was picked with', () => {
   assert.equal(buildServiceHeading('Miyerkules', '7:00 PM'), 'Miyerkules 7:00 PM')
 })
 
-test('createServiceFromSchedule snapshots the schedule into a card', () => {
+test('createServiceFromSchedule snapshots the schedule label into a card', () => {
   const schedule = DEFAULT_SCHEDULE_CATEGORIES.midweek[1]
   const service = createServiceFromSchedule(schedule, 'midweek')
   assert.ok(service.id)
@@ -33,9 +34,38 @@ test('createServiceFromSchedule snapshots the schedule into a card', () => {
   assert.equal(service.dayName, 'Huwebes')
   assert.equal(service.scheduleTime, '6:00 AM')
   assert.equal(service.categoryLabel, 'Midweek Worship')
-  assert.equal(service.heading, 'Huwebes 6:00 AM')
+  assert.equal(service.heading, 'HUWEBES, 6:00 AM')
   assert.equal(service.organist, '')
   assert.equal(service.reserve, '')
+})
+
+test('createServiceFromSchedule uses the label edited in System Configuration', () => {
+  const service = createServiceFromSchedule(
+    {
+      id: 'custom',
+      scheduleDay: 'MIYERKULES',
+      weekday: 3,
+      scheduleTime: '7:00 PM',
+      label: 'Midweek Prayer Meeting',
+      presetHint: '',
+    },
+    'midweek',
+  )
+  assert.equal(service.heading, 'Midweek Prayer Meeting')
+})
+
+test('scheduleDisplayLabel falls back to the day and time when the label is blank', () => {
+  assert.equal(
+    scheduleDisplayLabel({
+      id: 'blank',
+      scheduleDay: 'HUWEBES',
+      weekday: 4,
+      scheduleTime: '6:00 AM',
+      label: '   ',
+      presetHint: '',
+    }),
+    'Huwebes 6:00 AM',
+  )
 })
 
 test('servicesFromCategories prefills one card per schedule, midweek first', () => {
@@ -44,12 +74,12 @@ test('servicesFromCategories prefills one card per schedule, midweek first', () 
   assert.deepEqual(
     services.map((s) => s.heading),
     [
-      'Miyerkules 7:00 PM',
-      'Huwebes 6:00 AM',
-      'Huwebes 7:00 PM',
-      'Sabado 6:00 PM',
-      'Linggo 6:00 AM',
-      'Linggo 10:00 AM',
+      'MIYERKULES, 7:00 PM',
+      'HUWEBES, 6:00 AM',
+      'HUWEBES, 7:00 PM',
+      'SABADO, 6:00 PM',
+      'LINGGO, 6:00 AM',
+      'LINGGO, 10:00 AM',
     ],
   )
 })

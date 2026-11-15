@@ -46,7 +46,6 @@ import { cn } from '@/lib/utils'
 import { formatTime } from '@/lib/format'
 import {
   WEEKDAY_OPTIONS,
-  worshipDayName,
 } from '@/core/constants/worshipSchedules'
 import {
   useWorshipScheduleStore,
@@ -90,14 +89,14 @@ interface TimeFormState {
 
 export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
   const isMobile = useIsMobile()
-  const storedMidweek = useWorshipScheduleStore((s) => s.midweek)
-  const storedWeekend = useWorshipScheduleStore((s) => s.weekend)
-  const setSchedules = useWorshipScheduleStore((s) => s.setSchedules)
+  const midweek = useWorshipScheduleStore((s) => s.midweek)
+  const weekend = useWorshipScheduleStore((s) => s.weekend)
+  const addSchedule = useWorshipScheduleStore((s) => s.addSchedule)
+  const updateSchedule = useWorshipScheduleStore((s) => s.updateSchedule)
+  const removeSchedule = useWorshipScheduleStore((s) => s.removeSchedule)
+  const toggleSchedule = useWorshipScheduleStore((s) => s.toggleSchedule)
 
   const [expanded, setExpanded] = useState(false)
-  const [midweek, setMidweek] = useState<StoredWorshipSchedule[]>(storedMidweek)
-  const [weekend, setWeekend] = useState<StoredWorshipSchedule[]>(storedWeekend)
-  const [dirty, setDirty] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(true)
   const [form, setForm] = useState<TimeFormState | null>(null)
   const [pendingDelete, setPendingDelete] = useState<{
@@ -112,69 +111,27 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
     [midweek, weekend],
   )
 
-  const openCard = () => {
-    setExpanded((open) => {
-      const next = !open
-      // Refreshes the draft from the store the first time the card is opened,
-      // so an import or a previous save is visible without a page reload.
-      if (next && !dirty) {
-        setMidweek(storedMidweek)
-        setWeekend(storedWeekend)
-      }
-      return next
-    })
+  const openCard = () => setExpanded((open) => !open)
+
+  /**
+   * The count to put in the audit entry. Every store action applies its change
+   * synchronously, so this reads the post-change state rather than the render
+   * snapshot the caller closed over.
+   */
+  const activeCountNow = () => {
+    const state = useWorshipScheduleStore.getState()
+    return [...state.midweek, ...state.weekend].filter((s) => !s.disabled)
+      .length
   }
 
-  const save = () => {
-    setSchedules(midweek, weekend)
-    setDirty(false)
-    toast.success('Worship schedules saved.')
+  const logChange = (details: string) =>
     onAudit?.(
       'Updated Worship Schedules',
-      `${activeCount} active schedules (${midweek.length} midweek, ${weekend.length} weekend).`,
+      `${details} · ${activeCountNow()} active schedules.`,
     )
-  }
-
-  const [saveSchedules, savingSchedules] = useAsyncAction(save)
-
-  const cancel = () => {
-    setMidweek(storedMidweek)
-    setWeekend(storedWeekend)
-    setDirty(false)
-  }
 
   const items = (category: WorshipScheduleCategory) =>
     category === 'midweek' ? midweek : weekend
-
-  const setList = (
-    category: WorshipScheduleCategory,
-    list: StoredWorshipSchedule[],
-  ) => {
-    if (category === 'midweek') setMidweek(list)
-    else setWeekend(list)
-    setDirty(true)
-  }
-
-  const updateItem = (
-    category: WorshipScheduleCategory,
-    id: string,
-    patchIt: (item: StoredWorshipSchedule) => StoredWorshipSchedule,
-  ) => {
-    setList(
-      category,
-      items(category).map((item) => (item.id === id ? patchIt(item) : item)),
-    )
-  }
-
-  const confirmDelete = () => {
-    if (!pendingDelete) return
-    setList(
-      pendingDelete.category,
-      items(pendingDelete.category).filter((i) => i.id !== pendingDelete.item.id),
-    )
-    setPendingDelete(null)
-    toast.success('Worship schedule removed.')
-  }
 
   const duplicateIn = (
     category: WorshipScheduleCategory,
@@ -216,7 +173,7 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
     })
   }
 
-  const saveForm = () => {
+  const saveForm = async () => {
     if (!form) return
     const time24 = form.time24 || ''
     if (!time24) {
@@ -228,31 +185,47 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
       return
     }
     const displayTime = formatTime(time24)
-    const suggested = `${dayName(form.weekday)}, ${displayTime}`
-    const label = form.label.trim() || suggested
-    const scheduleDay = worshipDayName(form.weekday).toUpperCase()
+    const label = form.label.trim() || `${dayName(form.weekday)}, ${displayTime}`
 
-    if (form.editingId) {
-      updateItem(form.category, form.editingId, (item) => ({
-        ...item,
-        weekday: form.weekday,
-        scheduleDay,
-        scheduleTime: displayTime,
-        label,
-      }))
-    } else {
-      const record: StoredWorshipSchedule = {
-        id: `custom-${form.weekday}-${time24.replace(':', '')}`,
-        weekday: form.weekday,
-        scheduleDay,
-        scheduleTime: displayTime,
-        label,
-        presetHint: '',
-        custom: true,
-      }
-      setList(form.category, [...items(form.category), record])
-    }
+    // Each change persists as it is made, so closing this form is enough. The
+    // store rolls back and toasts on its own if the server rejects the write.
+    const saved = form.editingId
+      ? await updateSchedule(form.category, form.editingId, {
+          weekday: form.weekday,
+          scheduleTime: displayTime,
+          label,
+        })
+      : await addSchedule(form.category, {
+          weekday: form.weekday,
+          scheduleTime: displayTime,
+          label,
+        })
+    if (!saved) return
+
     setForm(null)
+    logChange(`${form.editingId ? 'Updated' : 'Added'} “${label}”`)
+    toast.success(
+      form.editingId ? 'Worship schedule updated.' : 'Worship schedule added.',
+    )
+  }
+
+  const handleToggle = async (
+    category: WorshipScheduleCategory,
+    item: StoredWorshipSchedule,
+  ) => {
+    const saved = await toggleSchedule(category, item.id)
+    if (!saved) return
+    logChange(`${item.disabled ? 'Enabled' : 'Disabled'} “${item.label}”`)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    const { category, item } = pendingDelete
+    setPendingDelete(null)
+    const saved = await removeSchedule(category, item.id)
+    if (!saved) return
+    logChange(`Removed “${item.label}”`)
+    toast.success('Worship schedule removed.')
   }
 
   const renderScheduleGroup = (category: WorshipScheduleCategory) => {
@@ -285,12 +258,7 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
                   item={item}
                   isMobile={isMobile}
                   onEdit={() => openEdit(category, item)}
-                  onToggle={() =>
-                    updateItem(category, item.id, (next) => ({
-                      ...next,
-                      disabled: !next.disabled,
-                    }))
-                  }
+                  onToggle={() => void handleToggle(category, item)}
                   onRemove={() => setPendingDelete({ category, item })}
                 />
               ))}
@@ -362,11 +330,8 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
             />
           </button>
           <CardAction>
-            <Badge
-              variant={dirty ? 'default' : 'outline'}
-              className={cn('text-xs', dirty && 'bg-amber-500 text-white')}
-            >
-              {dirty ? 'Unsaved changes' : `${activeCount} active`}
+            <Badge variant="outline" className="text-xs">
+              {activeCount} active
             </Badge>
           </CardAction>
         </CardHeader>
@@ -431,29 +396,6 @@ export function WorshipSchedulesCard({ onAudit }: WorshipSchedulesCardProps) {
           </CardContent>
         )}
       </Card>
-
-      {expanded && (
-        <div className="sticky bottom-0 z-10 -mx-4 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:relative md:bottom-auto md:z-auto md:mx-0 md:p-0">
-          <div className="flex flex-row gap-3 rounded-xl border bg-background/95 p-2 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur md:flex-row md:justify-end md:gap-2 md:border-0 md:bg-transparent md:shadow-none md:p-0">
-            <Button
-              variant="outline"
-              className="min-h-11 flex-1 md:min-h-0 md:flex-none"
-              onClick={cancel}
-              disabled={!dirty}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="min-h-11 flex-1 md:min-h-0 md:flex-none"
-              onClick={saveSchedules}
-              loading={savingSchedules}
-              disabled={!dirty}
-            >
-              Save Changes
-            </Button>
-          </div>
-        </div>
-      )}
 
       {form && (
         <TimeForm

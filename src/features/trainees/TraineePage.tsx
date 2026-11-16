@@ -185,8 +185,9 @@ export function TraineePage({ choir = 'aws' }: { choir?: Choir }) {
                 <FileDown className="size-4" />
               </Button>
             )}
-            <Button size="icon" aria-label="Add trainee" onClick={openAdd}>
+            <Button onClick={openAdd}>
               <Plus className="size-4" />
+              Add Trainee
             </Button>
           </>
         }

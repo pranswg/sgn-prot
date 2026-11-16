@@ -6,7 +6,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { Member, Trainee } from '@/core/types/member'
-import { CHOIR_LABELS, choirOf, membersOf, pnkVoicePositionId, traineesOf } from './choirs.ts'
+import {
+  CHOIR_LABELS,
+  choirOf,
+  membersOf,
+  pnkVoiceOptions,
+  pnkVoicePositionId,
+  traineesOf,
+} from './choirs.ts'
 
 function member(id: string, choir?: 'aws' | 'pnk'): Member {
   return {
@@ -101,4 +108,29 @@ test('PNK saves the configured Soprano 2 position, whatever its id', () => {
 
   // And with no voices configured at all it falls back to the standard id.
   assert.equal(pnkVoicePositionId([]), 'soprano-2')
+})
+
+test('PNK offers only its three configured voices, in order', () => {
+  const voices = [
+    { id: 'v_tenor', name: 'Tenor' },
+    { id: 'v_alto', name: 'ALTO' },
+    { id: 'v_s2', name: 'Soprano 2' },
+    { id: 'v_bass', name: 'Bass' },
+    { id: 'v_s1', name: 'soprano 1' },
+  ]
+
+  // Settings owns the ids; the list is matched by name and ordered S1, S2, Alto.
+  assert.deepEqual(
+    pnkVoiceOptions(voices).map((voice) => voice.id),
+    ['v_s1', 'v_s2', 'v_alto'],
+  )
+
+  // A voice the administrator removed or renamed is simply absent.
+  assert.deepEqual(
+    pnkVoiceOptions([{ id: 'v_s2', name: 'Soprano 2' }]).map(
+      (voice) => voice.id,
+    ),
+    ['v_s2'],
+  )
+  assert.deepEqual(pnkVoiceOptions([]), [])
 })

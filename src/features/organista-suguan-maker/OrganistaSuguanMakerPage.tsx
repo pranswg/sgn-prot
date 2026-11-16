@@ -26,13 +26,17 @@ import { openPdfPreviewWindow, showPdfPreview } from '@/lib/pdfPreview'
 import { useMemberStore } from '@/store/memberStore'
 import { membersOf } from '@/lib/choirs'
 import { useOrganistaSuguanStore } from '@/store/organistaSuguanStore'
+import { useNavStore } from '@/store/navStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
 import { memberHasRank } from '@/lib/memberRanks'
 import { useWorshipScheduleStore } from '@/store/worshipScheduleStore'
 import { useExportPreview } from '@/hooks/useExportPreview'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
-import type { OrganistaSuguanService } from '@/core/types/organistaSuguan'
+import type {
+  OrganistaSuguanRecord,
+  OrganistaSuguanService,
+} from '@/core/types/organistaSuguan'
 import { OrganistaServiceCard } from './OrganistaServiceCard'
 import {
   SchedulePicker,
@@ -347,24 +351,55 @@ export async function buildOrganistaSuguanPdf(
   return pdf.output('blob')
 }
 
+/** Rows for a new sheet: the enabled Worship Service Schedules. */
+function defaultServiceRows(): OrganistaService[] {
+  const { midweek, weekend } = useWorshipScheduleStore.getState()
+  return servicesFromCategories({
+    midweek: midweek.filter((s) => !s.disabled),
+    weekend: weekend.filter((s) => !s.disabled),
+  })
+}
+
+function recordServiceRows(record: OrganistaSuguanRecord | null) {
+  return record
+    ? record.services.map((service) => ({ ...service }))
+    : defaultServiceRows()
+}
+
+/** The format a fresh sheet starts with; a saved record keeps its own. */
+function recordDocFormat(record: OrganistaSuguanRecord | null): SuguanDocFormat {
+  return record
+    ? { ...record.docFormat }
+    : { ...DEFAULT_DOC_FORMAT, fontSize: 'large' }
+}
+
 /**
  * The Organist Suguan maker. Shares the Extra Occasion maker's layout
  * primitives (`occasion-page-header`, `occasion-form`, `occasion-field`,
  * `occasion-disclosure`, `occasion-actions` from `extraOccasion.css`) so both
  * document makers read as one screen: a title block, a card of fields, folded
  * document setup, the roster, and one sticky action bar.
+ *
+ * Opening a saved record from Suguan History sets `organistaSuguanId`, which
+ * seeds the form from that record and turns Save into an in-place update.
  */
 export function OrganistaSuguanMakerPage() {
-  const [churchName, setChurchName] = useState('')
-  const [destinadoName, setDestinadoName] = useState('')
-  const [services, setServices] = useState<OrganistaService[]>(() => {
-    const { midweek, weekend } = useWorshipScheduleStore.getState()
-    return servicesFromCategories({
-      midweek: midweek.filter((s) => !s.disabled),
-      weekend: weekend.filter((s) => !s.disabled),
-    })
-  })
+  const editingId = useNavStore((state) => state.organistaSuguanId)
+  const navigate = useNavStore((state) => state.navigate)
+  const records = useOrganistaSuguanStore((state) => state.records)
+  const existing = useMemo(
+    () => records.find((record) => record.id === editingId) ?? null,
+    [records, editingId],
+  )
+  const [churchName, setChurchName] = useState(existing?.churchName ?? '')
+  const [destinadoName, setDestinadoName] = useState(
+    existing?.destinadoName ?? '',
+  )
+  const [services, setServices] = useState<OrganistaService[]>(() =>
+    recordServiceRows(existing),
+  )
   const createRecord = useOrganistaSuguanStore((state) => state.createRecord)
+  const updateRecord = useOrganistaSuguanStore((state) => state.updateRecord)
   const allMembers = useMemberStore((state) => state.members)
   const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
   const dutyRoles = useSettingsStore((state) => state.dutyRoles)
@@ -381,11 +416,12 @@ export function OrganistaSuguanMakerPage() {
   const activeMemberNames = members
     .filter((member) => member.isActive)
     .map((member) => fullName(member.firstName, member.lastName))
-  const [docFormat, setDocFormat] = useState<SuguanDocFormat>({
-    ...DEFAULT_DOC_FORMAT,
-    fontSize: 'large',
-  })
-  const [pagsasanayDate, setPagsasanayDate] = useState('')
+  const [docFormat, setDocFormat] = useState<SuguanDocFormat>(() =>
+    recordDocFormat(existing),
+  )
+  const [pagsasanayDate, setPagsasanayDate] = useState(
+    existing?.pagsasanayDate ?? '',
+  )
   const [documentSetupOpen, setDocumentSetupOpen] = useState(false)
   const [dragServiceId, setDragServiceId] = useState<string | null>(null)
   const [overServiceId, setOverServiceId] = useState<string | null>(null)
@@ -398,6 +434,20 @@ export function OrganistaSuguanMakerPage() {
   const newServiceCardRef = useRef<HTMLElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
   const { exportPreview, requestExport } = useExportPreview()
+
+  // The page stays mounted when the nav target changes — tapping "Organist
+  // Suguan" in the sidebar while editing keeps the same component — so re-seed
+  // the form from whatever record the nav now points at (or a blank sheet).
+  const initialKey = editingId ?? '__new__'
+  const [loadedKey, setLoadedKey] = useState(initialKey)
+  if (loadedKey !== initialKey) {
+    setLoadedKey(initialKey)
+    setChurchName(existing?.churchName ?? '')
+    setDestinadoName(existing?.destinadoName ?? '')
+    setServices(recordServiceRows(existing))
+    setDocFormat(recordDocFormat(existing))
+    setPagsasanayDate(existing?.pagsasanayDate ?? '')
+  }
 
   const takenScheduleIds = useMemo(
     () =>
@@ -601,14 +651,23 @@ export function OrganistaSuguanMakerPage() {
 
   const saveToHistory = () => {
     if (!requirePagsasanayDate()) return
-    createRecord({
+    const payload = {
       churchName: churchName.trim(),
       pagsasanayDate,
       services,
       docFormat,
-      pangulongMangaawitName: pmName,
+      // Editing keeps the saved name when the Master List has no active
+      // Pangulong Mang-aawit right now, so a save never blanks the signature.
+      pangulongMangaawitName: pmName || existing?.pangulongMangaawitName || '',
       destinadoName,
-    })
+    }
+    if (existing) {
+      updateRecord(existing.id, payload)
+      toast.success('Organist Suguan updated.')
+      navigate('suguan-history')
+      return
+    }
+    createRecord(payload)
     toast.success('Organist Suguan saved to history.')
   }
 
@@ -689,7 +748,7 @@ export function OrganistaSuguanMakerPage() {
 
       <header className="occasion-page-header">
         <div className="min-w-0">
-          <h1>Organist Suguan</h1>
+          <h1>{existing ? 'Edit Organist Suguan' : 'Organist Suguan'}</h1>
           <p className="truncate">
             {[
               churchName.trim() || 'No locale yet',
@@ -968,7 +1027,7 @@ export function OrganistaSuguanMakerPage() {
             disabled={previewingOrganistSuguan || exportingOrganistSuguan}
           >
             <Save className="size-4" />
-            Save to History
+            {existing ? 'Save changes' : 'Save to History'}
           </Button>
         </div>
       </footer>

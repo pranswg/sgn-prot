@@ -54,17 +54,43 @@ export function traineesOf(
 }
 
 /**
- * PNK has no voice sections: every member is a Soprano 2. Its pages therefore
- * hide the voice filters, the voice column, and the form's voice picker, and
- * store this id instead — resolved from the configured voices so renamed
- * positions still match.
+ * The voices PNK may sing, in picker order. Settings owns the ids, names and
+ * colours, so these are matched against the configured list by name.
+ */
+export const PNK_VOICE_NAMES = ['Soprano 1', 'Soprano 2', 'Alto'] as const
+
+function normalizeVoiceName(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * The configured voices PNK offers: Soprano 1, Soprano 2 and Alto, in that
+ * order. A voice the administrator renamed is simply absent; nothing here is
+ * hard-coded to a settings-generated id.
+ */
+export function pnkVoiceOptions<T extends { name: string }>(
+  voices: readonly T[],
+): T[] {
+  return PNK_VOICE_NAMES.flatMap((name) => {
+    const key = normalizeVoiceName(name)
+    const match = voices.find((voice) => normalizeVoiceName(voice.name) === key)
+    return match ? [match] : []
+  })
+}
+
+/**
+ * PNK's default voice: the configured Soprano 2, falling back to a configured
+ * soprano and finally the standard id, so renamed positions still resolve.
  */
 export function pnkVoicePositionId(
   voices: readonly { id: string; name: string }[],
 ): string {
-  const sopranoTwo = voices.find((voice) =>
-    /^soprano\s*2$/i.test(voice.name.trim()),
+  const sopranoTwoKey = normalizeVoiceName(PNK_VOICE_NAMES[1])
+  const sopranoTwo = voices.find(
+    (voice) => normalizeVoiceName(voice.name) === sopranoTwoKey,
   )
-  const soprano = voices.find((voice) => /^soprano(?:\s*1)?$/i.test(voice.name.trim()))
+  const soprano = voices.find((voice) =>
+    /^soprano(?:\s*1)?$/i.test(voice.name.trim()),
+  )
   return sopranoTwo?.id ?? soprano?.id ?? voices[0]?.id ?? 'soprano-2'
 }

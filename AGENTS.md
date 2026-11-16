@@ -368,7 +368,8 @@ change. There is no router, so `page` is the entire navigation model, and the
 - `editSuguanInBuilder` deliberately leaves it `null`: editing a saved Suguan
   opens no dialog, so there is nothing to dismiss.
 - The one-shot flags (`directoryStart`, `selectedHistoryMemberId`,
-  `builderReturnPage`) and `builderSuguanId` are deliberately **not** persisted,
+  `builderReturnPage`) and the open-record targets (`builderSuguanId`,
+  `organistaSuguanId`, `extraOccasionSuguanId`) are deliberately **not** persisted,
   so a reload cannot re-open a dialog or replay a filtered directory. The
   rehydrate `merge` also drops a persisted `suguan-builder` page to the dashboard,
   because the builder's draft is in-memory and would come back empty.
@@ -413,16 +414,26 @@ counts, pickers and the Members History archive all read one pool at a time.
 - **Each list numbers from M-001.** `buildMemberReferences` is positional, so
   each page hands it its own choir's roster; PNK starts at M-001 rather than
   continuing AWS's sequence.
-- **AWS-only pickers.** Every Choir Suguan, Organista Suguan, Extra Occasion,
-  and Koro surface reads `membersOf(members, 'aws')`; a PNK member must never
-  appear in an AWS assignment picker. PNK has no Suguan sheet yet — it waits on
-  a reference layout, so do not invent one.
-- **PNK sings one voice.** Every PNK member is a soprano, so the PNK Master List
-  drops the Voice Positions filter (desktop dropdown and mobile chip), the voice
-  column/badge in the directory, and the voice picker in the member forms;
-  `pnkVoicePositionId` resolves the configured Soprano (by name, with a
-  `soprano-1` fallback) and the form saves that id. The AWS directory keeps both
-  its Voice Positions filter and its voice column.
+- **AWS-only pickers, except Koro Maker.** Every Choir Suguan, Organista Suguan,
+  and Extra Occasion surface reads `membersOf(members, 'aws')`; a PNK member must
+  never appear in an AWS assignment picker. Koro Maker is the deliberate
+  exception: a Koro table arranges AWS and PNK singers together, so its pool
+  (`availableMembers`, members plus trainees of both choirs) feeds the seats,
+  fill actions and exports, and only the Members panel's AWS/PNK switch (AWS by
+  default) scopes the list the user drags from. PNK has no Suguan sheet yet — it
+  waits on a reference layout, so do not invent one.
+- **PNK has three voices, chosen by name from Settings.** A PNK member is one of
+  the configured **Soprano 1, Soprano 2, or Alto**; `pnkVoiceOptions`
+  (`src/lib/choirs.ts`) matches those names case- and punctuation-insensitively
+  against `settingsStore.voices` and returns them in that order, so the ids stay
+  Settings-generated. The PNK directory keeps its Voice Positions filter (desktop
+  and mobile), its voice column/badge, and the member forms' voice picker, all
+  narrowed to those three options. A new member defaults to the configured
+  **Soprano 2** (`pnkVoicePositionId`), and a PNK record whose stored voice is
+  not one of the three is seeded to that default. The roster importer applies the
+  same narrowing, and the PDFs print the member's own voice through
+  `masterListPdfVoice`; only a legacy record with a blank voice still prints the
+  choir's Soprano 2. The AWS directory keeps the full configured voice list.
 - **The membership filter is gone for both choirs.** The directory's second
   filter is Choir Positions only — no Membership heading, no Recently Added, no
   membership categories, on desktop and in the mobile Roles sheet. `quick` still
@@ -521,10 +532,25 @@ and an organist-family membership counts as the configured `Organista` rank. The
 `'oic'` (`OIC_DUTY_ROLE_ID`, which is not a configured-role id) all stay for
 reading saved data.
 
-The member forms deliberately have no UI for Status (active), privileges,
-Date Added, or Notes. `isActive` is only toggled from the profile, `dateAdded`
-is auto-set on add to a PHT timestamp (`phtInstantISO`), and `positions` /
-`notes` are preserved untouched on edit.
+**Add Member and Add Trainee share one window.** `src/components/IdentityFormDialog.tsx`
+draws the header, the quiet identity rail, the scrolling form column, and a
+footer that states the outcome. The rail carries the live initials, name,
+choir, membership, reference, voice, and a Member history row; the trainee rail
+swaps that row for the training start, "Day N", and the promotion note. Below
+`md` the rail is hidden: the member form keeps its own mobile dialog with a
+full-width history row, and the trainee form stacks its sections. The history
+row resolves the name being typed against the same choir, so a returning singer
+can be inspected (and restored) before saving; it opens the existing
+`MemberHistoryDialog` over the form instead of navigating to Members History. A
+new member starts with the configured duty role named `Mang-aawit` selected
+(`resolveMangAawitDutyRole`, matched by name); with no such role configured
+nothing is preselected. The member history event stored as `joined` now prints
+as **Transferred In** — the stored type is unchanged.
+
+The member forms deliberately have no UI for privileges, Date Added, or Notes.
+Status is the single Active/Inactive toggle, `dateAdded` is auto-set on add to a
+PHT timestamp (`phtInstantISO`), and `positions` / `notes` are preserved
+untouched on edit.
 
 **A formal transfer moves the member off the Master List.** `transferMember`
 appends a `transferred-out` event and sets `isActive: false` together;
@@ -890,7 +916,17 @@ boundaries, so a change in one feature rarely reaches another.
   geometry and colors. Records save through
   `suguanStore` into Suguan History with their custom settings, where they can
   be previewed, re-exported, edited in this maker, and deleted.
-- **suguan-history** — saved Suguan list and detail view.
+- **suguan-history** — saved Suguan list and detail view. A row is the click
+  target for its detail on desktop and phone (Enter/Space on a focused row),
+  exactly like a Master List row; the checkbox cell and the action cell stop
+  their own clicks and keydowns so selecting or opening a menu never navigates.
+  Choir and Organist rows carry the same action set: Edit (pencil, `edit-suguan`),
+  View (eye), and a kebab with the exports (`export-documents`) and Delete
+  (`delete-suguan`). Editing an Organist record calls
+  `navStore.editOrganistaSuguan`, which seeds the maker from the saved record
+  (`organistaSuguanId`), turns Save into `organistaSuguanStore.updateRecord`
+  (id and `createdAt` preserved, `updatedAt` moves), and returns to history
+  afterwards. Organist view still follows the eye's `export-documents` gate.
 - **trainees** — the trainee list (choir section cards, row kebabs), the
   attendance-sheet dialog, and trainee-only add/edit and transfer forms.
 - **settings** — reference list management, backup export/import.

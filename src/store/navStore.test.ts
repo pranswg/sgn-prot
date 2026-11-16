@@ -18,6 +18,7 @@ function reset(page: Page = 'dashboard') {
     page,
     selectedSuguanId: null,
     builderSuguanId: null,
+    organistaSuguanId: null,
     extraOccasionSuguanId: null,
     extraOccasionBatchId: null,
     extraOccasionMode: null,
@@ -115,6 +116,18 @@ test('editing an Extra Occasion record opens its maker and plain navigation clea
 
   useNavStore.getState().navigate('suguan-history')
   assert.equal(useNavStore.getState().extraOccasionSuguanId, null)
+})
+
+test('editing an Organist Suguan opens its maker and plain navigation clears the target', () => {
+  reset('suguan-history')
+  useNavStore.getState().editOrganistaSuguan('org-1')
+  assert.equal(useNavStore.getState().page, 'organista-suguan-maker')
+  assert.equal(useNavStore.getState().organistaSuguanId, 'org-1')
+
+  // Re-entering the maker from the sidebar must start a blank sheet, never
+  // keep pointing at the record that was being edited.
+  useNavStore.getState().navigate('organista-suguan-maker')
+  assert.equal(useNavStore.getState().organistaSuguanId, null)
 })
 
 test('navigating to the Extra Occasion page opens the chooser', () => {

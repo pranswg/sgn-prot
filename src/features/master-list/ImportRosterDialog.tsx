@@ -23,6 +23,7 @@ import {
   CHOIRS,
   CHOIR_LABELS,
   membersOf,
+  pnkVoiceOptions,
   pnkVoicePositionId,
   traineesOf,
 } from '@/lib/choirs'
@@ -200,8 +201,14 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
     )
   }
 
+  // A PNK row may only land on one of PNK's three configured voices.
+  const voiceOptionsFor = (gender: 'male' | 'female') =>
+    choir === 'pnk'
+      ? pnkVoiceOptions(voices)
+      : voicePositionsForGender(gender, voices)
+
   const handleGenderChange = (candidate: RosterCandidate, gender: 'male' | 'female') => {
-    const options = voicePositionsForGender(gender, voices)
+    const options = voiceOptionsFor(gender)
     updateCandidate(candidate.id, {
       gender,
       voicePosition:
@@ -246,9 +253,13 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
       if (!firstName || !lastName) continue
 
       const voicePosition =
-        candidate.voicePosition ||
-        voicePositionsForGender(candidate.gender, voices)[0]?.id ||
-        ''
+        choir === 'pnk'
+          ? (pnkVoiceOptions(voices).find(
+              (voice) => voice.id === candidate.voicePosition,
+            )?.id ?? pnkVoicePositionId(voices))
+          : candidate.voicePosition ||
+            voicePositionsForGender(candidate.gender, voices)[0]?.id ||
+            ''
 
       // A spreadsheet export carries the original date added; the roster PDF
       // does not, so it falls back to today.
@@ -272,8 +283,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
           suffix: candidate.suffix,
           lastName,
           gender: candidate.gender,
-          voicePosition:
-            choir === 'pnk' ? pnkVoicePositionId(voices) : voicePosition,
+          voicePosition,
           membershipType: candidate.membershipType ?? 'regular',
           isActive: candidate.isActive,
           dateAdded,
@@ -477,7 +487,7 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
                             aria-label="Voice position"
                           >
                             <option value="">No section</option>
-                            {voicePositionsForGender(candidate.gender, voices).map((v) => (
+                            {voiceOptionsFor(candidate.gender).map((v) => (
                               <option key={v.id} value={v.id}>
                                 {v.name}
                               </option>

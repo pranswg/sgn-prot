@@ -182,7 +182,7 @@ test('AWS ranking tables follow the configured duty-role order and include futur
   ])
 })
 
-test('PNK sections use the choir prefix, omit rankings, and export members as Soprano 2', () => {
+test('PNK sections use the choir prefix, omit rankings, and print each voice', () => {
   const member = makeMember('PNK singer', {
     voicePosition: 'soprano-1',
     assignedDutyRoleIds: ['pangulong-mang-aawit'],
@@ -202,6 +202,17 @@ test('PNK sections use the choir prefix, omit rankings, and export members as So
   )
   assert.equal(
     masterListPdfVoice(member, TEST_VOICES, 'pnk'),
+    'Soprano 1',
+  )
+
+  // A PNK record saved before the voice picker existed has no voice, so the
+  // sheet falls back to the configured Soprano 2.
+  const legacy = makeMember('Legacy PNK singer', {
+    voicePosition: '',
+    choir: 'pnk',
+  })
+  assert.equal(
+    masterListPdfVoice(legacy, TEST_VOICES, 'pnk'),
     'Soprano 2',
   )
 })

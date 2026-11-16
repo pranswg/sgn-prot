@@ -23,7 +23,7 @@ import { normalizeNameKey } from '@/lib/rosterImport'
 
 /** What the three event kinds are called, e.g. for the timeline. */
 export const MEMBER_HISTORY_EVENT_LABELS: Record<MemberHistoryType, string> = {
-  joined: 'Joined Choir',
+  joined: 'Transferred In',
   'transferred-out': 'Transferred Out',
   returned: 'Returned to Choir',
 }

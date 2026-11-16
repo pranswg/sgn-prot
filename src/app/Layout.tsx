@@ -141,14 +141,14 @@ const PAGE_META: Record<
     groupTarget: 'master-list',
     title: 'AWS Members History',
     subtitle:
-      'Track AWS membership changes: joined dates, transfers, returns, and gaps.',
+      'Track AWS membership changes: transfer-in dates, transfers, returns, and gaps.',
   },
   'pnk-members-history': {
     group: 'PNK Choir',
     groupTarget: 'pnk-master-list',
     title: 'PNK Members History',
     subtitle:
-      'Track PNK membership changes: joined dates, transfers, returns, and gaps.',
+      'Track PNK membership changes: transfer-in dates, transfers, returns, and gaps.',
   },
   trainees: {
     group: 'AWS Choir',

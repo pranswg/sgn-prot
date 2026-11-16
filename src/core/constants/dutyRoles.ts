@@ -36,6 +36,20 @@ export function resolveOicDutyRole<T extends { id: string; name: string }>(
 }
 
 /**
+ * Name a configured role must carry to be treated as the plain Mang-aawit
+ * ranking. A new member starts with this rank selected, and the lookup is by
+ * name because duty roles created in Settings carry a generated id.
+ */
+export const MANGAAWIT_DUTY_ROLE_NAME = 'Mang-aawit'
+
+/** The configured duty role that represents the plain Mang-aawit ranking. */
+export function resolveMangAawitDutyRole<
+  T extends { id: string; name: string },
+>(roles: readonly T[]): T | undefined {
+  return findDutyRoleByName(roles, MANGAAWIT_DUTY_ROLE_NAME)
+}
+
+/**
  * Name a configured role must carry to be treated as the Pangulong Mang-aawit
  * ranking, which the printed signatures draw on.
  */

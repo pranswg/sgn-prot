@@ -16,6 +16,7 @@ export type OrganistaSuguanRecordInput = Omit<
 interface OrganistaSuguanState {
   records: OrganistaSuguanRecord[]
   createRecord: (input: OrganistaSuguanRecordInput) => OrganistaSuguanRecord
+  updateRecord: (id: string, input: OrganistaSuguanRecordInput) => void
   deleteRecord: (id: string) => void
   deleteMany: (ids: string[]) => void
   importData: (records: OrganistaSuguanRecord[]) => void
@@ -63,6 +64,30 @@ export const useOrganistaSuguanStore = create<OrganistaSuguanState>()(
           failure: 'Could not save the record. It was not added.',
         })
         return record
+      },
+      updateRecord: (id, input) => {
+        const previous = get().records
+        const existing = previous.find((record) => record.id === id)
+        if (!existing) return
+        const next: OrganistaSuguanRecord = {
+          ...existing,
+          ...input,
+          id: existing.id,
+          // Editing must not reshuffle the history list, so the original
+          // creation stamp survives and only `updatedAt` moves.
+          createdAt: existing.createdAt,
+          services: input.services.map((service) => ({ ...service })),
+          docFormat: { ...input.docFormat },
+          updatedAt: new Date().toISOString(),
+        }
+        set((state) => ({
+          records: state.records.map((record) => (record.id === id ? next : record)),
+        }))
+        persistWrite({
+          write: upsertRow('organista_suguans', id, next),
+          rollback: () => set({ records: previous }),
+          failure: 'Could not update the record. Your changes were reverted.',
+        })
       },
       deleteRecord: (id) => {
         const previous = get().records

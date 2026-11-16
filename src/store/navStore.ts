@@ -30,6 +30,8 @@ interface NavState {
   page: Page
   selectedSuguanId: string | null
   builderSuguanId: string | null
+  /** The saved Organist Suguan the maker should open for editing. */
+  organistaSuguanId: string | null
   extraOccasionSuguanId: string | null
   /** A saved planning session to open on the next visit to the page. */
   extraOccasionBatchId: string | null
@@ -87,6 +89,8 @@ interface NavState {
   /** Forgets the remembered return page once the user has committed to a draft. */
   clearBuilderReturnPage: () => void
   editSuguanInBuilder: (id: string) => void
+  /** Open the Organist Suguan maker loaded with a saved record. */
+  editOrganistaSuguan: (id: string) => void
   editExtraOccasionSuguan: (id: string) => void
   /** Switch the Extra Occasion page to a workflow (or back to the chooser). */
   setExtraOccasionMode: (mode: ExtraOccasionMode) => void
@@ -100,6 +104,7 @@ export const useNavStore = create<NavState>()(
       page: 'dashboard',
       selectedSuguanId: null,
       builderSuguanId: null,
+      organistaSuguanId: null,
       extraOccasionSuguanId: null,
       extraOccasionBatchId: null,
       extraOccasionMode: null,
@@ -112,6 +117,7 @@ export const useNavStore = create<NavState>()(
           page,
           selectedSuguanId: null,
           builderSuguanId: null,
+          organistaSuguanId: null,
           extraOccasionSuguanId: null,
           // Entering the page shows the chooser; leaving it clears the mode.
           extraOccasionBatchId: null,
@@ -138,6 +144,7 @@ export const useNavStore = create<NavState>()(
           directoryStart: start,
           selectedSuguanId: null,
           builderSuguanId: null,
+          organistaSuguanId: null,
           extraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
@@ -159,6 +166,7 @@ export const useNavStore = create<NavState>()(
           page: 'suguan-detail',
           selectedSuguanId: id,
           builderSuguanId: null,
+          organistaSuguanId: null,
           extraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
@@ -172,6 +180,7 @@ export const useNavStore = create<NavState>()(
           selectedHistoryMemberId: memberId,
           selectedSuguanId: null,
           builderSuguanId: null,
+          organistaSuguanId: null,
           extraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
@@ -191,6 +200,7 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'suguan-builder',
           builderSuguanId: null,
+          organistaSuguanId: null,
           extraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
@@ -220,6 +230,20 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'suguan-builder',
           builderSuguanId: id,
+          organistaSuguanId: null,
+          extraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
+          selectedSuguanId: null,
+          selectedHistoryMemberId: null,
+          builderReturnPage: null,
+          directoryStart: null,
+        }),
+      editOrganistaSuguan: (id) =>
+        set({
+          page: 'organista-suguan-maker',
+          organistaSuguanId: id,
+          builderSuguanId: null,
           extraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
@@ -235,6 +259,7 @@ export const useNavStore = create<NavState>()(
           extraOccasionBatchId: null,
           extraOccasionMode: 'single',
           builderSuguanId: null,
+          organistaSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,
@@ -248,6 +273,7 @@ export const useNavStore = create<NavState>()(
           extraOccasionBatchId: id,
           extraOccasionMode: 'multi',
           builderSuguanId: null,
+          organistaSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
           builderReturnPage: null,

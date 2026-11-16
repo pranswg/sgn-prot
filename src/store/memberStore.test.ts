@@ -106,6 +106,21 @@ test('Master List mutations refresh the last-updated timestamp', () => {
   useMemberStore.getState().clear()
 })
 
+test('server hydration is not a modification of the Master List', () => {
+  useMemberStore.setState({
+    lastUpdatedAt: '2000-01-01T00:00:00.000Z',
+    members: [],
+    trainees: [],
+  })
+  // Opening the app refetches the server snapshot; that read must not move the
+  // "Updated …" stamp shown above the directory.
+  useMemberStore.getState().importData([], [])
+  assert.equal(
+    useMemberStore.getState().lastUpdatedAt,
+    '2000-01-01T00:00:00.000Z',
+  )
+})
+
 test('the two choirs are separate lists: a PNK member never joins AWS', () => {
   useMemberStore.getState().clear()
 

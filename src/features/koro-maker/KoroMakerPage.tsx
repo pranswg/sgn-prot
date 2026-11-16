@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useMemberStore } from '@/store/memberStore'
-import { membersOf, traineesOf } from '@/lib/choirs'
+import { CHOIR_LABELS, CHOIRS, membersOf, traineesOf } from '@/lib/choirs'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useKoroStore } from '@/store/koroStore'
 import { exportFileName } from '@/lib/exportNaming'
@@ -64,7 +64,7 @@ import {
 } from '@/components/ui/select'
 import { memberIsOrganist } from '@/core/constants/memberMembership'
 import type { KoroCell, KoroTable } from '@/core/types/koro'
-import type { Member } from '@/core/types/member'
+import type { Choir, Member } from '@/core/types/member'
 import type { DocFontSize, SuguanGroup } from '@/core/types/suguan'
 import { exportKoroAsSuguanPdf } from './koroPdfExport'
 import { exportKoroTablePdf } from './koroTablePdfExport'
@@ -82,10 +82,9 @@ const GROUPS: { value: SuguanGroup; label: string }[] = [
 export function KoroMakerPage() {
   const allMembers = useMemberStore((state) => state.members)
   const allTrainees = useMemberStore((state) => state.trainees)
-  // AWS only: a PNK member must never be arranged into an AWS Koro.
-  const members = useMemo(() => membersOf(allMembers, 'aws'), [allMembers])
-  // Include trainees (Nagsasanay) in the available member pool for Koro arrangement.
-  const trainees = useMemo(() => traineesOf(allTrainees, 'aws'), [allTrainees])
+  // A Koro table deliberately mixes AWS and PNK singers, so the pool spans both
+  // choirs and includes trainees (Nagsasanay). The Members panel's choir switch
+  // is the one place the two lists stay apart.
   const voices = useSettingsStore((state) => state.allVoices())
   const dutyRoles = useSettingsStore((state) => state.dutyRoles)
   const localeName = useSettingsStore((state) => state.localeName)
@@ -101,6 +100,7 @@ export function KoroMakerPage() {
   >(null)
   const [memberQuery, setMemberQuery] = useState('')
   const [memberVoice, setMemberVoice] = useState('')
+  const [memberChoir, setMemberChoir] = useState<Choir>('aws')
   const [memberGender, setMemberGender] = useState<'all' | 'male' | 'female'>('all')
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   // Table-reorder drag: which table is lifted, and which is under the pointer.
@@ -131,10 +131,21 @@ export function KoroMakerPage() {
   const document =
     documents.find((entry) => entry.id === activeDocumentId) ?? documents[0]
   const availableMembers = useMemo<KoroRosterEntry[]>(() => {
-    const m = members.filter((member) => member.isActive)
-    const t = trainees.filter((trainee) => trainee.status === 'active')
+    const m = allMembers.filter((member) => member.isActive)
+    const t = allTrainees.filter((trainee) => trainee.status === 'active')
     return [...m, ...t]
-  }, [members, trainees])
+  }, [allMembers, allTrainees])
+  // The Members panel reads one choir at a time; seats, fill actions and exports
+  // keep reading `availableMembers`, which is why a table can mix both choirs.
+  const choirPool = useMemo<KoroRosterEntry[]>(() => {
+    const m = membersOf(allMembers, memberChoir).filter(
+      (member) => member.isActive,
+    )
+    const t = traineesOf(allTrainees, memberChoir).filter(
+      (trainee) => trainee.status === 'active',
+    )
+    return [...m, ...t]
+  }, [allMembers, allTrainees, memberChoir])
   const placedMemberIds = document
     ? koroPlacedMemberIds(document)
     : new Set<string>()
@@ -144,7 +155,9 @@ export function KoroMakerPage() {
     : new Map<string, string[]>()
   const duplicatedIds = new Set(counts?.duplicatedMemberIds ?? [])
   const rosterByVoice = koroRosterByVoice(availableMembers)
-  const unplacedCount = availableMembers.length - placedMemberIds.size
+  const unplacedCount = choirPool.filter(
+    (member) => !placedMemberIds.has(member.id),
+  ).length
   const selectedCount = selectedMemberIds.size
   // The organist field only offers organist-family members, the same rule the
   // Organist Suguan pickers use. Trainees carry no membership, so they never
@@ -165,7 +178,7 @@ export function KoroMakerPage() {
     const voiceOrder = new Map(
       voices.map((voice, index) => [voice.id, index] as const),
     )
-    return availableMembers
+    return choirPool
       .filter((member) => {
         if (hidePlaced && placedMemberIds.has(member.id)) return false
         if (memberGender !== 'all' && member.gender !== memberGender)
@@ -188,7 +201,7 @@ export function KoroMakerPage() {
         )
       })
   }, [
-    availableMembers,
+    choirPool,
     memberQuery,
     memberVoice,
     memberGender,
@@ -461,17 +474,17 @@ export function KoroMakerPage() {
     setExporting(kind)
     try {
       if (kind === 'table') {
-        await exportKoroTablePdf(document, members, voices, fileName, {
+        await exportKoroTablePdf(document, allMembers, voices, fileName, {
           localeName,
         })
         toast.success('Koro table exported as PDF.')
       } else if (kind === 'table-word') {
-        await exportKoroTableDocx(document, members, voices, fileName, {
+        await exportKoroTableDocx(document, allMembers, voices, fileName, {
           localeName,
         })
         toast.success('Koro table exported as Word.')
       } else {
-        await exportKoroAsSuguanPdf(document, members, voices, 'download', fileName)
+        await exportKoroAsSuguanPdf(document, allMembers, voices, 'download', fileName)
         toast.success('Suguan PDF exported.')
       }
     } catch (error) {
@@ -499,7 +512,7 @@ export function KoroMakerPage() {
     try {
       const pdfBlob = await exportKoroTablePdf(
         document,
-        members,
+        allMembers,
         voices,
         undefined,
         { localeName, output: 'preview' },
@@ -528,7 +541,7 @@ export function KoroMakerPage() {
     try {
       const pdfBlob = await exportKoroAsSuguanPdf(
         document,
-        members,
+        allMembers,
         voices,
         'preview',
       )
@@ -916,7 +929,7 @@ export function KoroMakerPage() {
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="koro-member-search">Members</Label>
               <span className="text-xs text-muted-foreground">
-                {panelMembers.length} of {availableMembers.length}
+                {panelMembers.length} of {choirPool.length}
               </span>
             </div>
             <Input
@@ -926,8 +939,26 @@ export function KoroMakerPage() {
               placeholder="Search by name"
             />
             <div className="grid grid-cols-2 gap-2">
+              {CHOIRS.map((choir) => (
+                <button
+                  key={choir}
+                  type="button"
+                  aria-pressed={memberChoir === choir}
+                  onClick={() => setMemberChoir(choir)}
+                  className={cn(
+                    'h-9 rounded-md border px-2 text-sm font-medium transition-colors',
+                    memberChoir === choir
+                      ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                      : 'border-input bg-background text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {CHOIR_LABELS[choir]}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <select
-                aria-label="Filter members by choir"
+                aria-label="Filter members by gender"
                 value={memberGender}
                 onChange={(event) =>
                   setMemberGender(event.target.value as 'all' | 'male' | 'female')
@@ -1026,7 +1057,9 @@ export function KoroMakerPage() {
             })}
             {panelMembers.length === 0 && (
               <p className="px-2 py-3 text-sm text-muted-foreground">
-                No members match these filters.
+                {choirPool.length === 0
+                  ? `No active ${CHOIR_LABELS[memberChoir]} members.`
+                  : 'No members match these filters.'}
               </p>
             )}
           </div>

@@ -66,6 +66,7 @@ import { suguanFileName } from '@/lib/suguanUtils'
 import { exportFileName } from '@/lib/exportNaming'
 import { exportSuguanPdf } from '@/features/suguan-builder/suguanPdfExport'
 import { buildOrganistaSuguanPdf } from '@/features/organista-suguan-maker/OrganistaSuguanMakerPage'
+import { buildOrganistaSuguanDocx } from '@/features/organista-suguan-maker/organistaSuguanDocx'
 import { organistaDateLabel } from '@/features/organista-suguan-maker/organistaDateLabel'
 import {
   DEFAULT_MEMBER_PAGE_SIZE,
@@ -78,6 +79,7 @@ import type { Suguan } from '@/core/types/suguan'
 import type { OrganistaSuguanRecord } from '@/core/types/organistaSuguan'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { cn } from '@/lib/utils'
 import {
   exportExtraOccasionDocx,
   exportExtraOccasionExcel,
@@ -168,6 +170,7 @@ export function SuguanHistoryPage() {
   const clearOrganistaHistory = useOrganistaSuguanStore((state) => state.clear)
   const openSuguanDetail = useNavStore((state) => state.openSuguanDetail)
   const editSuguanInBuilder = useNavStore((state) => state.editSuguanInBuilder)
+  const editOrganistaSuguan = useNavStore((state) => state.editOrganistaSuguan)
   const editExtraOccasionSuguan = useNavStore(
     (state) => state.editExtraOccasionSuguan,
   )
@@ -349,28 +352,36 @@ export function SuguanHistoryPage() {
     }
   }
 
-  const exportOrganista = (record: OrganistaSuguanRecord) => {
-    const fileName = exportFileName('Organist Suguan', 'pdf')
+  const exportOrganista = (
+    record: OrganistaSuguanRecord,
+    kind: 'pdf' | 'docx',
+  ) => {
+    const fileName = exportFileName('Organist Suguan', kind)
     requestExport({
       filename: fileName,
-      onConfirm: () => void runOrganistaExport(record, fileName),
+      onConfirm: () => void runOrganistaExport(record, kind, fileName),
     })
   }
 
   const runOrganistaExport = async (
     record: OrganistaSuguanRecord,
+    kind: 'pdf' | 'docx',
     fileName: string,
   ) => {
     setExportingId(`organista:${record.id}`)
     try {
-      const blob = await buildOrganistaSuguanPdf(
+      const args = [
         record.churchName,
         record.pagsasanayDate,
         record.services,
         record.docFormat,
         record.pangulongMangaawitName,
         record.destinadoName,
-      )
+      ] as const
+      const blob =
+        kind === 'docx'
+          ? await buildOrganistaSuguanDocx(...args)
+          : await buildOrganistaSuguanPdf(...args)
       const fileUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = fileUrl
@@ -379,10 +390,18 @@ export function SuguanHistoryPage() {
       link.click()
       link.remove()
       window.setTimeout(() => URL.revokeObjectURL(fileUrl), 1000)
-      toast.success('Organist Suguan PDF exported.')
+      toast.success(
+        kind === 'docx'
+          ? 'Organist Suguan Word document exported.'
+          : 'Organist Suguan PDF exported.',
+      )
     } catch (error) {
       console.error(error)
-      toast.error('Could not export the Organist Suguan PDF.')
+      toast.error(
+        kind === 'docx'
+          ? 'Could not export the Organist Suguan Word document.'
+          : 'Could not export the Organist Suguan PDF.',
+      )
     } finally {
       setExportingId(null)
     }
@@ -447,6 +466,16 @@ export function SuguanHistoryPage() {
           ? 'Lalaki'
           : 'Mixed'
       : organistaGroup(item.record)
+
+  // A row opens the same detail its eye button does, so the whole row is a
+  // target rather than the icon alone. Organist records follow the eye's
+  // permission gate; a saved Suguan is always viewable.
+  const rowOpenable = (item: HistoryItem) =>
+    item.kind === 'suguan' || canExportDocuments
+  const openHistoryItem = (item: HistoryItem) => {
+    if (item.kind === 'suguan') openSuguanDetail(item.record.id)
+    else if (canExportDocuments) setViewingOrganista(item.record)
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -579,8 +608,33 @@ export function SuguanHistoryPage() {
               </TableRow>
             ) : (
               page.items.map((item) => (
-                <TableRow key={item.key}>
-                  <TableCell>
+                <TableRow
+                  key={item.key}
+                  onClick={
+                    rowOpenable(item) ? () => openHistoryItem(item) : undefined
+                  }
+                  onKeyDown={
+                    rowOpenable(item)
+                      ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            openHistoryItem(item)
+                          }
+                        }
+                      : undefined
+                  }
+                  tabIndex={rowOpenable(item) ? 0 : undefined}
+                  className={cn(
+                    rowOpenable(item) &&
+                      'cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
+                  )}
+                >
+                  <TableCell
+                    // The checkbox is its own control; a click there selects
+                    // the row without opening the record.
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <Checkbox
                       aria-label={`Select ${historyService(item)} created ${createdAtDate(item.record.createdAt)}`}
                       checked={selectedIds.includes(item.key)}
@@ -603,7 +657,14 @@ export function SuguanHistoryPage() {
                     {historyGroup(item)}
                   </TableCell>
                   <TableCell>{assignedCount(item)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell
+                    className="text-right"
+                    // The menus are portalled, but React events still bubble
+                    // through the tree, so the cell stops them before the
+                    // row's open click sees them.
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <div className="flex justify-end gap-1">
                       {item.kind === 'suguan' ? (
                         <>
@@ -693,6 +754,14 @@ export function SuguanHistoryPage() {
                         </>
                       ) : (
                         <>
+                          {canEditSuguan && <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Edit Organist Suguan"
+                            onClick={() => editOrganistaSuguan(item.record.id)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>}
                           {canExportDocuments && <Button
                             variant="ghost"
                             size="icon-sm"
@@ -701,23 +770,50 @@ export function SuguanHistoryPage() {
                           >
                             <Eye className="size-4" />
                           </Button>}
-                          {canDeleteSuguan && <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Export Organist Suguan PDF"
-                            disabled={exportingId === item.key}
-                            onClick={() => void exportOrganista(item.record)}
-                          >
-                            <FileDown className="size-4" />
-                          </Button>}
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label="Delete Organist Suguan"
-                            onClick={() => setDeleteTargets([item])}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {(canExportDocuments || canDeleteSuguan) && <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="More Organist Suguan actions"
+                                disabled={exportingId === item.key}
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              {canExportDocuments && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      void exportOrganista(item.record, 'pdf')
+                                    }
+                                  >
+                                    <FileDown className="size-4" />
+                                    Export PDF (.pdf)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      void exportOrganista(item.record, 'docx')
+                                    }
+                                  >
+                                    <FileText className="size-4" />
+                                    Export Word (.docx)
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {canExportDocuments && canDeleteSuguan && (
+                                <DropdownMenuSeparator />
+                              )}
+                              {canDeleteSuguan && <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setDeleteTargets([item])}
+                              >
+                                <Trash2 className="size-4" />
+                                Delete from history
+                              </DropdownMenuItem>}
+                            </DropdownMenuContent>
+                          </DropdownMenu>}
                         </>
                       )}
                     </div>

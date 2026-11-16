@@ -1,13 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Check, GraduationCap } from 'lucide-react'
+import { IdentityFormDialog } from '@/components/IdentityFormDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,9 +17,16 @@ import { useMemberStore } from '@/store/memberStore'
 import { voicePositionsForGender, UNASSIGNED_VOICE_ID } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
 import { CHOIR_LABELS } from '@/lib/choirs'
+import { memberInitials } from '@/lib/memberDirectory'
 import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
-import { isDateKey, toDateKeyFromInstant, todayPHT } from '@/lib/phDate'
+import {
+  daysBetween,
+  formatDateKey,
+  isDateKey,
+  toDateKeyFromInstant,
+  todayPHT,
+} from '@/lib/phDate'
 
 interface TraineeFormDialogProps {
   open: boolean
@@ -63,6 +64,14 @@ function storedDateKey(raw: string): string {
   if (isDateKey(raw)) return raw
   const key = toDateKeyFromInstant(raw)
   return isDateKey(key) ? key : todayPHT()
+}
+
+/** "Day 12" for a start date still in training; the date itself when future. */
+function trainingDayLabel(startKey: string): string {
+  if (!isDateKey(startKey)) return 'Start date not set'
+  const day = daysBetween(startKey, todayPHT()) + 1
+  if (day < 1) return 'Starts soon'
+  return `Day ${day}`
 }
 
 export function TraineeFormDialog({
@@ -151,65 +160,157 @@ export function TraineeFormDialog({
 
   const [saveTrainee, savingTrainee] = useAsyncAction(handleSave)
 
+  const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
+  const dayLabel = trainingDayLabel(form.trainingStartDate)
+  const startLabel = isDateKey(form.trainingStartDate)
+    ? formatDateKey(form.trainingStartDate)
+    : '—'
+
+  const rail = (
+    <>
+      <span
+        className={cn(
+          'grid size-16 shrink-0 place-items-center rounded-2xl text-xl font-bold tracking-tight text-white',
+          fullName ? 'bg-brand-teal' : 'bg-brand-teal/70',
+        )}
+      >
+        {fullName ? (
+          memberInitials({
+            firstName: form.firstName,
+            lastName: form.lastName,
+          })
+        ) : (
+          <GraduationCap className="size-6" />
+        )}
+      </span>
+      <p className="mt-3 text-sm font-bold leading-tight text-foreground">
+        {fullName || 'New trainee'}
+      </p>
+      <p className="mt-0.5 text-[0.6875rem] text-muted-foreground">
+        {form.gender === 'female' ? "Women's Choir" : "Men's Choir"}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <span className="inline-flex h-5 items-center rounded-md bg-brand-teal-soft px-2 text-[0.625rem] font-bold tracking-wide text-brand-teal">
+          {CHOIR_LABELS[choir]}
+        </span>
+        <span className="inline-flex h-5 items-center rounded-md border border-border bg-card px-2 text-[0.625rem] font-semibold text-muted-foreground">
+          Nagsasanay
+        </span>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-border bg-card p-3">
+        <p className="text-[0.5625rem] font-bold uppercase tracking-[0.1em] text-muted-foreground/70">
+          Training since
+        </p>
+        <p className="mt-1 text-sm font-bold text-foreground">{startLabel}</p>
+        <div className="mt-2 flex items-center justify-between text-[0.625rem] font-medium text-muted-foreground">
+          <span>{dayLabel}</span>
+          <span>{form.status === 'active' ? 'In training' : 'Inactive'}</span>
+        </div>
+      </div>
+      <p className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground/80">
+        Promotion keeps this start date, so the directory never loses the
+        training anniversary.
+      </p>
+
+      <div className="flex-1" />
+      <p className="mt-4 flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
+        <Check className="size-3 shrink-0 text-green-600" />
+        Appears in Nagsasanay · {CHOIR_LABELS[choir]}
+      </p>
+    </>
+  )
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{trainee ? 'Edit trainee' : 'Add trainee'}</DialogTitle>
-          <DialogDescription>
-            {trainee
-              ? `Update the information for ${trainee.firstName} ${trainee.lastName}.`
-              : `Add a new trainee to the ${CHOIR_LABELS[choir]} Nagsasanay list.`}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-5 py-2">
-          <FormSection label="Personal information">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="t-firstName">First name</Label>
-                <Input
-                  id="t-firstName"
-                  value={form.firstName}
-                  onChange={(e) => set('firstName', e.target.value)}
-                  placeholder="First name"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="t-lastName">Last name</Label>
-                <Input
-                  id="t-lastName"
-                  value={form.lastName}
-                  onChange={(e) => set('lastName', e.target.value)}
-                  placeholder="Last name"
-                />
-              </div>
+    <IdentityFormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={<GraduationCap className="size-5" />}
+      accent="teal"
+      title={trainee ? 'Edit trainee' : 'Add trainee'}
+      description={
+        trainee
+          ? `Editing ${trainee.firstName} ${trainee.lastName}`
+          : `New trainee · ${CHOIR_LABELS[choir]} Nagsasanay`
+      }
+      rail={rail}
+      footerNote="Promoted trainees keep their training start date."
+      footer={
+        <>
+          <Button
+            variant="outline"
+            className="flex-1 sm:flex-none"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 sm:flex-none"
+            onClick={saveTrainee}
+            loading={savingTrainee}
+          >
+            {trainee ? 'Save changes' : 'Add trainee'}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-6">
+        <FormSection
+          label="Personal information"
+          hint={
+            <>
+              <span className="text-destructive">*</span> Required
+            </>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="t-firstName">
+                First name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="t-firstName"
+                value={form.firstName}
+                onChange={(e) => set('firstName', e.target.value)}
+                placeholder="First name"
+              />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="t-middleName">Middle name</Label>
-                <Input
-                  id="t-middleName"
-                  value={form.middleName}
-                  onChange={(e) => set('middleName', e.target.value)}
-                  placeholder="Middle name or initial"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="t-suffix">Suffix</Label>
-                <Input
-                  id="t-suffix"
-                  value={form.suffix}
-                  onChange={(e) => set('suffix', e.target.value)}
-                  placeholder="e.g. Jr., Sr., III"
-                />
-              </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="t-lastName">
+                Last name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="t-lastName"
+                value={form.lastName}
+                onChange={(e) => set('lastName', e.target.value)}
+                placeholder="Last name"
+              />
             </div>
-          </FormSection>
+            <div className="grid gap-1.5">
+              <Label htmlFor="t-middleName">Middle name</Label>
+              <Input
+                id="t-middleName"
+                value={form.middleName}
+                onChange={(e) => set('middleName', e.target.value)}
+                placeholder="Middle name or initial"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="t-suffix">Suffix</Label>
+              <Input
+                id="t-suffix"
+                value={form.suffix}
+                onChange={(e) => set('suffix', e.target.value)}
+                placeholder="e.g. Jr., Sr., III"
+              />
+            </div>
+          </div>
+        </FormSection>
 
+        <div className="grid gap-6 md:grid-cols-[1.55fr_1fr] md:items-start">
           <FormSection label="Choir details">
             <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label>Gender</Label>
                 <Select
                   value={form.gender}
@@ -217,7 +318,7 @@ export function TraineeFormDialog({
                     handleGenderChange(v as 'male' | 'female')
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -226,24 +327,26 @@ export function TraineeFormDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-1.5">
                 <Label>Voice position</Label>
                 <Select
                   value={form.voicePosition}
                   onValueChange={(v) => set('voicePosition', v)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={UNASSIGNED_VOICE_ID}>
                       No voice assigned yet
                     </SelectItem>
-                    {voicePositionsForGender(form.gender, allVoices()).map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.name}
-                      </SelectItem>
-                    ))}
+                    {voicePositionsForGender(form.gender, allVoices()).map(
+                      (v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.name}
+                        </SelectItem>
+                      ),
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -251,7 +354,7 @@ export function TraineeFormDialog({
           </FormSection>
 
           <FormSection label="Training">
-            <div className="grid max-w-xs gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="t-trainingStartDate">Training start date</Label>
               <Input
                 id="t-trainingStartDate"
@@ -259,63 +362,65 @@ export function TraineeFormDialog({
                 value={form.trainingStartDate}
                 onChange={(e) => set('trainingStartDate', e.target.value)}
               />
-            </div>
-          </FormSection>
-
-          <FormSection label="Status">
-            <div
-              role="group"
-              aria-label="Trainee status"
-              className="grid max-w-xs grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-1"
-            >
-              {(
-                [
-                  { value: 'active', label: 'Active' },
-                  { value: 'inactive', label: 'Inactive' },
-                ] as const
-              ).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={form.status === option.value}
-                  onClick={() => set('status', option.value)}
-                  className={cn(
-                    'h-9 rounded-md text-sm font-medium transition-colors',
-                    form.status === option.value
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
+              <p className="text-[0.6875rem] text-muted-foreground">
+                {dayLabel} in training · defaults to today.
+              </p>
             </div>
           </FormSection>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={saveTrainee} loading={savingTrainee}>
-            {trainee ? 'Save changes' : 'Add trainee'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+        <FormSection label="Status">
+          <div
+            role="group"
+            aria-label="Trainee status"
+            className="grid max-w-xs grid-cols-2 gap-1 rounded-lg border border-border bg-muted/40 p-0.5"
+          >
+            {(
+              [
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={form.status === option.value}
+                onClick={() => set('status', option.value)}
+                className={cn(
+                  'h-7 rounded-md text-sm font-medium transition-colors',
+                  form.status === option.value
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </FormSection>
+      </div>
+    </IdentityFormDialog>
   )
 }
 
 function FormSection({
   label,
+  hint,
   children,
 }: {
   label: string
-  children: React.ReactNode
+  hint?: ReactNode
+  children: ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
+    <section className="flex min-w-0 flex-col gap-3">
+      <h3 className="flex items-center justify-between gap-3 text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span>{label}</span>
+        {hint ? (
+          <span className="text-[0.625rem] font-medium normal-case tracking-normal text-muted-foreground/80">
+            {hint}
+          </span>
+        ) : null}
       </h3>
       {children}
     </section>

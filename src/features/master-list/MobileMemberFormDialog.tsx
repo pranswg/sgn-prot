@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, UserPlus } from 'lucide-react'
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { voicePositionsForGender } from '@/core/constants/voicePositions'
 import { memberPositionLabel } from '@/core/constants/memberMembership'
+import { resolveMangAawitDutyRole } from '@/core/constants/dutyRoles'
 import type {
   Choir,
   Member,
@@ -27,12 +28,18 @@ import type {
 } from '@/core/types/member'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
-import { CHOIR_LABELS, membersOf, pnkVoicePositionId } from '@/lib/choirs'
+import {
+  CHOIR_LABELS,
+  membersOf,
+  pnkVoiceOptions,
+  pnkVoicePositionId,
+} from '@/lib/choirs'
 import { cn } from '@/lib/utils'
 import { phtInstantISO } from '@/lib/phDate'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { DuplicateMemberPanel } from './DuplicateMemberPanel'
+import { MemberHistoryEntry } from './MemberHistoryEntry'
 import { MemberInitialsAvatar } from './MemberInitialsAvatar'
 import { useDuplicateActions } from './useDuplicateActions'
 
@@ -44,6 +51,11 @@ interface MobileMemberFormDialogProps {
   reference?: string
   /** Choir the new member joins, and the only pool duplicates are checked in. */
   choir?: Choir
+  /** Reference codes for the choir, so a matched duplicate can name its code. */
+  references?: ReadonlyMap<string, string>
+  canManageHistory?: boolean
+  /** Closes this form and opens the page's restore dialog. */
+  onRequestRestore?: (member: Member) => void
   onSaved?: () => void
 }
 
@@ -84,17 +96,31 @@ export function MobileMemberFormDialog({
   member,
   reference,
   choir = 'aws',
+  references,
+  canManageHistory = false,
+  onRequestRestore,
   onSaved,
 }: MobileMemberFormDialogProps) {
   const addMember = useMemberStore((s) => s.addMember)
   const updateMember = useMemberStore((s) => s.updateMember)
   const members = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const storedVoices = useSettingsStore((s) => s.voices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
-  // PNK is a single-voice choir: every member is a Soprano 2, so the form hides
-  // the voice picker and saves that configured position instead.
+  // PNK offers Soprano 1, Soprano 2 and Alto, resolved from Settings, and a new
+  // member starts on the configured Soprano 2.
   const isPnk = choir === 'pnk'
-  const sopranoVoiceId = pnkVoicePositionId(allVoices())
+  const pnkVoices = useMemo(
+    () => pnkVoiceOptions(storedVoices),
+    [storedVoices],
+  )
+  const pnkDefaultVoiceId = useMemo(
+    () => pnkVoicePositionId(storedVoices),
+    [storedVoices],
+  )
+  // A new member starts ranked as a plain Mang-aawit, matched to the
+  // configured duty role by name because Settings generates its id.
+  const mangAawitRoleId = resolveMangAawitDutyRole(dutyRoles)?.id ?? ''
   const [form, setForm] = useState<FormState>(blankForm)
   const [duplicateCandidates, setDuplicateCandidates] = useState<Member[]>([])
   // "Create New Member Anyway" is a one-shot bypass; it is reset on the next
@@ -118,12 +144,19 @@ export function MobileMemberFormDialog({
               suffix: member.suffix ?? '',
               lastName: member.lastName,
               gender: member.gender,
-              voicePosition: isPnk ? sopranoVoiceId : member.voicePosition,
+              voicePosition: isPnk
+                ? pnkVoices.some((voice) => voice.id === member.voicePosition)
+                  ? member.voicePosition
+                  : pnkDefaultVoiceId
+                : member.voicePosition,
               membershipType: member.membershipType,
               isActive: member.isActive,
               assignedDutyRoleIds: member.assignedDutyRoleIds ?? [],
             }
-          : blankForm(isPnk ? sopranoVoiceId : undefined),
+          : {
+              ...blankForm(isPnk ? pnkDefaultVoiceId : undefined),
+              assignedDutyRoleIds: mangAawitRoleId ? [mangAawitRoleId] : [],
+            },
       )
     }
   }
@@ -138,7 +171,7 @@ export function MobileMemberFormDialog({
       ...f,
       gender,
       voicePosition: isPnk
-        ? sopranoVoiceId
+        ? f.voicePosition
         : (options.find((v) => v.id === f.voicePosition)?.id ?? fallback),
     }))
   }
@@ -164,7 +197,7 @@ export function MobileMemberFormDialog({
         suffix: form.suffix.trim() || undefined,
         lastName: form.lastName.trim(),
         gender: form.gender,
-        voicePosition: isPnk ? sopranoVoiceId : form.voicePosition,
+        voicePosition: form.voicePosition,
         membershipType: form.membershipType,
         assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: form.isActive,
@@ -190,7 +223,7 @@ export function MobileMemberFormDialog({
         suffix: form.suffix.trim() || undefined,
         lastName: form.lastName.trim(),
         gender: form.gender,
-        voicePosition: isPnk ? sopranoVoiceId : form.voicePosition,
+        voicePosition: form.voicePosition,
         membershipType: form.membershipType,
         assignedDutyRoleIds: form.assignedDutyRoleIds,
         isActive: form.isActive,
@@ -214,6 +247,17 @@ export function MobileMemberFormDialog({
         .filter(Boolean)
         .join(' · ')
     : ''
+
+  // While adding, the history row resolves the typed name against the existing
+  // roster, so a returning singer can be checked without saving a duplicate.
+  const possibleDuplicate =
+    member || !form.firstName.trim() || !form.lastName.trim()
+      ? null
+      : (findPossibleDuplicateMembers(membersOf(members, choir), {
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+        })[0] ?? null)
+  const historyMember = member ?? possibleDuplicate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -315,12 +359,7 @@ export function MobileMemberFormDialog({
                 </FormSection>
 
                 <FormSection label="Choir details">
-                  <div
-                    className={cn(
-                      'grid w-full gap-3',
-                      !isPnk && 'grid-cols-2',
-                    )}
-                  >
+                  <div className="grid w-full grid-cols-2 gap-3">
                     <div className="grid min-w-0 gap-1.5">
                       <Label>Gender</Label>
                       <Select
@@ -338,29 +377,27 @@ export function MobileMemberFormDialog({
                         </SelectContent>
                       </Select>
                     </div>
-                    {!isPnk && (
-                      <div className="grid min-w-0 gap-1.5">
-                        <Label>Voice position</Label>
-                        <Select
-                          value={form.voicePosition}
-                          onValueChange={(v) => set('voicePosition', v)}
-                        >
-                          <SelectTrigger className="h-11 w-full rounded-xl">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {voicePositionsForGender(
-                              form.gender,
-                              allVoices(),
-                            ).map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    <div className="grid min-w-0 gap-1.5">
+                      <Label>Voice position</Label>
+                      <Select
+                        value={form.voicePosition}
+                        onValueChange={(v) => set('voicePosition', v)}
+                      >
+                        <SelectTrigger className="h-11 w-full rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(isPnk
+                            ? pnkVoices
+                            : voicePositionsForGender(form.gender, allVoices())
+                          ).map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </FormSection>
 
@@ -418,6 +455,23 @@ export function MobileMemberFormDialog({
                     })}
                   </div>
                 </FormSection>
+
+                <div className="border-t border-border/60 pt-5">
+                  <MemberHistoryEntry
+                    member={historyMember}
+                    reference={
+                      member
+                        ? reference
+                        : historyMember
+                          ? references?.get(historyMember.id)
+                          : undefined
+                    }
+                    canManage={canManageHistory}
+                    onRequestRestore={onRequestRestore}
+                    showLastEvent
+                    className="min-h-12"
+                  />
+                </div>
               </div>
             </div>
 

@@ -323,7 +323,7 @@ test('Master List spreadsheet export includes PDF-order sections and imports the
   assert.equal(importedTrainee.isTrainee, true)
 })
 
-test('PNK spreadsheet exports use the PNK choir name and Soprano 2 without Panguluhan', () => {
+test('PNK spreadsheet exports use the PNK choir name and the member voice without Panguluhan', () => {
   const rows = masterListToSpreadsheetRows(
     [
       {
@@ -349,7 +349,7 @@ test('PNK spreadsheet exports use the PNK choir name and Soprano 2 without Pangu
     false,
   )
   const memberRow = rows.find((row) => row[1] === 'Ana')
-  assert.equal(memberRow?.[6], 'Soprano 2')
+  assert.equal(memberRow?.[6], 'Soprano 1')
 })
 
 test('Master List Word export matches PDF sections, styling, page breaks, and paper size', async () => {
@@ -408,7 +408,7 @@ test('Master List Word export matches PDF sections, styling, page breaks, and pa
   assert.doesNotMatch(footer, /w:pgNum/)
 })
 
-test('PNK Word export omits Panguluhan and prints Soprano 2 with the PNK title', async () => {
+test('PNK Word export omits Panguluhan and prints the member voice with the PNK title', async () => {
   const member: Member = {
     ...EXISTING[0],
     id: 'pnk-member',
@@ -431,7 +431,7 @@ test('PNK Word export omits Panguluhan and prints Soprano 2 with the PNK title',
   const document = entries.get('word/document.xml')?.toString('utf8') ?? ''
 
   assert.match(document, /PNK STA\. MONICA CHOIR - Babae/)
-  assert.match(document, /Soprano 2/)
+  assert.match(document, /Soprano 1/)
   assert.doesNotMatch(document, /PANGULUHAN/)
   assert.doesNotMatch(
     document,

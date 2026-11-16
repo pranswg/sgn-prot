@@ -281,8 +281,12 @@ export function masterListPdfVoice(
   voices: VoicePosition[],
   choir: Choir = 'aws',
 ): string {
+  // PNK members choose between Soprano 1, Soprano 2 and Alto, so the sheet
+  // prints their own voice. Only a record saved before the picker existed falls
+  // back to the choir's configured Soprano 2.
   const voicePosition =
-    choir === 'pnk' ? pnkVoicePositionId(voices) : member.voicePosition
+    member.voicePosition ||
+    (choir === 'pnk' ? pnkVoicePositionId(voices) : '')
   return getVoiceName(voicePosition, voices)
 }
 

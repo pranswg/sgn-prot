@@ -50,7 +50,12 @@ import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
 import { formatPHTDateTime } from '@/lib/phDate'
 import type { Choir, Member } from '@/core/types/member'
-import { CHOIR_LABELS, membersOf, traineesOf } from '@/lib/choirs'
+import {
+  CHOIR_LABELS,
+  membersOf,
+  pnkVoiceOptions,
+  traineesOf,
+} from '@/lib/choirs'
 import { CHOIR_PAGES } from '@/lib/sidebarNav'
 import {
   exportCSVRows,
@@ -156,16 +161,12 @@ function filterChipValue(
 
 export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   // The page is reused for both choirs; every read below is scoped, and the
-  // forms stamp the same choir on anything added from here.
-  // PNK sings in one voice — everyone is a Soprano 2 — so it hides the voice
-  // filters, the voice column and the form's voice picker, and hides the
-  // membership filter too (its list is one membership pool).
+  // forms stamp the same choir on anything added from here. PNK offers three
+  // voices (Soprano 1, Soprano 2, Alto) resolved from Settings, so it keeps the
+  // voice column and filter, limited to those positions.
   const isPnk = choir === 'pnk'
-  // One chip row drives the phone filter dialogs, so PNK simply drops the Voice
-  // chip rather than opening a dialog with nothing in it.
-  const mobileFilterSections: MobileFilterSection[] = isPnk
-    ? MOBILE_FILTER_SECTIONS.filter((section) => section !== 'voices')
-    : MOBILE_FILTER_SECTIONS
+  // One chip row drives the phone filter dialogs.
+  const mobileFilterSections: MobileFilterSection[] = MOBILE_FILTER_SECTIONS
   const allMembers = useMemberStore((s) => s.members)
   const allTrainees = useMemberStore((s) => s.trainees)
   const members = useMemo(() => membersOf(allMembers, choir), [allMembers, choir])
@@ -176,6 +177,12 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   const lastUpdatedAt = useMemberStore((s) => s.lastUpdatedAt)
   const removeMember = useMemberStore((s) => s.removeMember)
   const voices = useSettingsStore((s) => s.voices)
+  // PNK's filter offers only its three configured voices; AWS keeps the whole
+  // configured list.
+  const voiceFilterOptions = useMemo(
+    () => (isPnk ? pnkVoiceOptions(voices) : voices),
+    [isPnk, voices],
+  )
   const allVoices = useSettingsStore((s) => s.allVoices)
   const dutyRoles = useSettingsStore((s) => s.dutyRoles)
   const localeName = useSettingsStore((s) => s.localeName)
@@ -555,8 +562,9 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
     references,
     sort,
     dutyRoles,
-    // PNK is a single-voice choir, so its table drops the voice column.
-    showVoice: !isPnk,
+    // Both choirs show the voice column; PNK's three voices are as much a
+    // label as AWS's five.
+    showVoice: true,
     onEdit: openEditDialog,
     onTransfer: (member: Member) =>
       setLifecycleTarget({ member, kind: 'transfer' }),
@@ -578,13 +586,9 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         actions={
           <>
             {canAddMembers && (
-              <Button
-                size="icon"
-                aria-label="Add member"
-                title="Add member"
-                onClick={openAddDialog}
-              >
+              <Button onClick={openAddDialog}>
                 <Plus className="size-4" />
+                Add Member
               </Button>
             )}
             {canExportDocuments && (
@@ -686,40 +690,38 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
               ))}
             </div>
 
-            {!isPnk && (
-              <Select
-                value={filters.voices[0] ?? ''}
-                onValueChange={(v) =>
-                  setFilter('voices', v === CLEAR_FILTER ? [] : [v])
-                }
+            <Select
+              value={filters.voices[0] ?? ''}
+              onValueChange={(v) =>
+                setFilter('voices', v === CLEAR_FILTER ? [] : [v])
+              }
+            >
+              <SelectTrigger
+                aria-label="Filter by voice position"
+                className={cn(
+                  'h-9 w-[11.5rem] bg-background text-[0.8125rem]',
+                  filters.voices.length > 0 &&
+                    'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
+                )}
               >
-                <SelectTrigger
-                  aria-label="Filter by voice position"
-                  className={cn(
-                    'h-9 w-[11.5rem] bg-background text-[0.8125rem]',
-                    filters.voices.length > 0 &&
-                      'border-brand-teal/40 bg-brand-teal-soft text-brand-teal',
-                  )}
-                >
-                  <Music2 className="size-4 text-muted-foreground" />
-                  <SelectValue placeholder="Voice Positions" />
-                </SelectTrigger>
-                <SelectContent>
-                  {voices.map((voice) => (
-                    <SelectItem key={voice.id} value={voice.id}>
-                      {voice.name}
-                    </SelectItem>
-                  ))}
-                  <SelectSeparator />
-                  <SelectItem
-                    value={CLEAR_FILTER}
-                    disabled={filters.voices.length === 0}
-                  >
-                    Clear
+                <Music2 className="size-4 text-muted-foreground" />
+                <SelectValue placeholder="Voice Positions" />
+              </SelectTrigger>
+              <SelectContent>
+                {voiceFilterOptions.map((voice) => (
+                  <SelectItem key={voice.id} value={voice.id}>
+                    {voice.name}
                   </SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+                ))}
+                <SelectSeparator />
+                <SelectItem
+                  value={CLEAR_FILTER}
+                  disabled={filters.voices.length === 0}
+                >
+                  Clear
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
             <Select
               value={filters.positions[0] ?? ''}
@@ -950,7 +952,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                     dutyRoles={dutyRoles}
                     references={references}
                     sort={sort}
-                    showVoice={!isPnk}
+                    showVoice
                     hasActions={
                       canEditMembers ||
                       canManageHistory ||
@@ -995,7 +997,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
         }}
         filters={filters}
         onApply={setFilters}
-        voices={voices}
+        voices={voiceFilterOptions}
         dutyRoles={dutyRoles}
         stats={stats}
         sections={mobileFilterSections}
@@ -1039,6 +1041,12 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
           reference={
             editingMember ? references.get(editingMember.id) : undefined
           }
+          references={references}
+          canManageHistory={canManageHistory}
+          onRequestRestore={(target) => {
+            setFormOpen(false)
+            setLifecycleTarget({ member: target, kind: 'restore' })
+          }}
           choir={choir}
         />
       ) : (
@@ -1046,6 +1054,15 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
           open={formOpen}
           onOpenChange={setFormOpen}
           member={editingMember}
+          reference={
+            editingMember ? references.get(editingMember.id) : undefined
+          }
+          references={references}
+          canManageHistory={canManageHistory}
+          onRequestRestore={(target) => {
+            setFormOpen(false)
+            setLifecycleTarget({ member: target, kind: 'restore' })
+          }}
           choir={choir}
         />
       )}

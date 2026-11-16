@@ -650,10 +650,11 @@ export const useMemberStore = create<MemberState>()(
       },
 
       importData: (members, trainees) => {
+        // Hydration is a read, not an edit: keep the stored "last updated"
+        // stamp so opening the app never claims the Master List changed.
         set({
           members: normalizeMemberList(members),
           trainees: normalizeTraineeList(trainees),
-          lastUpdatedAt: updatedAt(),
         })
       },
 

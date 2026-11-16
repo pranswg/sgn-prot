@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   findDutyRoleByName,
   normalizeRoleName,
+  resolveMangAawitDutyRole,
   resolveOicDutyRole,
   resolvePmDutyRole,
 } from './dutyRoles.ts'
@@ -58,6 +59,14 @@ test('findDutyRoleByName matches by name whatever the configured id is', () => {
   )
   assert.equal(findDutyRoleByName(roles, 'Kalihim'), undefined)
   assert.equal(findDutyRoleByName(roles, '  '), undefined)
+})
+
+test('resolveMangAawitDutyRole finds the plain Mang-aawit role only', () => {
+  const plain = role('abc', 'Mang-aawit')
+  const pm = role('Ccuo8FLgJo4lgfK19ildr', 'Pangulong Mang-aawit')
+  assert.equal(resolveMangAawitDutyRole([pm, plain]), plain)
+  assert.equal(resolveMangAawitDutyRole([pm]), undefined)
+  assert.equal(resolveMangAawitDutyRole([]), undefined)
 })
 
 test('resolvePmDutyRole finds the configured Pangulong Mang-aawit role', () => {

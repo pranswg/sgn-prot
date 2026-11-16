@@ -1,7 +1,12 @@
 import type { Choir, Member, Trainee } from '@/core/types/member'
-import type { VoicePosition } from '@/core/types/suguan'
+import type {
+  DocScaling,
+  SuguanDocFormat,
+  VoicePosition,
+} from '@/core/types/suguan'
 import { sortMasterListPdfMembers } from '@/lib/masterListPdfData'
 import { formatDateKeyLongDate, type DateKey } from '@/lib/phDate'
+import { clampCustomBodyFontSize } from '@/lib/suguanUtils'
 
 export type MasterListAttendanceRow =
   | { kind: 'section'; label: string }
@@ -121,6 +126,136 @@ export function paginateMasterListAttendanceRows(
   return pages
 }
 
+function formatAttendanceName(
+  person: Member | Trainee,
+  lastNameFirst: boolean,
+): string {
+  const givenNames = [person.firstName, person.middleName]
+    .filter(Boolean)
+    .join(' ')
+  const name = lastNameFirst
+    ? [person.lastName, givenNames].filter(Boolean).join(', ')
+    : [givenNames, person.lastName].filter(Boolean).join(' ')
+  return [name, person.suffix].filter(Boolean).join(' ')
+}
+
+function sortTrainees(trainees: Trainee[]): Trainee[] {
+  return [...trainees].sort(
+    (left, right) =>
+      left.lastName.localeCompare(right.lastName) ||
+      left.firstName.localeCompare(right.firstName) ||
+      left.id.localeCompare(right.id),
+  )
+}
+
+interface AttendanceCounter {
+  value: number
+}
+
+function memberRows(
+  items: Member[],
+  voices: VoicePosition[],
+  lastNameFirst: boolean,
+  counter: AttendanceCounter,
+): MasterListAttendanceRow[] {
+  return sortMasterListPdfMembers(items, voices, 'name').map((member) => ({
+    kind: 'member',
+    member,
+    name: formatAttendanceName(member, lastNameFirst),
+    number: ++counter.value,
+  }))
+}
+
+function traineeSection(
+  trainees: Trainee[],
+  gender: Trainee['gender'],
+  include: boolean,
+  lastNameFirst: boolean,
+  counter: AttendanceCounter,
+): MasterListAttendanceRow[] {
+  if (!include) return []
+  const selected = sortTrainees(
+    trainees.filter(
+      (trainee) => trainee.status === 'active' && trainee.gender === gender,
+    ),
+  )
+  if (selected.length === 0) return []
+  return [
+    {
+      kind: 'section',
+      label: gender === 'female' ? 'Nagsasanay Women' : 'Nagsasanay Men',
+    },
+    ...selected.map((trainee) => ({
+      kind: 'trainee' as const,
+      name: formatAttendanceName(trainee, lastNameFirst),
+      number: ++counter.value,
+    })),
+  ]
+}
+
+/** PNK always reads Babae then Lalaki, members and trainees interleaved. */
+function pnkRows(
+  members: Member[],
+  trainees: Trainee[],
+  includeNagsasanayMen: boolean,
+  includeNagsasanayWomen: boolean,
+  lastNameFirst: boolean,
+): MasterListAttendanceRow[] {
+  const counter: AttendanceCounter = { value: 0 }
+  return (['female', 'male'] as const).flatMap((gender) => {
+    const genderMembers = members.filter((member) => member.gender === gender)
+    const includeTrainees =
+      gender === 'male' ? includeNagsasanayMen : includeNagsasanayWomen
+    const genderTrainees = includeTrainees
+      ? sortTrainees(
+          trainees.filter(
+            (trainee) =>
+              trainee.status === 'active' && trainee.gender === gender,
+          ),
+        )
+      : []
+    const people: (
+      | { person: Member; kind: 'member' }
+      | { person: Trainee; kind: 'trainee' }
+    )[] = [
+      ...genderMembers.map((person) => ({
+        person,
+        kind: 'member' as const,
+      })),
+      ...genderTrainees.map((person) => ({
+        person,
+        kind: 'trainee' as const,
+      })),
+    ].sort(
+      (left, right) =>
+        left.person.lastName.localeCompare(right.person.lastName) ||
+        left.person.firstName.localeCompare(right.person.firstName) ||
+        left.person.id.localeCompare(right.person.id),
+    )
+    if (people.length === 0) return []
+    return [
+      {
+        kind: 'section' as const,
+        label: gender === 'female' ? 'Babae' : 'Lalaki',
+      },
+      ...people.map(({ person, kind }) =>
+        kind === 'member'
+          ? {
+              kind,
+              member: person,
+              name: formatAttendanceName(person, lastNameFirst),
+              number: ++counter.value,
+            }
+          : {
+              kind,
+              name: formatAttendanceName(person, lastNameFirst),
+              number: ++counter.value,
+            },
+      ),
+    ]
+  })
+}
+
 export function buildMasterListAttendanceRows(
   members: Member[],
   voices: VoicePosition[],
@@ -132,179 +267,231 @@ export function buildMasterListAttendanceRows(
   choir: Choir = 'aws',
 ): MasterListAttendanceRow[] {
   const activeMembers = members.filter((member) => member.isActive)
-  let number = 0
-  const formatName = (person: Member | Trainee): string => {
-    const givenNames = [person.firstName, person.middleName]
-      .filter(Boolean)
-      .join(' ')
-    const familyName = person.lastName
-    const name = lastNameFirst
-      ? [familyName, givenNames].filter(Boolean).join(', ')
-      : [givenNames, familyName].filter(Boolean).join(' ')
-    return [name, person.suffix].filter(Boolean).join(' ')
+  const counter: AttendanceCounter = { value: 0 }
+
+  if (choir === 'pnk') {
+    return pnkRows(
+      activeMembers,
+      trainees,
+      includeNagsasanayMen,
+      includeNagsasanayWomen,
+      lastNameFirst,
+    )
   }
-  const memberRows = (items: Member[]): MasterListAttendanceRow[] =>
-    sortMasterListPdfMembers(items, voices, 'name').map((member) => ({
-      kind: 'member',
-      member,
-      name: formatName(member),
-      number: ++number,
-    }))
 
-  const rows =
-    choir === 'pnk'
-      ? (['female', 'male'] as const).flatMap((gender) => {
-          const genderMembers = activeMembers.filter(
-            (member) => member.gender === gender,
-          )
-          const genderTrainees = trainees
-            .filter(
-              (trainee) =>
-                trainee.status === 'active' &&
-                trainee.gender === gender &&
-                (gender === 'male'
-                  ? includeNagsasanayMen
-                  : includeNagsasanayWomen),
-            )
-            .sort(
-              (left, right) =>
-                left.lastName.localeCompare(right.lastName) ||
-                left.firstName.localeCompare(right.firstName) ||
-                left.id.localeCompare(right.id),
-            )
-          const people: (
-            | { person: Member; kind: 'member' }
-            | { person: Trainee; kind: 'trainee' }
-          )[] = [
-            ...genderMembers.map((person) => ({
-              person,
-              kind: 'member' as const,
-            })),
-            ...genderTrainees.map((person) => ({
-              person,
-              kind: 'trainee' as const,
-            })),
-          ].sort(
-            (left, right) =>
-              left.person.lastName.localeCompare(right.person.lastName) ||
-              left.person.firstName.localeCompare(right.person.firstName) ||
-              left.person.id.localeCompare(right.person.id),
-          )
-          if (people.length === 0) return []
-          return [
-            {
-              kind: 'section' as const,
-              label: gender === 'female' ? 'Babae' : 'Lalaki',
-            },
-            ...people.map(({ person, kind }) =>
-              kind === 'member'
-                ? {
-                    kind,
-                    member: person,
-                    name: formatName(person),
-                    number: ++number,
-                  }
-                : {
-                    kind,
-                    name: formatName(person),
-                    number: ++number,
-                  },
-            ),
-          ]
-        })
-      : selectedVoiceIds === null
-      ? (['female', 'male'] as const).flatMap((gender, index) => {
-          const genderMembers = activeMembers.filter(
-            (member) => member.gender === gender,
-          )
-          const genderTrainees = trainees
-            .filter(
-              (trainee) =>
-                trainee.status === 'active' &&
-                trainee.gender === gender &&
-                (gender === 'male'
-                  ? includeNagsasanayMen
-                  : includeNagsasanayWomen),
-            )
-            .sort(
-              (left, right) =>
-                left.lastName.localeCompare(right.lastName) ||
-                left.firstName.localeCompare(right.firstName) ||
-                left.id.localeCompare(right.id),
-            )
-          if (genderMembers.length === 0 && genderTrainees.length === 0) {
-            return []
-          }
-          return [
-            ...(index > 0 ? [{ kind: 'page-break' as const }] : []),
-            {
-              kind: 'section' as const,
-              label: gender === 'female' ? 'Women' : 'Men',
-            },
-            ...memberRows(genderMembers),
-            ...(genderTrainees.length > 0
-              ? [
-                  {
-                    kind: 'section' as const,
-                    label: gender === 'female'
-                      ? 'Nagsasanay Women'
-                      : 'Nagsasanay Men',
-                  },
-                  ...genderTrainees.map((person) => ({
-                    kind: 'trainee' as const,
-                    name: formatName(person),
-                    number: ++number,
-                  })),
-                ]
-              : []),
-          ]
-        })
-      : voices
-          .filter((voice) => selectedVoiceIds.includes(voice.id))
-          .flatMap((voice) => {
-            const assigned = activeMembers.filter(
-              (member) => member.voicePosition === voice.id,
-            )
-            if (assigned.length === 0) return []
-            return [
-              { kind: 'section' as const, label: voice.name },
-              ...memberRows(assigned),
-            ]
-          })
+  if (selectedVoiceIds !== null) {
+    const voiceRows = voices
+      .filter((voice) => selectedVoiceIds.includes(voice.id))
+      .flatMap((voice) => {
+        const assigned = activeMembers.filter(
+          (member) => member.voicePosition === voice.id,
+        )
+        if (assigned.length === 0) return []
+        return [
+          { kind: 'section' as const, label: voice.name },
+          ...memberRows(assigned, voices, lastNameFirst, counter),
+        ]
+      })
 
-  const activeTrainees = trainees.filter(
-    (trainee) => trainee.status === 'active',
-  )
-  const traineeSection = (
-    label: string,
-    gender: Trainee['gender'],
-  ): MasterListAttendanceRow[] => {
-    const selected = activeTrainees
-      .filter((trainee) => trainee.gender === gender)
-      .sort(
-        (left, right) =>
-          left.lastName.localeCompare(right.lastName) ||
-          left.firstName.localeCompare(right.firstName) ||
-          left.id.localeCompare(right.id),
-      )
-    if (selected.length === 0) return []
     return [
-      { kind: 'section', label },
-      ...selected.map((trainee) => ({
-        kind: 'trainee' as const,
-        name: formatName(trainee),
-        number: ++number,
-      })),
+      ...voiceRows,
+      ...traineeSection(
+        trainees,
+        'male',
+        includeNagsasanayMen,
+        lastNameFirst,
+        counter,
+      ),
+      ...traineeSection(
+        trainees,
+        'female',
+        includeNagsasanayWomen,
+        lastNameFirst,
+        counter,
+      ),
     ]
   }
 
-  return [
-    ...rows,
-    ...(choir !== 'pnk' && selectedVoiceIds !== null && includeNagsasanayMen
-      ? traineeSection('Nagsasanay Men', 'male')
-      : []),
-    ...(choir !== 'pnk' && selectedVoiceIds !== null && includeNagsasanayWomen
-      ? traineeSection('Nagsasanay Women', 'female')
-      : []),
-  ]
+  return (['female', 'male'] as const).flatMap((gender, index) => {
+    const includeTrainees =
+      gender === 'male' ? includeNagsasanayMen : includeNagsasanayWomen
+    const genderMembers = activeMembers.filter(
+      (member) => member.gender === gender,
+    )
+    const genderTrainees = includeTrainees
+      ? sortTrainees(
+          trainees.filter(
+            (trainee) =>
+              trainee.status === 'active' && trainee.gender === gender,
+          ),
+        )
+      : []
+    if (genderMembers.length === 0 && genderTrainees.length === 0) return []
+    return [
+      ...(index > 0 ? [{ kind: 'page-break' as const }] : []),
+      {
+        kind: 'section' as const,
+        label: gender === 'female' ? 'Women' : 'Men',
+      },
+      ...memberRows(genderMembers, voices, lastNameFirst, counter),
+      ...(genderTrainees.length > 0
+        ? [
+            {
+              kind: 'section' as const,
+              label:
+                gender === 'female' ? 'Nagsasanay Women' : 'Nagsasanay Men',
+            },
+            ...genderTrainees.map((trainee) => ({
+              kind: 'trainee' as const,
+              name: formatAttendanceName(trainee, lastNameFirst),
+              number: ++counter.value,
+            })),
+          ]
+        : []),
+    ]
+  })
+}
+
+/**
+ * One printed attendance sheet. A separated sheet carries the choir name that
+ * prints under the dates; the combined sheet has an empty label.
+ */
+export interface MasterListAttendanceSheet {
+  label: string
+  rows: MasterListAttendanceRow[]
+}
+
+/**
+ * The sheet list the renderers paginate. With `separateChoirs` off (the
+ * default) there is one sheet, built exactly as before. With it on, AWS splits
+ * into a Babae sheet (women + Nagsasanay Women) and a Lalaki sheet (men +
+ * Nagsasanay Men); each numbers its own roster and is skipped when empty. PNK
+ * already reads Babae then Lalaki, so it stays one sheet.
+ */
+export function buildMasterListAttendanceSheets(
+  members: Member[],
+  voices: VoicePosition[],
+  selectedVoiceIds: readonly string[] | null,
+  trainees: Trainee[] = [],
+  includeNagsasanayMen = false,
+  includeNagsasanayWomen = false,
+  lastNameFirst = false,
+  choir: Choir = 'aws',
+  separateChoirs = false,
+): MasterListAttendanceSheet[] {
+  if (!separateChoirs || choir === 'pnk') {
+    return [
+      {
+        label: '',
+        rows: buildMasterListAttendanceRows(
+          members,
+          voices,
+          selectedVoiceIds,
+          trainees,
+          includeNagsasanayMen,
+          includeNagsasanayWomen,
+          lastNameFirst,
+          choir,
+        ),
+      },
+    ]
+  }
+
+  const activeMembers = members.filter((member) => member.isActive)
+  return (['female', 'male'] as const)
+    .map((gender) => {
+      const counter: AttendanceCounter = { value: 0 }
+      const rows: MasterListAttendanceRow[] = []
+      const genderMembers = activeMembers.filter(
+        (member) => member.gender === gender,
+      )
+
+      if (selectedVoiceIds !== null) {
+        for (const voice of voices) {
+          if (!selectedVoiceIds.includes(voice.id)) continue
+          const assigned = genderMembers.filter(
+            (member) => member.voicePosition === voice.id,
+          )
+          if (assigned.length === 0) continue
+          rows.push(
+            { kind: 'section', label: voice.name },
+            ...memberRows(assigned, voices, lastNameFirst, counter),
+          )
+        }
+      } else if (genderMembers.length > 0) {
+        rows.push(...memberRows(genderMembers, voices, lastNameFirst, counter))
+      }
+
+      // The sheet label already names the choir, so its Nagsasanay group is
+      // the only section that needs a heading.
+      rows.push(
+        ...traineeSection(
+          trainees,
+          gender,
+          gender === 'male' ? includeNagsasanayMen : includeNagsasanayWomen,
+          lastNameFirst,
+          counter,
+        ),
+      )
+      return {
+        label: gender === 'female' ? 'Babae' : 'Lalaki',
+        rows,
+      }
+    })
+    .filter((sheet) => sheet.rows.length > 0)
+}
+
+const ATTENDANCE_NAME_FONT_SIZES = {
+  small: 8,
+  normal: 9,
+  large: 11,
+} as const
+
+/**
+ * The printed member-name size. Attendance keeps its own Normal (9 pt) rather
+ * than the Suguan preset's 11 pt, so the default sheet is unchanged; custom
+ * sizes are clamped by the same helper the Suguan layout uses.
+ */
+export function attendanceNameFontSize(format: SuguanDocFormat): number {
+  return format.fontSize === 'custom'
+    ? clampCustomBodyFontSize(format.customBodyFontSize)
+    : ATTENDANCE_NAME_FONT_SIZES[format.fontSize]
+}
+
+export const MIN_ATTENDANCE_ROW_SCALE = 0.8
+
+/**
+ * Fit-page row compaction: draw the whole roster on one page by tightening row
+ * heights only. Font sizes never change. A roster that would need more than the
+ * floor allows still paginates at full height, and a forced page break (the
+ * separate-sheet mode's roster break) disables compaction.
+ */
+export function fitAttendanceRowHeights(
+  rows: readonly MasterListAttendanceRow[],
+  availableHeight: number,
+  memberRowHeight: number,
+  sectionRowHeight: number,
+  scaling: DocScaling,
+): { memberRowHeight: number; sectionRowHeight: number; scale: number } {
+  const unscaled = { memberRowHeight, sectionRowHeight, scale: 1 }
+  if (scaling !== 'fit-page' || availableHeight <= 0) return unscaled
+  if (rows.some((row) => row.kind === 'page-break')) return unscaled
+  const totalHeight = rows.reduce(
+    (height, row) =>
+      height +
+      (row.kind === 'section'
+        ? sectionRowHeight
+        : row.kind === 'page-break'
+          ? 0
+          : memberRowHeight),
+    0,
+  )
+  if (totalHeight <= availableHeight) return unscaled
+  const factor = availableHeight / totalHeight
+  if (factor < MIN_ATTENDANCE_ROW_SCALE) return unscaled
+  return {
+    memberRowHeight: memberRowHeight * factor,
+    sectionRowHeight: sectionRowHeight * factor,
+    scale: factor,
+  }
 }

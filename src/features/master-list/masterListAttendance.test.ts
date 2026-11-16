@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
+import { DEFAULT_DOC_FORMAT } from '@/lib/suguanUtils.ts'
 import {
+  attendanceNameFontSize,
   buildMasterListAttendanceRows,
+  buildMasterListAttendanceSheets,
+  fitAttendanceRowHeights,
   formatAttendanceDateSummary,
   paginateMasterListAttendanceRows,
 } from './masterListAttendance.ts'
@@ -408,5 +412,156 @@ test('formats attendance dates in a single summary line', () => {
   assert.equal(
     formatAttendanceDateSummary(['2026-10-17', '2026-11-02']),
     'October 17, 2026; November 2, 2026',
+  )
+})
+
+const describeRow = (row: {
+  kind: string
+  label?: string
+  name?: string
+  number?: number
+}) =>
+  row.kind === 'section'
+    ? `section:${row.label}`
+    : row.kind === 'member' || row.kind === 'trainee'
+      ? `${row.kind}:${row.number}:${row.name}`
+      : row.kind
+
+test('separate choirs split AWS into Babae and Lalaki sheets', () => {
+  const sheets = buildMasterListAttendanceSheets(
+    members,
+    voices,
+    null,
+    [trainee('t-f', 'Faye', 'Foxtrot', 'female'), trainee('t-m', 'Mia', 'Mike', 'male')],
+    true,
+    true,
+    false,
+    'aws',
+    true,
+  )
+
+  assert.deepEqual(
+    sheets.map((sheet) => sheet.label),
+    ['Babae', 'Lalaki'],
+  )
+  assert.deepEqual(sheets[0].rows.map(describeRow), [
+    'member:1:Amy Alpha',
+    'member:2:Zoe Zulu',
+    'section:Nagsasanay Women',
+    'trainee:3:Faye Foxtrot',
+  ])
+  assert.deepEqual(sheets[1].rows.map(describeRow), [
+    'member:1:Ben Bravo',
+    'member:2:Ian Indigo',
+    'section:Nagsasanay Men',
+    'trainee:3:Mia Mike',
+  ])
+})
+
+test('separate choirs keeps voice sections inside each gender sheet', () => {
+  const sheets = buildMasterListAttendanceSheets(
+    members,
+    voices,
+    ['soprano', 'tenor'],
+    [],
+    false,
+    false,
+    false,
+    'aws',
+    true,
+  )
+
+  assert.deepEqual(
+    sheets.map((sheet) => [sheet.label, ...sheet.rows.map(describeRow)]),
+    [
+      ['Babae', 'section:Soprano', 'member:1:Amy Alpha', 'member:2:Zoe Zulu'],
+      ['Lalaki', 'section:Tenor', 'member:1:Ben Bravo'],
+    ],
+  )
+})
+
+test('separation is off by default and never applies to PNK', () => {
+  const combined = buildMasterListAttendanceSheets(members, voices, ['soprano'])
+  assert.equal(combined.length, 1)
+  assert.equal(combined[0].label, '')
+
+  const pnkSeparated = buildMasterListAttendanceSheets(
+    members,
+    voices,
+    null,
+    [],
+    false,
+    false,
+    false,
+    'pnk',
+    true,
+  )
+  assert.deepEqual(
+    pnkSeparated.map((sheet) => sheet.label),
+    [''],
+  )
+  assert.equal(
+    pnkSeparated[0].rows.some((row) => row.kind === 'section' && row.label === 'Babae'),
+    true,
+  )
+})
+
+test('attendance name sizes follow the Suguan font setting', () => {
+  assert.equal(attendanceNameFontSize(DEFAULT_DOC_FORMAT), 9)
+  assert.equal(
+    attendanceNameFontSize({ ...DEFAULT_DOC_FORMAT, fontSize: 'small' }),
+    8,
+  )
+  assert.equal(
+    attendanceNameFontSize({ ...DEFAULT_DOC_FORMAT, fontSize: 'large' }),
+    11,
+  )
+  assert.equal(
+    attendanceNameFontSize({
+      ...DEFAULT_DOC_FORMAT,
+      fontSize: 'custom',
+      customBodyFontSize: 13.5,
+    }),
+    13.5,
+  )
+  assert.equal(
+    attendanceNameFontSize({
+      ...DEFAULT_DOC_FORMAT,
+      fontSize: 'custom',
+      customBodyFontSize: 40,
+    }),
+    20,
+  )
+})
+
+test('fit-page compacts row heights without changing fonts, with a 0.8 floor', () => {
+  const rows = buildMasterListAttendanceRows(members, voices, ['soprano'])
+
+  assert.deepEqual(
+    fitAttendanceRowHeights(rows, 500, 26, 22, 'fit-page'),
+    { memberRowHeight: 26, sectionRowHeight: 22, scale: 1 },
+  )
+  const fitted = fitAttendanceRowHeights(rows, 68, 26, 22, 'fit-page')
+  assert.equal(fitted.scale < 1 && fitted.scale >= 0.8, true)
+  assert.equal(fitted.memberRowHeight, 26 * fitted.scale)
+  assert.equal(fitted.sectionRowHeight, 22 * fitted.scale)
+
+  assert.deepEqual(
+    fitAttendanceRowHeights(rows, 10, 26, 22, 'fit-page'),
+    { memberRowHeight: 26, sectionRowHeight: 22, scale: 1 },
+  )
+  assert.deepEqual(
+    fitAttendanceRowHeights(rows, 68, 26, 22, 'auto'),
+    { memberRowHeight: 26, sectionRowHeight: 22, scale: 1 },
+  )
+  assert.deepEqual(
+    fitAttendanceRowHeights(
+      [...rows, { kind: 'page-break' }],
+      68,
+      26,
+      22,
+      'fit-page',
+    ),
+    { memberRowHeight: 26, sectionRowHeight: 22, scale: 1 },
   )
 })

@@ -228,7 +228,6 @@ Excel row heights, and Word name paragraphs must stay aligned; the Organist PDF
 and Word table renderers consume the same format fields.
 
 ### 2. Fonts are self-hosted as `SuguanSheet`, not `Inter`
-
 `src/assets/fonts/Inter-{Regular,Bold}.ttf` are registered in `src/index.css`
 under the family name **`SuguanSheet`** and used by both the preview and the
 PDF export for Choir Suguan. Do not rename the family to `Inter`. The app's own
@@ -899,6 +898,15 @@ boundaries, so a change in one feature rarely reaches another.
 - **master-list** — members and trainees. The largest feature. Directory table
   and mobile cards, roster import, CSV/Excel export, and a configurable
   attendance-sheet PDF with custom dates, title, and voice-position grouping.
+  The attendance dialog reuses the Suguan `DocumentSetupStep` (paper, orientation,
+  margins, scaling, font size, table spacing) and hands the format to the
+  renderers as `MasterListAttendanceOptions.docFormat`; the PDF and Word renderers mirror each
+  other's geometry through `buildMasterListAttendanceSheets`,
+  `attendanceNameFontSize` and `fitAttendanceRowHeights` (`masterListAttendance.ts`),
+  so change one renderer only alongside the other. Attendance's Normal name size
+  is 9 pt (not the Suguan preset's 11 pt), dates and "Lagda" share one tight
+  36 pt header row, and the separated Babae / Lalaki sheets are an
+  AWS-only checkbox that is off by default — PNK stays one Babae/Lalaki sheet.
   `MasterListPage.tsx` owns the filters; child components receive
   `members`, `references`, and `sort` as props.
 - **members-history** — the per-choir archive: compact rows, the membership

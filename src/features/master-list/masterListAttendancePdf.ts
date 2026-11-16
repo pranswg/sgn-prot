@@ -1,20 +1,21 @@
 import bookAntiquaRegularUrl from '@/assets/fonts/BookAntiqua-Regular.ttf?url'
 import bookAntiquaBoldUrl from '@/assets/fonts/BookAntiqua-Bold.ttf?url'
 import type { Choir, Member, Trainee } from '@/core/types/member'
-import type { VoicePosition } from '@/core/types/suguan'
+import type { SuguanDocFormat, VoicePosition } from '@/core/types/suguan'
 import { createAttendanceDatePanels } from '@/lib/attendanceDatePanels'
 import { formatDateKeyNumeric, isDateKey, type DateKey } from '@/lib/phDate'
 import {
-  buildMasterListAttendanceRows,
+  docMarginsMm,
+  docPaperDimensionsMm,
+  normalizeDocFormat,
+} from '@/lib/suguanUtils'
+import {
+  attendanceNameFontSize,
+  buildMasterListAttendanceSheets,
+  fitAttendanceRowHeights,
   formatAttendanceDateSummary,
   paginateMasterListAttendanceRows,
 } from './masterListAttendance'
-import {
-  MASTER_LIST_PAPER_SIZES,
-  type MasterListPaperSize,
-} from './masterListPaperSizes'
-
-export type MasterListAttendanceOrientation = 'portrait' | 'landscape'
 
 export interface MasterListAttendanceOptions {
   members: Member[]
@@ -26,9 +27,9 @@ export interface MasterListAttendanceOptions {
   selectedVoiceIds: string[]
   includeNagsasanayMen: boolean
   includeNagsasanayWomen: boolean
+  separateChoirs: boolean
   lastNameFirst: boolean
-  paperSize: MasterListPaperSize
-  orientation: MasterListAttendanceOrientation
+  docFormat: SuguanDocFormat
   choir: Choir
   pangulongName: string
   filename: string
@@ -47,6 +48,13 @@ async function fontAsBase64(url: string): Promise<string> {
   return btoa(binary)
 }
 
+const mmToPt = (mm: number) => (mm * 72) / 25.4
+
+/**
+ * The sheet reads like the Suguan sheet: title, date summary, an optional
+ * choir label, then the table. Header rows stay at Normal size; only member
+ * names follow the selected font size.
+ */
 export async function exportMasterListAttendancePdf(
   options: MasterListAttendanceOptions,
 ): Promise<void> {
@@ -60,9 +68,9 @@ export async function exportMasterListAttendancePdf(
     selectedVoiceIds,
     includeNagsasanayMen,
     includeNagsasanayWomen,
+    separateChoirs,
     lastNameFirst,
-    paperSize,
-    orientation,
+    docFormat,
     choir,
     pangulongName,
     filename,
@@ -74,30 +82,29 @@ export async function exportMasterListAttendancePdf(
   if (dates.length === 0 || dates.some((date) => !isDateKey(date))) {
     throw new Error('Add at least one valid attendance date.')
   }
-  const paper = MASTER_LIST_PAPER_SIZES.find(({ id }) => id === paperSize)
-  if (!paper) throw new Error('The selected paper size is not supported.')
+  const format = normalizeDocFormat(docFormat)
+  const dimensions = docPaperDimensionsMm(format)
+  const margins = docMarginsMm(format)
 
   const [{ jsPDF }, regular, bold] = await Promise.all([
     import('jspdf'),
     fontAsBase64(bookAntiquaRegularUrl),
     fontAsBase64(bookAntiquaBoldUrl),
   ])
-  const widthPt = (paper.width * 72) / 25.4
-  const heightPt = (paper.height * 72) / 25.4
-  const isLandscape = orientation === 'landscape'
+  const widthPt = mmToPt(dimensions.width)
+  const heightPt = mmToPt(dimensions.height)
+  const isLandscape = format.orientation === 'landscape'
   const doc = new jsPDF({
-    orientation,
+    orientation: format.orientation,
     unit: 'pt',
-    format: isLandscape
-      ? [heightPt, widthPt]
-      : [widthPt, heightPt],
+    format: isLandscape ? [heightPt, widthPt] : [widthPt, heightPt],
   })
   doc.addFileToVFS('BookAntiqua-Regular.ttf', regular)
   doc.addFont('BookAntiqua-Regular.ttf', 'BookAntiqua', 'normal')
   doc.addFileToVFS('BookAntiqua-Bold.ttf', bold)
   doc.addFont('BookAntiqua-Bold.ttf', 'BookAntiqua', 'bold')
 
-  const rows = buildMasterListAttendanceRows(
+  const sheets = buildMasterListAttendanceSheets(
     members,
     voices,
     groupByVoice ? selectedVoiceIds : null,
@@ -106,8 +113,9 @@ export async function exportMasterListAttendancePdf(
     includeNagsasanayWomen,
     lastNameFirst,
     choir,
+    separateChoirs,
   )
-  if (rows.length === 0) {
+  if (sheets.every((sheet) => sheet.rows.length === 0)) {
     throw new Error('There are no active members or selected trainees to include.')
   }
   const datePanels = createAttendanceDatePanels(
@@ -116,194 +124,240 @@ export async function exportMasterListAttendancePdf(
   const dateSummary = formatAttendanceDateSummary(dates)
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 34
-  const tableWidth = pageWidth - margin * 2
+  const marginLeft = mmToPt(margins.left)
+  const marginRight = mmToPt(margins.right)
+  const marginTop = mmToPt(margins.top)
+  const pageBottom = pageHeight - mmToPt(margins.bottom)
+  const tableWidth = pageWidth - marginLeft - marginRight
   const numberWidth = 34
   const titleLines = doc.splitTextToSize(title.trim(), tableWidth)
-  const titleTop = 34
+  const titleTop = marginTop
   const dateSummaryTop = titleTop + titleLines.length * 23 + 9
-  const tableTop = dateSummaryTop + 16
-  const continuationTableTop = margin
-  const tableHeaderHeight = 42
-  const memberRowHeight = 26
-  const sectionRowHeight = 22
+  // The choir indicator sits directly under the dates, like a second title
+  // line: no extra gap above or below it.
+  const choirLabelTop = dateSummaryTop + 16
+  const choirLabelFontSize = 14
+  const continuationTableTop = marginTop
+  // Date over Lagda: one tight pair, not two spaced lines.
+  const tableHeaderHeight = 36
+  const dateHeaderY = 12
+  const lagdaHeaderY = 24
+  const nameFontSize = attendanceNameFontSize(format)
+  const nameSpacing =
+    (format.tableSpacingBeforePt ?? 0) + (format.tableSpacingAfterPt ?? 0)
+  // Roster names only: a larger chosen size grows the row, and table spacing
+  // adds to it without ever changing the font size.
+  const baseMemberRowHeight = Math.max(26, nameFontSize * 1.8)
+  const baseSectionRowHeight = 22
   const signatureReserve = 20 + 30 + (choir === 'aws' ? 54 : 0)
   const regularPageHeight =
-    pageHeight - continuationTableTop - tableHeaderHeight - 32
+    pageBottom - continuationTableTop - tableHeaderHeight - 32
   const finalPageHeight =
-    pageHeight -
-    signatureReserve -
-    continuationTableTop -
-    tableHeaderHeight
-  const firstPageHeight = pageHeight - tableTop - tableHeaderHeight - 32
-  const firstFinalPageHeight =
-    pageHeight - signatureReserve - tableTop - tableHeaderHeight
-  const rowPages = paginateMasterListAttendanceRows(
-    rows,
-    regularPageHeight,
-    finalPageHeight,
-    memberRowHeight,
-    sectionRowHeight,
-    { height: firstPageHeight, finalHeight: firstFinalPageHeight },
-  )
+    pageBottom - signatureReserve - continuationTableTop - tableHeaderHeight
+
+  const plans = sheets.map((sheet) => {
+    const tableTop = sheet.label ? choirLabelTop + 17 : dateSummaryTop + 16
+    const firstPageHeight = pageBottom - tableTop - tableHeaderHeight - 32
+    const firstFinalPageHeight =
+      pageBottom - signatureReserve - tableTop - tableHeaderHeight
+    const fit = fitAttendanceRowHeights(
+      sheet.rows,
+      firstFinalPageHeight,
+      baseMemberRowHeight,
+      baseSectionRowHeight,
+      format.scaling,
+    )
+    const memberRowHeight = fit.memberRowHeight + nameSpacing
+    const sectionRowHeight = fit.sectionRowHeight
+    const rowPages = paginateMasterListAttendanceRows(
+      sheet.rows,
+      regularPageHeight,
+      finalPageHeight,
+      memberRowHeight,
+      sectionRowHeight,
+      { height: firstPageHeight, finalHeight: firstFinalPageHeight },
+    )
+    return { sheet, tableTop, memberRowHeight, sectionRowHeight, rowPages }
+  })
 
   let pageNumber = 0
-  const totalPages = datePanels.length * rowPages.length
-  for (const datePanel of datePanels) {
-    for (const pageRows of rowPages) {
-      if (pageNumber > 0) doc.addPage()
-      pageNumber += 1
+  const totalPages = plans.reduce(
+    (total, plan) => total + datePanels.length * plan.rowPages.length,
+    0,
+  )
+  for (const plan of plans) {
+    let sheetPage = 0
+    for (const datePanel of datePanels) {
+      for (const pageRows of plan.rowPages) {
+        if (pageNumber > 0) doc.addPage()
+        pageNumber += 1
+        sheetPage += 1
 
-      const columnsInPanel = datePanel.length
-      const nameWidth =
-        columnsInPanel === 1
-          ? tableWidth - numberWidth - 64
-          : Math.min(180, tableWidth * 0.34)
-      const columnWidth = (tableWidth - numberWidth - nameWidth) / columnsInPanel
-      const firstPage = pageNumber === 1
-      const headerY = firstPage ? tableTop : continuationTableTop
-      if (firstPage) {
-        doc.setFont('BookAntiqua', 'bold')
-        doc.setFontSize(18)
-        doc.text(titleLines, pageWidth / 2, titleTop, {
-          align: 'center',
-          baseline: 'top',
-        })
-        doc.setFont('BookAntiqua', 'normal')
-        doc.setFontSize(12)
-        doc.text(dateSummary, pageWidth / 2, dateSummaryTop, {
-          align: 'center',
-          maxWidth: tableWidth,
-        })
-      }
-
-      doc.setFillColor(239, 242, 245)
-      doc.rect(margin, headerY, tableWidth, tableHeaderHeight, 'F')
-      doc.setDrawColor(60, 60, 60)
-      doc.setLineWidth(0.6)
-      doc.rect(margin, headerY, tableWidth, tableHeaderHeight)
-      const widths = [numberWidth, nameWidth, ...datePanel.map(() => columnWidth)]
-      let x = margin
-      const headers = [
-        'Blg.',
-        'Pangalan',
-        ...datePanel.map((date) => formatDateKeyNumeric(date)),
-      ]
-      doc.setFont('BookAntiqua', 'bold')
-      headers.forEach((header, index) => {
-        const cellWidth = widths[index]
-        doc.setFontSize(index < 2 ? 11 : 8)
-        if (index < 2) {
-          doc.text(header, x + cellWidth / 2, headerY + tableHeaderHeight / 2, {
+        const columnsInPanel = datePanel.length
+        const nameWidth =
+          columnsInPanel === 1
+            ? tableWidth - numberWidth - 64
+            : Math.min(180, tableWidth * 0.34)
+        const columnWidth = (tableWidth - numberWidth - nameWidth) / columnsInPanel
+        const firstSheetPage = sheetPage === 1
+        const headerY = firstSheetPage ? plan.tableTop : continuationTableTop
+        if (firstSheetPage) {
+          doc.setFont('BookAntiqua', 'bold')
+          doc.setFontSize(18)
+          doc.text(titleLines, pageWidth / 2, titleTop, {
             align: 'center',
-            baseline: 'middle',
-            maxWidth: cellWidth - 4,
-          })
-        } else {
-          const centerX = x + cellWidth / 2
-          doc.text(header, centerX, headerY + 13, {
-            align: 'center',
-            baseline: 'middle',
-            maxWidth: cellWidth - 4,
+            baseline: 'top',
           })
           doc.setFont('BookAntiqua', 'normal')
-          doc.text('Lagda', centerX, headerY + 31, {
+          doc.setFontSize(12)
+          doc.text(dateSummary, pageWidth / 2, dateSummaryTop, {
             align: 'center',
-            baseline: 'middle',
-            maxWidth: cellWidth - 4,
+            maxWidth: tableWidth,
           })
-          doc.setFont('BookAntiqua', 'bold')
+          if (plan.sheet.label) {
+            doc.setFont('BookAntiqua', 'bold')
+            doc.setFontSize(choirLabelFontSize)
+            doc.text(plan.sheet.label, pageWidth / 2, choirLabelTop, {
+              align: 'center',
+            })
+          }
         }
-        x += cellWidth
-        if (index < headers.length - 1) {
-          doc.line(x, headerY, x, headerY + tableHeaderHeight)
-        }
-      })
 
-      let y = headerY + tableHeaderHeight
-      for (const row of pageRows) {
-        if (row.kind === 'section') {
-          doc.setFillColor(248, 248, 248)
-          doc.rect(margin, y, tableWidth, sectionRowHeight, 'F')
-          doc.rect(margin, y, tableWidth, sectionRowHeight)
-          doc.setFont('BookAntiqua', 'bold')
-          doc.setFontSize(9)
-          doc.text(row.label, margin + 8, y + sectionRowHeight / 2, {
-            baseline: 'middle',
-          })
-          y += sectionRowHeight
-          continue
-        }
-        doc.rect(margin, y, tableWidth, memberRowHeight)
-        let cellX = margin
-        widths.forEach((cellWidth, index) => {
-          if (index > 0) doc.line(cellX, y, cellX, y + memberRowHeight)
-          if (index === 0) {
-            doc.setFont('BookAntiqua', 'normal')
-            doc.setFontSize(8)
-            doc.text(String(row.number), cellX + cellWidth / 2, y + memberRowHeight / 2, {
+        doc.setFillColor(239, 242, 245)
+        doc.rect(marginLeft, headerY, tableWidth, tableHeaderHeight, 'F')
+        doc.setDrawColor(60, 60, 60)
+        doc.setLineWidth(0.6)
+        doc.rect(marginLeft, headerY, tableWidth, tableHeaderHeight)
+        const widths = [numberWidth, nameWidth, ...datePanel.map(() => columnWidth)]
+        let x = marginLeft
+        const headers = [
+          'Blg.',
+          'Pangalan',
+          ...datePanel.map((date) => formatDateKeyNumeric(date)),
+        ]
+        doc.setFont('BookAntiqua', 'bold')
+        headers.forEach((header, index) => {
+          const cellWidth = widths[index]
+          doc.setFontSize(index < 2 ? 11 : 8)
+          if (index < 2) {
+            doc.text(header, x + cellWidth / 2, headerY + tableHeaderHeight / 2, {
               align: 'center',
               baseline: 'middle',
+              maxWidth: cellWidth - 4,
             })
-          } else if (index === 1) {
+          } else {
+            const centerX = x + cellWidth / 2
+            doc.text(header, centerX, headerY + dateHeaderY, {
+              align: 'center',
+              baseline: 'middle',
+              maxWidth: cellWidth - 4,
+            })
             doc.setFont('BookAntiqua', 'normal')
-            doc.setFontSize(9)
-            doc.text(
-              row.name,
-              cellX + 5,
-              y + memberRowHeight / 2,
-              {
-                baseline: 'middle',
-                maxWidth: cellWidth - 10,
-              },
-            )
+            doc.text('Lagda', centerX, headerY + lagdaHeaderY, {
+              align: 'center',
+              baseline: 'middle',
+              maxWidth: cellWidth - 4,
+            })
+            doc.setFont('BookAntiqua', 'bold')
           }
-          cellX += cellWidth
+          x += cellWidth
+          if (index < headers.length - 1) {
+            doc.line(x, headerY, x, headerY + tableHeaderHeight)
+          }
         })
-        y += memberRowHeight
-      }
-      doc.setFont('BookAntiqua', 'normal')
-      doc.setFontSize(7)
-      doc.text(
-        `${pageNumber} / ${totalPages}`,
-        pageWidth - margin,
-        pageHeight - 14,
-        { align: 'right' },
-      )
-      if (pageNumber === totalPages && choir === 'aws') {
-        const lastTableBottom =
-          headerY +
-          tableHeaderHeight +
-          pageRows.reduce(
-            (height, row) =>
-              height + (row.kind === 'section' ? sectionRowHeight : memberRowHeight),
-            0,
-          )
-        const signatureTop = Math.max(lastTableBottom + 30, pageHeight - 100)
+
+        let y = headerY + tableHeaderHeight
+        for (const row of pageRows) {
+          if (row.kind === 'section') {
+            doc.setFillColor(248, 248, 248)
+            doc.rect(marginLeft, y, tableWidth, plan.sectionRowHeight, 'F')
+            doc.rect(marginLeft, y, tableWidth, plan.sectionRowHeight)
+            doc.setFont('BookAntiqua', 'bold')
+            doc.setFontSize(9)
+            doc.text(row.label, marginLeft + 8, y + plan.sectionRowHeight / 2, {
+              baseline: 'middle',
+            })
+            y += plan.sectionRowHeight
+            continue
+          }
+          doc.rect(marginLeft, y, tableWidth, plan.memberRowHeight)
+          let cellX = marginLeft
+          widths.forEach((cellWidth, index) => {
+            if (index > 0) doc.line(cellX, y, cellX, y + plan.memberRowHeight)
+            if (index === 0) {
+              doc.setFont('BookAntiqua', 'normal')
+              doc.setFontSize(8)
+              doc.text(
+                String(row.number),
+                cellX + cellWidth / 2,
+                y + plan.memberRowHeight / 2,
+                { align: 'center', baseline: 'middle' },
+              )
+            } else if (index === 1) {
+              doc.setFont('BookAntiqua', 'normal')
+              doc.setFontSize(nameFontSize)
+              doc.text(
+                row.name,
+                cellX + 5,
+                y + plan.memberRowHeight / 2,
+                {
+                  baseline: 'middle',
+                  maxWidth: cellWidth - 10,
+                },
+              )
+            }
+            cellX += cellWidth
+          })
+          y += plan.memberRowHeight
+        }
         doc.setFont('BookAntiqua', 'normal')
-        doc.setFontSize(10)
-        doc.text('Naghanda:', pageWidth / 2, signatureTop, { align: 'center' })
-        doc.setFont('BookAntiqua', 'bold')
-        doc.setFontSize(10)
-        doc.text(pangulongName.trim(), pageWidth / 2, signatureTop + 31, {
-          align: 'center',
-          maxWidth: pageWidth - margin * 2,
-        })
-        doc.setLineWidth(0.6)
-        doc.line(
-          pageWidth / 2 - 75,
-          signatureTop + 37,
-          pageWidth / 2 + 75,
-          signatureTop + 37,
-        )
-        doc.setFont('BookAntiqua', 'normal')
-        doc.setFontSize(9)
+        doc.setFontSize(7)
+        // Inside the content box, not in the printer's unprintable bottom
+        // margin where a page number gets clipped.
         doc.text(
-          'Pangulong Mang-aawit',
-          pageWidth / 2,
-          signatureTop + 54,
-          { align: 'center' },
+          `${pageNumber} / ${totalPages}`,
+          pageWidth - marginRight,
+          pageBottom - 3,
+          { align: 'right' },
         )
+        if (pageNumber === totalPages && choir === 'aws') {
+          const lastTableBottom =
+            headerY +
+            tableHeaderHeight +
+            pageRows.reduce(
+              (height, row) =>
+                height +
+                (row.kind === 'section'
+                  ? plan.sectionRowHeight
+                  : plan.memberRowHeight),
+              0,
+            )
+          const signatureTop = Math.max(lastTableBottom + 30, pageBottom - 100)
+          doc.setFont('BookAntiqua', 'normal')
+          doc.setFontSize(10)
+          doc.text('Naghanda:', pageWidth / 2, signatureTop, { align: 'center' })
+          doc.setFont('BookAntiqua', 'bold')
+          doc.setFontSize(10)
+          doc.text(pangulongName.trim(), pageWidth / 2, signatureTop + 31, {
+            align: 'center',
+            maxWidth: pageWidth - marginLeft - marginRight,
+          })
+          doc.setLineWidth(0.6)
+          doc.line(
+            pageWidth / 2 - 75,
+            signatureTop + 37,
+            pageWidth / 2 + 75,
+            signatureTop + 37,
+          )
+          doc.setFont('BookAntiqua', 'normal')
+          doc.setFontSize(9)
+          doc.text(
+            'Pangulong Mang-aawit',
+            pageWidth / 2,
+            signatureTop + 54,
+            { align: 'center' },
+          )
+        }
       }
     }
   }

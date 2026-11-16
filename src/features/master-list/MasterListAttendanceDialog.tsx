@@ -1,11 +1,22 @@
 import { useState } from 'react'
-import { CalendarPlus, FileDown, X } from 'lucide-react'
+import { CalendarPlus, FileDown, FileText, X } from 'lucide-react'
 import type { Choir, Member, Trainee } from '@/core/types/member'
-import type { DutyRole, VoicePosition } from '@/core/types/suguan'
+import type {
+  DutyRole,
+  SuguanDocFormat,
+  VoicePosition,
+} from '@/core/types/suguan'
 import { resolvePmDutyRole } from '@/core/constants/dutyRoles'
 import { memberHasRank } from '@/lib/memberRanks'
+import {
+  DEFAULT_DOC_FORMAT,
+  PAPER_SIZE_LABELS,
+  normalizeDocFormat,
+} from '@/lib/suguanUtils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DisclosureSection } from '@/components/DisclosureSection'
+import { DocumentSetupStep } from '@/features/suguan-builder/DocumentSetupStep'
 import {
   Dialog,
   DialogContent,
@@ -24,16 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDateKeyLongDate, isDateKey, todayPHT, type DateKey } from '@/lib/phDate'
-import {
-  DEFAULT_MASTER_LIST_PAPER_SIZE,
-  MASTER_LIST_PAPER_SIZES,
-  isMasterListPaperSize,
-  type MasterListPaperSize,
-} from './masterListPaperSizes'
-import type {
-  MasterListAttendanceOptions,
-  MasterListAttendanceOrientation,
-} from './masterListAttendancePdf'
+import type { MasterListAttendanceOptions } from './masterListAttendancePdf'
 
 export type MasterListAttendanceExportFormat = 'pdf' | 'docx'
 
@@ -54,9 +56,9 @@ interface MasterListAttendanceDialogProps {
       | 'selectedVoiceIds'
       | 'includeNagsasanayMen'
       | 'includeNagsasanayWomen'
+      | 'separateChoirs'
       | 'lastNameFirst'
-      | 'paperSize'
-      | 'orientation'
+      | 'docFormat'
       | 'pangulongName'
     >,
     format: MasterListAttendanceExportFormat,
@@ -99,12 +101,17 @@ export function MasterListAttendanceDialog({
   const [includeNagsasanayWomen, setIncludeNagsasanayWomen] = useState(false)
   const [lastNameFirst, setLastNameFirst] = useState(true)
   const [pangulongMemberId, setPangulongMemberId] = useState('')
-  const [paperSize, setPaperSize] = useState<MasterListPaperSize>(
-    DEFAULT_MASTER_LIST_PAPER_SIZE,
-  )
-  const [orientation, setOrientation] =
-    useState<MasterListAttendanceOrientation>('portrait')
+  const [separateChoirs, setSeparateChoirs] = useState(false)
+  const [docFormat, setDocFormat] = useState<SuguanDocFormat>(() => ({
+    ...DEFAULT_DOC_FORMAT,
+  }))
+  const [docOpen, setDocOpen] = useState(false)
   const [error, setError] = useState('')
+  const normalizedFormat = normalizeDocFormat(docFormat)
+  const fontSizeSummary =
+    normalizedFormat.fontSize === 'custom'
+      ? 'Custom font size'
+      : `${normalizedFormat.fontSize[0].toUpperCase()}${normalizedFormat.fontSize.slice(1)} font`
 
   const addDate = () => {
     if (!isDateKey(dateDraft)) {
@@ -182,9 +189,9 @@ export function MasterListAttendanceDialog({
         selectedVoiceIds: isPnk ? [] : selectedVoiceIds,
         includeNagsasanayMen,
         includeNagsasanayWomen,
+        separateChoirs: isPnk ? false : separateChoirs,
         lastNameFirst,
-        paperSize,
-        orientation,
+        docFormat,
         pangulongName: selectedPangulong
           ? [
               selectedPangulong.firstName,
@@ -202,11 +209,12 @@ export function MasterListAttendanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Master List Attendance Sheet</DialogTitle>
           <DialogDescription>
-            Add the attendance dates and choose how members are grouped.
+            Add the attendance dates, choose how members are grouped, and set
+            up the printed document.
           </DialogDescription>
         </DialogHeader>
 
@@ -312,6 +320,27 @@ export function MasterListAttendanceDialog({
             )}
           </section>
 
+          {!isPnk && (
+            <label className="flex items-start gap-3 rounded-md border p-3">
+              <Checkbox
+                checked={separateChoirs}
+                onCheckedChange={(checked) =>
+                  setSeparateChoirs(checked === true)
+                }
+              />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium">
+                  Separate Babae and Lalaki sheets
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Prints a Babae sheet (women + Nagsasanay Women) and a Lalaki
+                  sheet (men + Nagsasanay Men). Each sheet is labelled under
+                  the dates.
+                </span>
+              </span>
+            </label>
+          )}
+
           <label className="flex items-start gap-3 rounded-md border p-3">
             <Checkbox
               checked={lastNameFirst}
@@ -414,55 +443,32 @@ export function MasterListAttendanceDialog({
                     Include all members without voice sections
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    Creates separate Women and Men sheets; selected trainees
-                    are included with their gender.
+                    Prints one roster without voice sections. Selected trainees
+                    are included under their Nagsasanay section.
                   </span>
                 </span>
               </label>
             </section>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="master-attendance-paper">Paper size</Label>
-              <Select
-                value={paperSize}
-                onValueChange={(value) => {
-                  if (isMasterListPaperSize(value)) setPaperSize(value)
-                }}
-              >
-                <SelectTrigger id="master-attendance-paper">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MASTER_LIST_PAPER_SIZES.map((paper) => (
-                    <SelectItem key={paper.id} value={paper.id}>
-                      {paper.label} · {paper.width} × {paper.height} mm
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="master-attendance-orientation">Orientation</Label>
-              <Select
-                value={orientation}
-                onValueChange={(value) => {
-                  if (value === 'portrait' || value === 'landscape') {
-                    setOrientation(value)
-                  }
-                }}
-              >
-                <SelectTrigger id="master-attendance-orientation">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="portrait">Portrait</SelectItem>
-                  <SelectItem value="landscape">Landscape</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <DisclosureSection
+            open={docOpen}
+            onToggle={() => setDocOpen((current) => !current)}
+            icon={FileText}
+            title="Document setup"
+            summary={`${PAPER_SIZE_LABELS[normalizedFormat.paperSize].short} · ${
+              normalizedFormat.orientation === 'landscape'
+                ? 'Landscape'
+                : 'Portrait'
+            } · ${fontSizeSummary}`}
+            bodyClassName="p-4"
+          >
+            <DocumentSetupStep
+              value={docFormat}
+              onChange={setDocFormat}
+              embedded
+            />
+          </DisclosureSection>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

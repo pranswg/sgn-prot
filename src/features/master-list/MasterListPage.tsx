@@ -512,9 +512,9 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
       | 'selectedVoiceIds'
       | 'includeNagsasanayMen'
       | 'includeNagsasanayWomen'
+      | 'separateChoirs'
       | 'lastNameFirst'
-      | 'paperSize'
-      | 'orientation'
+      | 'docFormat'
       | 'pangulongName'
     >,
     format: MasterListAttendanceExportFormat,

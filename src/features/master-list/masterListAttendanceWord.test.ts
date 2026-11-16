@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { inflateRawSync } from 'node:zlib'
-import type { Member } from '@/core/types/member'
+import type { Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
+import { DEFAULT_DOC_FORMAT } from '@/lib/suguanUtils'
 import { createMasterListAttendanceWordBlob } from './masterListAttendanceWord.ts'
 
 const member: Member = {
@@ -17,9 +18,31 @@ const member: Member = {
   positions: [],
 }
 
+const tenor: Member = {
+  ...member,
+  id: 'member-2',
+  firstName: 'Ben',
+  lastName: 'Santos',
+  gender: 'male',
+  voicePosition: 'tenor',
+}
+
 const voices: VoicePosition[] = [
   { id: 'soprano', name: 'Soprano', shortName: 'S', gender: 'female' },
+  { id: 'tenor', name: 'Tenor', shortName: 'T', gender: 'male' },
 ]
+
+function trainee(id: string, firstName: string, gender: Trainee['gender']): Trainee {
+  return {
+    id,
+    firstName,
+    lastName: 'Trainee',
+    gender,
+    voicePosition: '',
+    status: 'active',
+    dateAdded: '2026-01-01',
+  }
+}
 
 async function attendanceDocumentXml(blob: Blob): Promise<string> {
   const archive = Buffer.from(await blob.arrayBuffer())
@@ -63,47 +86,122 @@ test('creates a Word attendance sheet with the configured page and signatory', a
     selectedVoiceIds: ['soprano'],
     includeNagsasanayMen: false,
     includeNagsasanayWomen: false,
+    separateChoirs: false,
     lastNameFirst: false,
-    paperSize: 'letter',
-    orientation: 'portrait',
+    docFormat: { ...DEFAULT_DOC_FORMAT, paperSize: 'letter' },
     choir: 'aws',
     pangulongName: 'Maria Santos',
     filename: 'attendance.docx',
   })
 
-  test('creates a PNK Word attendance sheet without requiring a signatory', async () => {
-    const blob = await createMasterListAttendanceWordBlob({
-      members: [member],
-      trainees: [],
-      voices,
-      dates: ['2026-10-17'],
-      title: 'Attendance Sheet',
-      groupByVoice: false,
-      selectedVoiceIds: [],
-      includeNagsasanayMen: false,
-      includeNagsasanayWomen: false,
-      lastNameFirst: false,
-      paperSize: 'letter',
-      orientation: 'portrait',
-      choir: 'pnk',
-      pangulongName: '',
-      filename: 'pnk-attendance.docx',
-    })
+  assert.ok(blob.size > 0)
+  const documentXml = await attendanceDocumentXml(blob)
+  assert.match(documentXml, /<w:t[^>]*>10\/17\/2026<\/w:t>[\s\S]*<w:t[^>]*>Lagda<\/w:t>/)
+  assert.match(documentXml, /<w:t[^>]*>Naghanda:<\/w:t>/)
+  assert.match(documentXml, /<w:t[^>]*>Maria Santos<\/w:t>/)
+  assert.equal(
+    blob.type,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  )
+})
 
-    assert.ok(blob.size > 0)
-    const documentXml = await attendanceDocumentXml(blob)
-    assert.match(documentXml, /<w:t[^>]*>10\/17\/2026<\/w:t>[\s\S]*<w:t[^>]*>Lagda<\/w:t>/)
-    assert.match(documentXml, /<w:t[^>]*>Lagda<\/w:t>/)
+test('creates a PNK Word attendance sheet without requiring a signatory', async () => {
+  const blob = await createMasterListAttendanceWordBlob({
+    members: [member],
+    trainees: [],
+    voices,
+    dates: ['2026-10-17'],
+    title: 'Attendance Sheet',
+    groupByVoice: false,
+    selectedVoiceIds: [],
+    includeNagsasanayMen: false,
+    includeNagsasanayWomen: false,
+    separateChoirs: false,
+    lastNameFirst: false,
+    docFormat: { ...DEFAULT_DOC_FORMAT, paperSize: 'letter' },
+    choir: 'pnk',
+    pangulongName: '',
+    filename: 'pnk-attendance.docx',
   })
 
   assert.ok(blob.size > 0)
   const documentXml = await attendanceDocumentXml(blob)
   assert.match(documentXml, /<w:t[^>]*>10\/17\/2026<\/w:t>[\s\S]*<w:t[^>]*>Lagda<\/w:t>/)
-  assert.match(documentXml, /<w:t[^>]*>Lagda<\/w:t>/)
-  assert.equal(
-    blob.type,
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  assert.doesNotMatch(documentXml, /<w:t[^>]*>Naghanda:<\/w:t>/)
+})
+
+test('separates Babae and Lalaki sheets with their Nagsasanay groups', async () => {
+  const blob = await createMasterListAttendanceWordBlob({
+    members: [member, tenor],
+    trainees: [
+      trainee('t-f', 'Faye', 'female'),
+      trainee('t-m', 'Mario', 'male'),
+    ],
+    voices,
+    dates: ['2026-10-17'],
+    title: 'Attendance Sheet',
+    groupByVoice: false,
+    selectedVoiceIds: [],
+    includeNagsasanayMen: true,
+    includeNagsasanayWomen: true,
+    separateChoirs: true,
+    lastNameFirst: false,
+    docFormat: DEFAULT_DOC_FORMAT,
+    choir: 'aws',
+    pangulongName: 'Maria Santos',
+    filename: 'separated-attendance.docx',
+  })
+
+  const documentXml = await attendanceDocumentXml(blob)
+  const text = [...documentXml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)].map(
+    (match) => match[1],
   )
+  const womenIndex = text.indexOf('Babae')
+  const menIndex = text.indexOf('Lalaki')
+  assert.ok(womenIndex > -1 && menIndex > womenIndex)
+  assert.ok(text.indexOf('Nagsasanay Women') > womenIndex)
+  assert.ok(text.indexOf('Nagsasanay Women') < menIndex)
+  assert.ok(text.indexOf('Nagsasanay Men') > menIndex)
+  // Two sheets, each with its own title block.
+  assert.equal(
+    documentXml.match(/<w:t[^>]*>Attendance Sheet<\/w:t>/g)?.length,
+    2,
+  )
+  // The indicator is printed at 14 pt, larger than the date summary.
+  assert.match(
+    documentXml,
+    /<w:sz w:val="28"\/>[\s\S]{0,400}<w:t[^>]*>Babae<\/w:t>/,
+  )
+  assert.match(
+    documentXml,
+    /<w:sz w:val="28"\/>[\s\S]{0,400}<w:t[^>]*>Lalaki<\/w:t>/,
+  )
+  // The date header pair sits in one compact 36 pt row.
+  assert.match(documentXml, /<w:trHeight w:val="720" w:hRule="exact"\/>/)
+})
+
+test('a combined sheet prints no choir label under the dates', async () => {
+  const blob = await createMasterListAttendanceWordBlob({
+    members: [member, tenor],
+    trainees: [],
+    voices,
+    dates: ['2026-10-17'],
+    title: 'Attendance Sheet',
+    groupByVoice: false,
+    selectedVoiceIds: [],
+    includeNagsasanayMen: false,
+    includeNagsasanayWomen: false,
+    separateChoirs: false,
+    lastNameFirst: false,
+    docFormat: DEFAULT_DOC_FORMAT,
+    choir: 'aws',
+    pangulongName: 'Maria Santos',
+    filename: 'combined-attendance.docx',
+  })
+
+  const documentXml = await attendanceDocumentXml(blob)
+  assert.doesNotMatch(documentXml, /<w:t[^>]*>Babae<\/w:t>/)
+  assert.doesNotMatch(documentXml, /<w:t[^>]*>Lalaki<\/w:t>/)
 })
 
 test('prints the sheet title once and keeps the landscape page size correct', async () => {
@@ -122,9 +220,13 @@ test('prints the sheet title once and keeps the landscape page size correct', as
     selectedVoiceIds: ['soprano'],
     includeNagsasanayMen: false,
     includeNagsasanayWomen: false,
+    separateChoirs: false,
     lastNameFirst: false,
-    paperSize: 'letter',
-    orientation: 'landscape',
+    docFormat: {
+      ...DEFAULT_DOC_FORMAT,
+      paperSize: 'letter',
+      orientation: 'landscape',
+    },
     choir: 'pnk',
     pangulongName: '',
     filename: 'landscape-attendance.docx',

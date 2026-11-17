@@ -5,8 +5,11 @@ import type { DutyRole } from '@/core/types/suguan'
 import type { VoicePosition } from '@/core/types/suguan'
 import {
   groupMasterListPdfSections,
+  inactiveMasterListPdfSections,
+  masterListPdfChoirName,
   masterListPdfName,
   masterListPdfPosition,
+  masterListPdfTocLabel,
   masterListPdfVoice,
   sortMasterListPdfMembers,
   splitMasterListPdfSections,
@@ -215,6 +218,70 @@ test('PNK sections use the choir prefix, omit rankings, and print each voice', (
     masterListPdfVoice(legacy, TEST_VOICES, 'pnk'),
     'Soprano 2',
   )
+})
+
+test('inactive sections split singers by gender and share one Nagsasanay table', () => {
+  const inactiveWoman = makeMember('Inactive woman', { isActive: false })
+  const inactiveMan = makeMember('Inactive man', {
+    gender: 'male',
+    voicePosition: 'tenor',
+    isActive: false,
+  })
+  const sections = inactiveMasterListPdfSections(
+    [inactiveWoman, inactiveMan, makeMember('Active woman')],
+    [
+      makeTrainee('Inactive trainee', { status: 'inactive' }),
+      makeTrainee('Active trainee'),
+      makeTrainee('Promoted trainee', { status: 'promoted' }),
+    ],
+    'San Jose',
+  )
+
+  assert.deepEqual(
+    sections.map((section) => section.title),
+    [
+      'AWS SAN JOSE CHOIR - Inactive Women',
+      'AWS SAN JOSE CHOIR - Inactive Men',
+      'AWS SAN JOSE CHOIR - Inactive Nagsasanay',
+    ],
+  )
+  const [women, men, trainees] = sections
+  if (women.kind === 'members') {
+    assert.deepEqual(women.members.map((member) => member.id), [
+      'Inactive woman',
+    ])
+    assert.equal(women.order, 'name')
+  }
+  if (men.kind === 'members') {
+    assert.deepEqual(men.members.map((member) => member.id), ['Inactive man'])
+  }
+  if (trainees.kind === 'trainees') {
+    assert.deepEqual(trainees.trainees.map((trainee) => trainee.id), [
+      'Inactive trainee',
+    ])
+  }
+
+  assert.deepEqual(inactiveMasterListPdfSections([], [], 'San Jose'), [])
+  assert.deepEqual(
+    inactiveMasterListPdfSections(
+      [makeMember('PNK woman', { isActive: false, choir: 'pnk' })],
+      [],
+      'Sta. Monica',
+      'pnk',
+    ).map((section) => section.title),
+    ['PNK STA. MONICA CHOIR - Inactive Babae'],
+  )
+})
+
+test('table of contents labels drop the choir prefix', () => {
+  const choirName = masterListPdfChoirName('Sta. Monica', 'aws')
+
+  assert.equal(choirName, 'AWS STA. MONICA CHOIR')
+  assert.equal(
+    masterListPdfTocLabel(`${choirName} - Women`, choirName),
+    'Women',
+  )
+  assert.equal(masterListPdfTocLabel('PANGULUHAN', choirName), 'PANGULUHAN')
 })
 
 test('singer tables are ordered by voice section and then by surname', () => {

@@ -9,8 +9,11 @@ import type { Choir, Member, Trainee } from '@/core/types/member'
 import type { VoicePosition } from '@/core/types/suguan'
 import {
   groupMasterListPdfSections,
+  inactiveMasterListPdfSections,
+  masterListPdfChoirName,
   masterListPdfName,
   masterListPdfPosition,
+  masterListPdfTocLabel,
   masterListPdfVoice,
   sortMasterListPdfMembers,
   splitMasterListPdfSections,
@@ -95,18 +98,45 @@ export async function exportMasterListPdf(
   doc.addFileToVFS('SegoeScript.ttf', segoeScript)
   doc.addFont('SegoeScript.ttf', 'SegoeScript', 'normal')
 
-  doc.setFont('SegoeScript', 'normal')
-  doc.setFontSize(21)
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  doc.text('MASTER LIST', pageWidth / 2, 49, { align: 'center' })
+  const timestamp = formatMasterListPdfTimestamp(new Date())
+  const choirName = masterListPdfChoirName(localeName, choir)
 
-  let nextY = 70
+  // Title page. The table of contents gets its own page right after it, and its
+  // page numbers are only known once every table has been drawn, so it is
+  // reserved here and filled in before the footer pass at the end.
+  doc.setFont('SegoeScript', 'normal')
+  doc.setFontSize(30)
+  doc.text('MASTER LIST', pageWidth / 2, pageHeight * 0.36, {
+    align: 'center',
+  })
+  doc.setFont('BookAntiqua', 'bold')
+  doc.setFontSize(16)
+  doc.text(choirName, pageWidth / 2, pageHeight * 0.36 + 40, {
+    align: 'center',
+  })
+  doc.setFont('BookAntiqua', 'normal')
+  doc.setFontSize(12)
+  doc.text(timestamp, pageWidth / 2, pageHeight * 0.36 + 66, {
+    align: 'center',
+  })
+  doc.addPage()
+  doc.addPage()
+
+  const tocEntries: { title: string; page: number }[] = []
+  let nextY = PAGE_MARGIN
   const sections = groupMasterListPdfSections(
     members,
     trainees,
     localeName,
     dutyRoles,
+    choir,
+  )
+  const inactiveSections = inactiveMasterListPdfSections(
+    members,
+    trainees,
+    localeName,
     choir,
   )
   const { contentSections, hierarchySections } =
@@ -138,6 +168,7 @@ export async function exportMasterListPdf(
         nextY = PAGE_MARGIN
       }
       let tableFinalY = nextY
+      let tableStartPage = 0
       autoTable(doc, {
         startY: nextY,
         margin: {
@@ -215,16 +246,38 @@ export async function exportMasterListPdf(
           }
         },
         didDrawPage: (data) => {
+          // `HookData.pageNumber` counts pages within this one table, not the
+          // document, so read the real page from jsPDF for the contents page.
+          if (!tableStartPage) {
+            tableStartPage = doc.getCurrentPageInfo().pageNumber
+          }
           if (data.cursor) tableFinalY = data.cursor.y
         },
       })
+      if (tableStartPage > 0) {
+        tocEntries.push({
+          title: masterListPdfTocLabel(section.title, choirName),
+          page: tableStartPage,
+        })
+      }
       nextY = tableFinalY + 18
     }
   }
 
   renderSections(contentSections)
+  if (inactiveSections.length > 0) {
+    // The quick-reference inactive tables share one page, so the block always
+    // starts on a fresh page instead of trailing the last roster table.
+    doc.addPage()
+    nextY = PAGE_MARGIN
+    renderSections(inactiveSections)
+  }
   if (choir === 'aws') {
     doc.addPage()
+    tocEntries.push({
+      title: 'PANGULUHAN',
+      page: doc.getNumberOfPages(),
+    })
     doc.setFont('SegoeScript', 'normal')
     doc.setFontSize(20)
     doc.text('PANGULUHAN', pageWidth / 2, 49, { align: 'center' })
@@ -249,6 +302,10 @@ export async function exportMasterListPdf(
     (row) => [row.category, row.kind === 'item' ? String(row.count) : ''],
   )
   doc.addPage()
+  tocEntries.push({
+    title: 'MASTER LIST SUMMARY',
+    page: doc.getNumberOfPages(),
+  })
   autoTable(doc, {
     startY: PAGE_MARGIN,
     margin: {
@@ -295,8 +352,32 @@ export async function exportMasterListPdf(
     },
   })
 
-  const timestamp = formatMasterListPdfTimestamp(new Date())
-  for (let page = 1; page <= doc.getNumberOfPages(); page += 1) {
+  doc.setPage(2)
+  doc.setFont('SegoeScript', 'normal')
+  doc.setFontSize(22)
+  doc.text('TABLE OF CONTENTS', pageWidth / 2, 62, { align: 'center' })
+  doc.setFont('BookAntiqua', 'normal')
+  let tocY = 100
+  for (const entry of tocEntries) {
+    doc.setFontSize(11)
+    doc.text(entry.title, PAGE_MARGIN + 6, tocY)
+    const number = String(entry.page)
+    const lineStart = PAGE_MARGIN + 6 + doc.getTextWidth(entry.title) + 8
+    const lineEnd = pageWidth - PAGE_MARGIN - doc.getTextWidth(number) - 14
+    if (lineEnd > lineStart) {
+      doc.setDrawColor(120)
+      doc.setLineWidth(0.5)
+      doc.setLineDashPattern([0.6, 2.4], 0)
+      doc.line(lineStart, tocY - 2.5, lineEnd, tocY - 2.5)
+      doc.setLineDashPattern([], 0)
+      doc.setDrawColor(0)
+    }
+    doc.text(number, pageWidth - PAGE_MARGIN, tocY, { align: 'right' })
+    tocY += 19
+  }
+
+  // The title page carries its own date, so it gets no footer.
+  for (let page = 2; page <= doc.getNumberOfPages(); page += 1) {
     doc.setPage(page)
     doc.setFont('BookAntiqua', 'normal')
     doc.setFontSize(8)

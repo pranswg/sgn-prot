@@ -21,6 +21,23 @@ export type MasterListSummaryRow =
   | { kind: 'section'; category: string }
   | { kind: 'item'; category: string; count: number }
 
+/** The choir name every section title is prefixed with, e.g. `AWS STA. MONICA CHOIR`. */
+export function masterListPdfChoirName(
+  localeName: string,
+  choir: Choir = 'aws',
+): string {
+  return `${CHOIR_LABELS[choir]} ${localeName.trim().toLocaleUpperCase()} CHOIR`
+}
+
+/** Section titles without the choir prefix, for the export's table of contents. */
+export function masterListPdfTocLabel(
+  title: string,
+  choirName: string,
+): string {
+  const prefix = `${choirName} - `
+  return title.startsWith(prefix) ? title.slice(prefix.length) : title
+}
+
 export function groupMasterListPdfSections(
   members: Member[],
   trainees: Trainee[],
@@ -28,7 +45,7 @@ export function groupMasterListPdfSections(
   dutyRoles: DutyRole[],
   choir: Choir = 'aws',
 ): MasterListPdfSection[] {
-  const choirName = `${CHOIR_LABELS[choir]} ${localeName.trim().toLocaleUpperCase()} CHOIR`
+  const choirName = masterListPdfChoirName(localeName, choir)
   const sections: MasterListPdfSection[] = [
     {
       kind: 'members',
@@ -90,6 +107,57 @@ export function groupMasterListPdfSections(
         trainees: genderTrainees,
       })
     }
+  }
+
+  return sections
+}
+
+/**
+ * The quick-reference inactive tables an export appends after the roster.
+ * Inactive singers are listed by name in their own Women/Men table (Babae/Lalaki
+ * for PNK), and inactive trainees share one Nagsasanay table. A category with
+ * nobody in it is skipped, like the roster's own empty sections.
+ */
+export function inactiveMasterListPdfSections(
+  members: Member[],
+  trainees: Trainee[],
+  localeName: string,
+  choir: Choir = 'aws',
+): MasterListPdfSection[] {
+  const choirName = masterListPdfChoirName(localeName, choir)
+  const sections: MasterListPdfSection[] = []
+
+  for (const gender of ['female', 'male'] as const) {
+    const inactive = members.filter(
+      (member) => !member.isActive && member.gender === gender,
+    )
+    if (inactive.length > 0) {
+      const genderLabel =
+        choir === 'pnk'
+          ? gender === 'female'
+            ? 'Babae'
+            : 'Lalaki'
+          : gender === 'female'
+            ? 'Women'
+            : 'Men'
+      sections.push({
+        kind: 'members',
+        title: `${choirName} - Inactive ${genderLabel}`,
+        order: 'name',
+        members: inactive,
+      })
+    }
+  }
+
+  const inactiveTrainees = trainees.filter(
+    (trainee) => trainee.status === 'inactive',
+  )
+  if (inactiveTrainees.length > 0) {
+    sections.push({
+      kind: 'trainees',
+      title: `${choirName} - Inactive Nagsasanay`,
+      trainees: inactiveTrainees,
+    })
   }
 
   return sections

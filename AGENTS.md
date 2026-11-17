@@ -919,6 +919,17 @@ boundaries, so a change in one feature rarely reaches another.
   AWS-only checkbox that is off by default — PNK stays one Babae/Lalaki sheet.
   `MasterListPage.tsx` owns the filters; child components receive
   `members`, `references`, and `sort` as props.
+  The **PDF and Word Master List** open on a title page, then a table of
+  contents, then the roster. The inactive quick-reference tables come from
+  `inactiveMasterListPdfSections` (`masterListPdfData.ts`): Inactive Women and
+  Inactive Men (Babae/Lalaki for PNK) by name, plus one Inactive Nagsasanay
+  table, appended after the roster while the main sections still list everyone.
+  The PDF fills the reserved contents page after drawing every table, so it
+  prints real page numbers; Word writes a PAGEREF field per section against a
+  bookmark on the section's title row and relies on the document's
+  `updateFields`, the same mechanism as the Page X of Y footer. Spreadsheet
+  export stays on `groupMasterListPdfSections` alone, so CSV/XLSX never
+  duplicates the inactive rows.
 - **members-history** — the per-choir archive: compact rows, the membership
   timeline dialog, and the shared transfer/restore dialogs.
 - **suguan-builder** — the multi-step Suguan sheet. Steps are defined in

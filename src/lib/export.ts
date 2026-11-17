@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import type { FileChild } from 'docx'
 import type { Choir, Member, Trainee } from '@/core/types/member'
 import {
   getVoiceName,
@@ -15,8 +16,11 @@ import {
 } from '@/features/master-list/masterListPaperSizes'
 import {
   groupMasterListPdfSections,
+  inactiveMasterListPdfSections,
+  masterListPdfChoirName,
   masterListPdfName,
   masterListPdfPosition,
+  masterListPdfTocLabel,
   masterListPdfVoice,
   sortMasterListPdfMembers,
   splitMasterListPdfSections,
@@ -320,9 +324,11 @@ export async function createMasterListWordBlob(
 ): Promise<Blob> {
   const {
     AlignmentType,
+    Bookmark,
     BorderStyle,
     Document,
     Footer,
+    LeaderType,
     PageOrientation,
     Packer,
     Paragraph,
@@ -332,6 +338,7 @@ export async function createMasterListWordBlob(
     TableLayoutType,
     TableRow,
     TabStopType,
+    Tab,
     TextRun,
     WidthType,
   } = await import('docx')
@@ -361,11 +368,18 @@ export async function createMasterListWordBlob(
   )
   const tableWidth = columnWidths.reduce((total, width) => total + width, 0)
   const tableHeaders = ['Blg.', 'Pangalan', 'Voice', 'Status', 'Position']
+  const choirName = masterListPdfChoirName(localeName, choir)
   const sections = groupMasterListPdfSections(
     members,
     trainees,
     localeName,
     dutyRoles,
+    choir,
+  )
+  const inactiveSections = inactiveMasterListPdfSections(
+    members,
+    trainees,
+    localeName,
     choir,
   )
   const { contentSections, hierarchySections } =
@@ -377,6 +391,20 @@ export async function createMasterListWordBlob(
     choir,
     dutyRoles,
   )
+  const timestampNow = new Date()
+  const timestampDate = new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Manila',
+  }).format(timestampNow)
+  const timestampTime = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Manila',
+  }).format(timestampNow)
   const children = []
 
   const makeParagraph = (
@@ -389,19 +417,33 @@ export async function createMasterListWordBlob(
       color?: string
       before?: number
       after?: number
+      bookmark?: string
     } = {},
   ) =>
     new Paragraph({
       alignment: options.align ?? AlignmentType.LEFT,
       spacing: { before: options.before ?? 0, after: options.after ?? 0 },
       children: [
-        new TextRun({
-          text,
-          font: options.font ?? 'Book Antiqua',
-          size: options.size ?? 20,
-          bold: options.bold ?? false,
-          color: options.color ?? '000000',
-        }),
+        options.bookmark
+          ? new Bookmark({
+              id: options.bookmark,
+              children: [
+                new TextRun({
+                  text,
+                  font: options.font ?? 'Book Antiqua',
+                  size: options.size ?? 20,
+                  bold: options.bold ?? false,
+                  color: options.color ?? '000000',
+                }),
+              ],
+            })
+          : new TextRun({
+              text,
+              font: options.font ?? 'Book Antiqua',
+              size: options.size ?? 20,
+              bold: options.bold ?? false,
+              color: options.color ?? '000000',
+            }),
       ],
     })
 
@@ -416,6 +458,7 @@ export async function createMasterListWordBlob(
       align?: (typeof AlignmentType)[keyof typeof AlignmentType]
       margins?: { top: number; bottom: number; left: number; right: number }
       columnSpan?: number
+      bookmark?: string
     } = {},
   ) =>
     new TableCell({
@@ -443,11 +486,12 @@ export async function createMasterListWordBlob(
           size: options.size ?? 20,
           bold: options.bold,
           color: options.color,
+          bookmark: options.bookmark,
         }),
       ],
     })
 
-  const makeRosterTable = (title: string, body: string[][]) =>
+  const makeRosterTable = (title: string, body: string[][], bookmark?: string) =>
     new Table({
       width: { size: tableWidth, type: WidthType.DXA },
       layout: TableLayoutType.FIXED,
@@ -463,6 +507,7 @@ export async function createMasterListWordBlob(
               bold: true,
               size: 22,
               align: AlignmentType.LEFT,
+              bookmark,
             }),
           ],
         }),
@@ -520,52 +565,137 @@ export async function createMasterListWordBlob(
           'Nagsasanay',
         ])
 
-  children.push(
-    makeParagraph('MASTER LIST', {
-      align: AlignmentType.CENTER,
-      font: 'Segoe Script',
-      size: 42,
-      after: 140,
-    }),
-  )
-  for (const section of contentSections) {
-    children.push(makeRosterTable(section.title, rosterRows(section)))
-    children.push(new Paragraph({ text: '', spacing: { after: 360 } }))
+  const tocEntries: { label: string; bookmark: string }[] = []
+  const makeTocEntry = (label: string, bookmark: string) =>
+    new Paragraph({
+      tabStops: [
+        {
+          type: TabStopType.RIGHT,
+          position: tableWidth,
+          leader: LeaderType.DOT,
+        },
+      ],
+      spacing: { after: 120 },
+      children: [
+        new TextRun({ text: label, font: 'Book Antiqua', size: 20 }),
+        new TextRun({ children: [new Tab()] }),
+        new SimpleField(`PAGEREF ${bookmark} \\h`, '1'),
+      ],
+    })
+
+  const rosterChildren: FileChild[] = []
+  const inactiveChildren: FileChild[] = []
+  const addRosterTable = (
+    target: FileChild[],
+    title: string,
+    body: string[][],
+  ) => {
+    const bookmark = `toc_${tocEntries.length + 1}`
+    tocEntries.push({
+      label: masterListPdfTocLabel(title, choirName),
+      bookmark,
+    })
+    target.push(makeRosterTable(title, body, bookmark))
+    target.push(new Paragraph({ text: '', spacing: { after: 360 } }))
   }
 
+  for (const section of contentSections) {
+    addRosterTable(rosterChildren, section.title, rosterRows(section))
+  }
+  for (const section of inactiveSections) {
+    addRosterTable(inactiveChildren, section.title, rosterRows(section))
+  }
+
+  const hierarchyChildren: FileChild[] = []
   if (choir === 'aws') {
-    children.push(
+    const panguluhanBookmark = 'toc_panguluhan'
+    tocEntries.push({ label: 'PANGULUHAN', bookmark: panguluhanBookmark })
+    hierarchyChildren.push(
       new Paragraph({
         pageBreakBefore: true,
         alignment: AlignmentType.CENTER,
         spacing: { after: 140 },
         children: [
-          new TextRun({
-            text: 'PANGULUHAN',
-            font: 'Segoe Script',
-            size: 40,
+          new Bookmark({
+            id: panguluhanBookmark,
+            children: [
+              new TextRun({
+                text: 'PANGULUHAN',
+                font: 'Segoe Script',
+                size: 40,
+              }),
+            ],
           }),
         ],
       }),
     )
-    if (hierarchySections.length > 0) {
-      for (const section of hierarchySections) {
-        const body = sortMasterListPdfMembers(
-          section.members,
-          voices,
-          section.order,
-        ).map((member, index) => [
-          `${index + 1}.`,
-          masterListPdfName(member),
-          masterListPdfVoice(member, voices, choir),
-          member.isActive ? 'Active' : 'Inactive',
-          masterListPdfPosition(member, dutyRoles),
-        ])
-        children.push(makeRosterTable(section.title, body))
-        children.push(new Paragraph({ text: '', spacing: { after: 360 } }))
-      }
+    for (const section of hierarchySections) {
+      const body = sortMasterListPdfMembers(
+        section.members,
+        voices,
+        section.order,
+      ).map((member, index) => [
+        `${index + 1}.`,
+        masterListPdfName(member),
+        masterListPdfVoice(member, voices, choir),
+        member.isActive ? 'Active' : 'Inactive',
+        masterListPdfPosition(member, dutyRoles),
+      ])
+      addRosterTable(hierarchyChildren, section.title, body)
     }
   }
+  tocEntries.push({
+    label: 'MASTER LIST SUMMARY',
+    bookmark: 'toc_summary',
+  })
+
+  children.push(
+    makeParagraph('MASTER LIST', {
+      align: AlignmentType.CENTER,
+      font: 'Segoe Script',
+      size: 52,
+      after: 200,
+    }),
+    makeParagraph(choirName, {
+      align: AlignmentType.CENTER,
+      size: 28,
+      bold: true,
+      after: 100,
+    }),
+    makeParagraph(`As of ${timestampDate} - ${timestampTime}`, {
+      align: AlignmentType.CENTER,
+    }),
+    new Paragraph({
+      pageBreakBefore: true,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 240 },
+      children: [
+        new TextRun({
+          text: 'TABLE OF CONTENTS',
+          font: 'Segoe Script',
+          size: 36,
+        }),
+      ],
+    }),
+    ...tocEntries.map((entry) => makeTocEntry(entry.label, entry.bookmark)),
+    new Paragraph({
+      pageBreakBefore: true,
+      includeIfEmpty: true,
+      text: '',
+    }),
+    ...rosterChildren,
+    ...(inactiveChildren.length > 0
+      ? [
+          new Paragraph({
+            pageBreakBefore: true,
+            includeIfEmpty: true,
+            text: '',
+          }),
+          ...inactiveChildren,
+        ]
+      : []),
+    ...hierarchyChildren,
+  )
 
   const summaryColumnWidths = [tableWidth - 1520, 1520]
   const summaryHeader = new TableRow({
@@ -576,6 +706,7 @@ export async function createMasterListWordBlob(
         bold: true,
         size: 24,
         margins: { top: 120, bottom: 120, left: 160, right: 160 },
+        bookmark: index === 0 ? 'toc_summary' : undefined,
       }),
     ),
   })
@@ -619,20 +750,6 @@ export async function createMasterListWordBlob(
     }),
   )
 
-  const timestampNow = new Date()
-  const timestampDate = new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: '2-digit',
-    year: 'numeric',
-    timeZone: 'Asia/Manila',
-  }).format(timestampNow)
-  const timestampTime = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Manila',
-  }).format(timestampNow)
   const footer = new Paragraph({
     tabStops: [{ type: TabStopType.RIGHT, position: tableWidth }],
     children: [
@@ -661,8 +778,13 @@ export async function createMasterListWordBlob(
     },
     sections: [
       {
-        footers: { default: new Footer({ children: [footer] }) },
+        footers: {
+          default: new Footer({ children: [footer] }),
+          // The title page carries its own date, so it gets no footer.
+          first: new Footer({ children: [new Paragraph({ text: '' })] }),
+        },
         properties: {
+          titlePage: true,
           page: {
             size: {
               width: pageWidthTwips,

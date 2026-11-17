@@ -389,7 +389,11 @@ test('Master List Word export matches PDF sections, styling, page breaks, and pa
   const footer = entries.get('word/footer1.xml')?.toString('utf8') ?? ''
 
   assert.match(document, /MASTER LIST/)
+  assert.match(document, /TABLE OF CONTENTS/)
+  assert.match(document, /PAGEREF toc_/)
+  assert.match(document, /w:bookmarkStart/)
   assert.match(document, /AWS STA\. MONICA CHOIR - Women/)
+  assert.match(document, /AWS STA\. MONICA CHOIR - Inactive Men/)
   assert.match(document, /PANGULUHAN/)
   assert.match(document, /AWS STA\. MONICA CHOIR - Pangulong Mang-aawit/)
   assert.match(document, /MASTER LIST SUMMARY/)
@@ -400,7 +404,7 @@ test('Master List Word export matches PDF sections, styling, page breaks, and pa
   assert.match(document, /F2F2F2/)
   assert.match(document, /166534/)
   assert.match(document, /B91C1C/)
-  assert.equal((document.match(/w:pageBreakBefore/g) ?? []).length, 2)
+  assert.equal((document.match(/w:pageBreakBefore/g) ?? []).length, 5)
   assert.match(document, /w:w="12240" w:h="20160"/)
   assert.match(footer, /As of/)
   assert.match(footer, /PAGE/)

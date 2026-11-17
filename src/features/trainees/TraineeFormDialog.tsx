@@ -18,6 +18,7 @@ import { voicePositionsForGender, UNASSIGNED_VOICE_ID } from '@/core/constants/v
 import { useSettingsStore } from '@/store/settingsStore'
 import { CHOIR_LABELS } from '@/lib/choirs'
 import { memberInitials } from '@/lib/memberDirectory'
+import { INACTIVE_TEXT_TONE, INACTIVE_TONE } from '@/lib/statusTone'
 import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import {
@@ -205,7 +206,13 @@ export function TraineeFormDialog({
         <p className="mt-1 text-sm font-bold text-foreground">{startLabel}</p>
         <div className="mt-2 flex items-center justify-between text-[0.625rem] font-medium text-muted-foreground">
           <span>{dayLabel}</span>
-          <span>{form.status === 'active' ? 'In training' : 'Inactive'}</span>
+          <span
+            className={cn(
+              form.status === 'inactive' && INACTIVE_TEXT_TONE,
+            )}
+          >
+            {form.status === 'active' ? 'In training' : 'Inactive'}
+          </span>
         </div>
       </div>
       <p className="mt-2 text-[0.6875rem] leading-relaxed text-muted-foreground/80">
@@ -389,7 +396,9 @@ export function TraineeFormDialog({
                 className={cn(
                   'h-7 rounded-md text-sm font-medium transition-colors',
                   form.status === option.value
-                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    ? option.value === 'active'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : `${INACTIVE_TONE} shadow-sm`
                     : 'text-muted-foreground hover:bg-muted',
                 )}
               >

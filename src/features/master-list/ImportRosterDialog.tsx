@@ -35,6 +35,7 @@ import {
   isSpreadsheetFile,
 } from '@/lib/spreadsheetImport'
 import { todayPHT } from '@/lib/phDate'
+import { INACTIVE_TONE } from '@/lib/statusTone'
 import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 
@@ -511,7 +512,12 @@ export function ImportRosterDialog({ open, onOpenChange }: ImportRosterDialogPro
                             <Badge variant="destructive">Already in list</Badge>
                           )}
                           {!candidate.isActive && (
-                            <Badge variant="outline">Inactive</Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn('border-transparent', INACTIVE_TONE)}
+                            >
+                              Inactive
+                            </Badge>
                           )}
                           {candidate.membershipType &&
                             candidate.membershipType !== 'regular' && (

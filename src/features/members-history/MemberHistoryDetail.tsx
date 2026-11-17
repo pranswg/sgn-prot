@@ -46,6 +46,11 @@ import { formatDateKeyLongDate } from '@/lib/phDate'
 import { formatMemberName, memberInitials } from '@/lib/memberDirectory'
 import { getVoiceName } from '@/core/constants/voicePositions'
 import { useSettingsStore } from '@/store/settingsStore'
+import {
+  ACTIVE_TONE,
+  INACTIVE_TEXT_TONE,
+  INACTIVE_TONE,
+} from '@/lib/statusTone'
 import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 
@@ -68,8 +73,8 @@ const EVENT_STYLES: Record<MemberHistoryEvent['type'], string> = {
   joined: 'border-brand-teal/30 bg-brand-teal-soft text-brand-teal',
   'transferred-out': 'border-amber-500/30 bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
   returned: 'border-green-500/30 bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
-  deactivated: 'border-slate-400/40 bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300',
-  reactivated: 'border-green-500/30 bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
+  deactivated: `border-red-500/30 ${INACTIVE_TONE}`,
+  reactivated: `border-green-500/30 ${ACTIVE_TONE}`,
 }
 
 function MemberAvatar({ member }: { member: Member }) {
@@ -132,11 +137,16 @@ function InactiveHistoryCard({ member }: { member: Member }) {
     <section className="rounded-xl border border-border/70 bg-muted/20 px-3.5 py-3">
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-          <UserX className="size-3.5 text-muted-foreground" />
+          <UserX className={cn('size-3.5', INACTIVE_TEXT_TONE)} />
           Inactive history
         </p>
         {periods.length > 0 && (
-          <span className="rounded-full bg-background px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
+          <span
+            className={cn(
+              'rounded-full px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums',
+              INACTIVE_TONE,
+            )}
+          >
             {periods.length}
           </span>
         )}
@@ -162,7 +172,7 @@ function InactiveHistoryCard({ member }: { member: Member }) {
               {period.to ? (
                 <span>{formatDateKeyLongDate(period.to)}</span>
               ) : (
-                <span className="font-medium text-amber-600 dark:text-amber-300">
+                <span className={cn('font-medium', INACTIVE_TEXT_TONE)}>
                   Ongoing
                 </span>
               )}

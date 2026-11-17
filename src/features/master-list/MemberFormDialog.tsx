@@ -27,6 +27,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { phtInstantISO } from '@/lib/phDate'
 import { findPossibleDuplicateMembers } from '@/lib/memberHistory'
 import { memberInitials } from '@/lib/memberDirectory'
+import { INACTIVE_TONE } from '@/lib/statusTone'
 import { cn } from '@/lib/utils'
 import { useAsyncAction } from '@/hooks/useAsyncAction'
 import { DuplicateMemberPanel } from './DuplicateMemberPanel'
@@ -503,7 +504,9 @@ export function MemberFormDialog({
                     className={cn(
                       'h-7 rounded-md text-sm font-medium transition-colors',
                       form.isActive === option.value
-                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        ? option.value
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : `${INACTIVE_TONE} shadow-sm`
                         : 'text-muted-foreground hover:bg-muted',
                     )}
                   >

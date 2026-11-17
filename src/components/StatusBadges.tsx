@@ -1,6 +1,12 @@
 import { RotateCcw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import {
+  ACTIVE_DOT_TONE,
+  ACTIVE_TONE,
+  INACTIVE_DOT_TONE,
+  INACTIVE_TONE,
+} from '@/lib/statusTone'
 import type { Member } from '@/core/types/member'
 import {
   memberLifecycleStatus,
@@ -18,16 +24,14 @@ export function MemberStatusBadge({ active }: { active: boolean }) {
       className={cn(
         badgeBase,
         'gap-1.5',
-        active
-          ? 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300'
-          : 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+        active ? ACTIVE_TONE : INACTIVE_TONE,
       )}
     >
       <span
         aria-hidden
         className={cn(
           'size-1.5 rounded-full',
-          active ? 'bg-green-600' : 'bg-red-600',
+          active ? ACTIVE_DOT_TONE : INACTIVE_DOT_TONE,
         )}
       />
       {active ? 'Active' : 'Inactive'}
@@ -36,19 +40,19 @@ export function MemberStatusBadge({ active }: { active: boolean }) {
 }
 
 const LIFECYCLE_STYLES: Record<MemberLifecycleStatus, string> = {
-  active: 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
+  active: ACTIVE_TONE,
   returned:
     'bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300',
   'transferred-out':
     'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  inactive: 'bg-muted text-muted-foreground',
+  inactive: INACTIVE_TONE,
 }
 
 const LIFECYCLE_DOTS: Record<MemberLifecycleStatus, string> = {
-  active: 'bg-green-600',
+  active: ACTIVE_DOT_TONE,
   returned: 'bg-teal-600',
   'transferred-out': 'bg-amber-600',
-  inactive: 'bg-muted-foreground/60',
+  inactive: INACTIVE_DOT_TONE,
 }
 
 /**
@@ -89,8 +93,8 @@ export function ReturnedMemberBadge() {
 }
 
 const TRAINEE_STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
-  inactive: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-300',
+  active: ACTIVE_TONE,
+  inactive: INACTIVE_TONE,
   promoted:
     'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300',
   'transferred-out':

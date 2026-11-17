@@ -1,13 +1,14 @@
 /**
  * Membership lifecycle logic for the Members History feature.
  *
- * Every member can pass through three milestones — joined, transferred out,
- * returned to the choir — and each one is a `MemberHistoryEvent` appended to
- * the SAME member profile. Transferring out never deletes the record, and
- * returning never creates a second profile. All the derived values below
- * (current lifecycle status, membership period count, last-active date) come
- * from reading those events in order, so a member's history is the single
- * source of truth instead of a parallel list somewhere else.
+ * Every member can pass through five milestones — joined, transferred out,
+ * returned to the choir, marked inactive, reactivated — and each one is a
+ * `MemberHistoryEvent` appended to the SAME member profile. Transferring out
+ * never deletes the record, and returning never creates a second profile. All
+ * the derived values below (current lifecycle status, membership period count,
+ * inactive periods, last-active date) come from reading those events in order,
+ * so a member's history is the single source of truth instead of a parallel
+ * list somewhere else.
  *
  * Kept framework-free so `memberHistory.test.ts` can pin it under `node:test`.
  */
@@ -21,11 +22,13 @@ import type {
 import { laterDateKey } from '@/lib/phDate'
 import { normalizeNameKey } from '@/lib/rosterImport'
 
-/** What the three event kinds are called, e.g. for the timeline. */
+/** What the five event kinds are called, e.g. for the timeline. */
 export const MEMBER_HISTORY_EVENT_LABELS: Record<MemberHistoryType, string> = {
   joined: 'Transferred In',
   'transferred-out': 'Transferred Out',
   returned: 'Returned to Choir',
+  deactivated: 'Marked Inactive',
+  reactivated: 'Reactivated',
 }
 
 export const TRANSFER_REASON_OPTIONS: {
@@ -80,10 +83,11 @@ export function lastLifecycleEvent(
 }
 
 /**
- * The member's current lifecycle status. `isActive` gates the result: transfer
- * and restore both flip it in the same action that appends the event, so an
- * event kind that contradicts the flag means the plain deactivate toggle has
- * run since and the flag wins. A `joined`-only active member is simply active.
+ * The member's current lifecycle status. `isActive` gates the result: transfer,
+ * restore, and the Active/Inactive toggle all flip it in the same action that
+ * appends an event, so a legacy record whose flag changed without an event
+ * still reads from the flag rather than a stale event. A `joined`-only active
+ * member is simply active.
  */
 export function memberLifecycleStatus(member: Member): MemberLifecycleStatus {
   const last = lastLifecycleEvent(member)
@@ -151,6 +155,47 @@ export function memberMembershipPeriods(member: Member): number {
   return memberHistoryEvents(member).filter(
     (event) => event.type === 'joined' || event.type === 'returned',
   ).length
+}
+
+/** One stretch the member spent marked inactive. */
+export interface MemberInactivePeriod {
+  /** Id of the `deactivated` event that opened the period. */
+  id: string
+  /** Calendar date the member was marked inactive. */
+  from: string
+  /** Calendar date the period ended, or `null` while it is still ongoing. */
+  to: string | null
+}
+
+/**
+ * The member's inactive periods, oldest first, derived from the `deactivated`
+ * and `reactivated` events. A transfer-out or restore also closes an open
+ * period, because either one takes the member out of plain-inactivity scope.
+ * A `deactivated` with no closing event is ongoing (`to: null`). A record whose
+ * flag was flipped before event tracking returns `[]`, so the history dialog
+ * says none were recorded rather than inventing a start date.
+ */
+export function memberInactivePeriods(member: Member): MemberInactivePeriod[] {
+  const periods: MemberInactivePeriod[] = []
+  let open: MemberInactivePeriod | null = null
+  for (const event of memberHistoryEvents(member)) {
+    if (event.type === 'deactivated') {
+      if (!open) open = { id: event.id, from: event.date, to: null }
+      continue
+    }
+    if (
+      open &&
+      (event.type === 'reactivated' ||
+        event.type === 'returned' ||
+        event.type === 'transferred-out')
+    ) {
+      open.to = event.date
+      periods.push(open)
+      open = null
+    }
+  }
+  if (open) periods.push(open)
+  return periods
 }
 
 /**

@@ -5,7 +5,9 @@ import {
   Pencil,
   Trash2,
   Undo2,
+  UserCheck,
   UserPlus,
+  UserX,
   X,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -33,6 +35,7 @@ import { useAuthStore } from '@/store/authStore'
 import {
   MEMBER_HISTORY_EVENT_LABELS,
   memberHistoryEvents,
+  memberInactivePeriods,
   memberIsReturned,
   memberLifecycleStatus,
   memberMembershipPeriods,
@@ -57,12 +60,16 @@ const EVENT_ICONS: Record<MemberHistoryEvent['type'], typeof UserPlus> = {
   joined: UserPlus,
   'transferred-out': LogOut,
   returned: Undo2,
+  deactivated: UserX,
+  reactivated: UserCheck,
 }
 
 const EVENT_STYLES: Record<MemberHistoryEvent['type'], string> = {
   joined: 'border-brand-teal/30 bg-brand-teal-soft text-brand-teal',
   'transferred-out': 'border-amber-500/30 bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
   returned: 'border-green-500/30 bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
+  deactivated: 'border-slate-400/40 bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300',
+  reactivated: 'border-green-500/30 bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300',
 }
 
 function MemberAvatar({ member }: { member: Member }) {
@@ -109,6 +116,61 @@ function LifecycleHeader({ member, reference, canManage, onRequestRestore }: Lif
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * The inactive periods recorded by the Active/Inactive toggle. Periods come
+ * from paired `deactivated` / `reactivated` events, so a member who has never
+ * been switched off states that plainly instead of leaving the section blank.
+ */
+function InactiveHistoryCard({ member }: { member: Member }) {
+  const periods = memberInactivePeriods(member)
+  const currentlyInactive = memberLifecycleStatus(member) === 'inactive'
+
+  return (
+    <section className="rounded-xl border border-border/70 bg-muted/20 px-3.5 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+          <UserX className="size-3.5 text-muted-foreground" />
+          Inactive history
+        </p>
+        {periods.length > 0 && (
+          <span className="rounded-full bg-background px-1.5 py-0.5 text-[0.625rem] font-semibold tabular-nums text-muted-foreground">
+            {periods.length}
+          </span>
+        )}
+      </div>
+
+      {periods.length === 0 ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {currentlyInactive
+            ? 'Currently inactive. No earlier inactive periods were recorded.'
+            : 'None recorded — this member has never been marked inactive.'}
+        </p>
+      ) : (
+        <ul className="mt-2 grid gap-1.5">
+          {periods.map((period) => (
+            <li
+              key={period.id}
+              className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
+            >
+              <span>{formatDateKeyLongDate(period.from)}</span>
+              <span aria-hidden className="text-muted-foreground/60">
+                →
+              </span>
+              {period.to ? (
+                <span>{formatDateKeyLongDate(period.to)}</span>
+              ) : (
+                <span className="font-medium text-amber-600 dark:text-amber-300">
+                  Ongoing
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -182,6 +244,8 @@ export function MemberHistoryContent({
         canManage={canManage}
         onRequestRestore={onRequestRestore}
       />
+
+      <InactiveHistoryCard member={member} />
 
       {events.length === 0 ? (
         <div className="rounded-xl border border-border/70 bg-muted/30 px-4 py-5 text-center">

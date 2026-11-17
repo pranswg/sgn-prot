@@ -35,13 +35,20 @@ export type TransferReason =
   | 'other'
 
 /** The kinds of membership milestone a member can pass through. */
-export type MemberHistoryType = 'joined' | 'transferred-out' | 'returned'
+export type MemberHistoryType =
+  | 'joined'
+  | 'transferred-out'
+  | 'returned'
+  | 'deactivated'
+  | 'reactivated'
 
 /**
  * One milestone in a member's membership journey. Everyone starts with a
  * `joined` event; a transfer-out appends `transferred-out`, and coming back to
  * the choir appends `returned` on the SAME profile rather than creating a new
- * record. Events are appended, never rewritten, so the timeline is the archive.
+ * record. Toggling the Active/Inactive switch appends `deactivated` or
+ * `reactivated`, so every inactive period is dated. Events are appended, never
+ * rewritten, so the timeline is the archive.
  */
 export interface MemberHistoryEvent {
   id: string

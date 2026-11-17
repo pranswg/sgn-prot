@@ -4,6 +4,8 @@ import type { Account } from '@/core/types/auth'
 import { useAuthStore } from './authStore.ts'
 import { useMemberStore } from './memberStore.ts'
 import { membersOf } from '@/lib/choirs.ts'
+import { memberInactivePeriods } from '@/lib/memberHistory.ts'
+import { todayPHT } from '@/lib/phDate.ts'
 
 const memberInput = {
   firstName: 'Maria',
@@ -103,6 +105,67 @@ test('Master List mutations refresh the last-updated timestamp', () => {
     useMemberStore.getState().lastUpdatedAt,
     '2000-01-01T00:00:00.000Z',
   )
+  useMemberStore.getState().clear()
+})
+
+test('flipping the Active switch records an inactive history event', () => {
+  useAuthStore.getState().clear()
+  useMemberStore.getState().clear()
+  useAuthStore.setState({ accounts: [account()], currentAccountId: 'acc_1' })
+
+  const member = useMemberStore.getState().addMember(memberInput)
+  assert.equal(member.history?.length, 1)
+
+  const stored = () =>
+    useMemberStore.getState().members.find((m) => m.id === member.id)
+
+  useMemberStore.getState().updateMember(member.id, { isActive: false })
+  assert.equal(stored()?.isActive, false)
+  assert.equal(stored()?.history?.length, 2)
+  assert.equal(stored()?.history?.[1]?.type, 'deactivated')
+  assert.equal(stored()?.history?.[1]?.date, todayPHT())
+  assert.equal(stored()?.history?.[1]?.actorName, 'Import Admin')
+  const openPeriods = memberInactivePeriods(stored()!)
+  assert.equal(openPeriods.length, 1)
+  assert.equal(openPeriods[0]?.to, null)
+
+  // Saving an unrelated field sends the current status too; it is not a flip.
+  useMemberStore
+    .getState()
+    .updateMember(member.id, { isActive: false, voicePosition: 'alto' })
+  assert.equal(stored()?.history?.length, 2)
+  assert.equal(stored()?.voicePosition, 'alto')
+
+  useMemberStore.getState().updateMember(member.id, { isActive: true })
+  assert.equal(stored()?.history?.length, 3)
+  assert.equal(stored()?.history?.[2]?.type, 'reactivated')
+  const closedPeriods = memberInactivePeriods(stored()!)
+  assert.equal(closedPeriods.length, 1)
+  assert.equal(closedPeriods[0]?.to, todayPHT())
+
+  useAuthStore.getState().clear()
+  useMemberStore.getState().clear()
+})
+
+test('the deactivate/reactivate helpers record the same events', () => {
+  useAuthStore.getState().clear()
+  useMemberStore.getState().clear()
+  useAuthStore.setState({ accounts: [account()], currentAccountId: 'acc_1' })
+
+  const member = useMemberStore.getState().addMember(memberInput)
+  useMemberStore.getState().deactivateMember(member.id)
+  useMemberStore.getState().reactivateMember(member.id)
+
+  const stored = useMemberStore
+    .getState()
+    .members.find((m) => m.id === member.id)
+  assert.deepEqual(
+    stored?.history?.map((event) => event.type),
+    ['joined', 'deactivated', 'reactivated'],
+  )
+  assert.equal(memberInactivePeriods(stored!)[0]?.to, todayPHT())
+
+  useAuthStore.getState().clear()
   useMemberStore.getState().clear()
 })
 

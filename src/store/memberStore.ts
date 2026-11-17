@@ -15,7 +15,7 @@ import { useAdminStore } from '@/store/adminStore'
 import { deleteAllRows, deleteRow, upsertRow } from '@/api/db'
 import { persist as persistWrite } from '@/lib/writeThrough'
 import { choirOf } from '@/lib/choirs'
-import { isDateKey, toDateKeyFromInstant } from '@/lib/phDate'
+import { isDateKey, todayPHT, toDateKeyFromInstant } from '@/lib/phDate'
 import {
   memberLifecycleStatus,
   transferReasonLabel,
@@ -57,8 +57,33 @@ function joinedEventFor(
   }
 }
 
-/** Validates and normalises a persisted `history` array without re-seeding. */
-function normalizePersistedHistory(
+/** The signed-in account's display name, when there is one. */
+function currentActorName(): string | undefined {
+  const auth = useAuthStore.getState()
+  return auth.accounts.find((account) => account.id === auth.currentAccountId)
+    ?.fullName
+}
+
+/**
+ * A dated Active/Inactive switch. The edit forms call `updateMember`, so this
+ * is what turns a status toggle into an inactive period the timeline can show.
+ */
+function statusEventFor(
+  member: Pick<Member, 'voicePosition'>,
+  isActive: boolean,
+  actorName?: string,
+): MemberHistoryEvent {
+  return {
+    id: nanoid(),
+    type: isActive ? 'reactivated' : 'deactivated',
+    date: todayPHT(),
+    voicePosition: member.voicePosition,
+    actorName,
+    createdAt: updatedAt(),
+  }
+}
+
+/** Validates and normalises a persisted `history` array without re-seeding. */function normalizePersistedHistory(
   value: unknown,
 ): MemberHistoryEvent[] | undefined {
   if (!Array.isArray(value)) return undefined
@@ -277,7 +302,15 @@ export const useMemberStore = create<MemberState>()(
         const previous = get().members
         const existing = previous.find((member) => member.id === id)
         if (!existing) return
-        const next = { ...existing, ...input }
+        const next: Member = { ...existing, ...input }
+        // Only a real flip is a history event; the edit forms always send the
+        // current status, so saving an unrelated field must stay silent.
+        if (input.isActive !== undefined && input.isActive !== existing.isActive) {
+          next.history = [
+            ...(existing.history ?? []),
+            statusEventFor(next, input.isActive, currentActorName()),
+          ]
+        }
         set((s) => ({
           members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
@@ -291,7 +324,14 @@ export const useMemberStore = create<MemberState>()(
           (member) => member.id === id && member.isActive,
         )
         if (!existing) return
-        const next = { ...existing, isActive: false }
+        const next: Member = {
+          ...existing,
+          isActive: false,
+          history: [
+            ...(existing.history ?? []),
+            statusEventFor(existing, false, currentActorName()),
+          ],
+        }
         set((s) => ({
           members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),
@@ -305,7 +345,14 @@ export const useMemberStore = create<MemberState>()(
           (member) => member.id === id && !member.isActive,
         )
         if (!existing) return
-        const next = { ...existing, isActive: true }
+        const next: Member = {
+          ...existing,
+          isActive: true,
+          history: [
+            ...(existing.history ?? []),
+            statusEventFor(existing, true, currentActorName()),
+          ],
+        }
         set((s) => ({
           members: s.members.map((m) => (m.id === id ? next : m)),
           lastUpdatedAt: updatedAt(),

@@ -15,6 +15,7 @@ import {
   findPossibleDuplicateMembers,
   lastLifecycleEvent,
   memberHistoryYears,
+  memberInactivePeriods,
   memberIsReturned,
   memberLastActiveDateKey,
   memberLifecycleStatus,
@@ -148,6 +149,80 @@ test('membership periods count joined plus returned, not transfers', () => {
   })
   assert.equal(memberMembershipPeriods(threeStints), 3)
   assert.equal(memberMembershipPeriods(member()), 0)
+})
+
+test('inactive periods pair deactivated and reactivated events', () => {
+  const switchedOffTwice = member({
+    history: [
+      event('joined', '2024-01-05'),
+      event('deactivated', '2024-06-01'),
+      event('reactivated', '2024-09-01'),
+      event('deactivated', '2025-02-01'),
+    ],
+  })
+  assert.deepEqual(memberInactivePeriods(switchedOffTwice), [
+    { id: 'deactivated-2024-06-01', from: '2024-06-01', to: '2024-09-01' },
+    { id: 'deactivated-2025-02-01', from: '2025-02-01', to: null },
+  ])
+  // No recorded switch-off means no inactive history to show.
+  assert.deepEqual(memberInactivePeriods(member()), [])
+})
+
+test('a transfer, restore, or reactivation closes an open inactive period', () => {
+  const transferred = member({
+    isActive: false,
+    history: [
+      event('joined', '2024-01-05'),
+      event('deactivated', '2024-06-01'),
+      event('transferred-out', '2024-10-01'),
+    ],
+  })
+  assert.deepEqual(memberInactivePeriods(transferred), [
+    { id: 'deactivated-2024-06-01', from: '2024-06-01', to: '2024-10-01' },
+  ])
+
+  const restored = member({
+    history: [
+      event('joined', '2024-01-05'),
+      event('deactivated', '2024-06-01'),
+      event('transferred-out', '2024-10-01'),
+      event('returned', '2025-01-10'),
+    ],
+  })
+  assert.deepEqual(memberInactivePeriods(restored), [
+    { id: 'deactivated-2024-06-01', from: '2024-06-01', to: '2024-10-01' },
+  ])
+
+  const switchedBack = member({
+    history: [
+      event('joined', '2024-01-05'),
+      event('deactivated', '2024-06-01'),
+      event('returned', '2025-01-10'),
+    ],
+  })
+  assert.deepEqual(memberInactivePeriods(switchedBack), [
+    { id: 'deactivated-2024-06-01', from: '2024-06-01', to: '2025-01-10' },
+  ])
+})
+
+test('inactive events keep the lifecycle status in step with the flag', () => {
+  const switchedOff = member({
+    isActive: false,
+    history: [
+      event('joined', '2024-01-05'),
+      event('deactivated', '2024-06-01'),
+    ],
+  })
+  const switchedBackOn = member({
+    isActive: true,
+    history: [
+      event('joined', '2024-01-05'),
+      event('deactivated', '2024-06-01'),
+      event('reactivated', '2024-09-01'),
+    ],
+  })
+  assert.equal(memberLifecycleStatus(switchedOff), 'inactive')
+  assert.equal(memberLifecycleStatus(switchedBackOn), 'active')
 })
 
 test('last active date is the newest event date, falling back to dateAdded', () => {

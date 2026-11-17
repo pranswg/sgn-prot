@@ -558,9 +558,19 @@ Master List page, its PDF export, and the Dashboard cards all narrow through,
 so a transferred member is only reachable from the Members History page (which
 has Restore). A plain deactivate keeps the member on the Master List with an
 "Inactive" badge. `memberLifecycleStatus` lets `isActive` gate the derived
-status for exactly this reason: the deactivate toggle flips the flag without
-appending an event, so a stale `joined`/`returned` event must not read as
+status for exactly this reason: a legacy profile's flag may have been flipped
+before event tracking, so a stale `joined`/`returned` event must not read as
 active. Do not re-derive lifecycle status from events alone.
+
+**The Active/Inactive toggle is history too.** `updateMember` appends a
+`deactivated` or `reactivated` event whenever the submitted `isActive` differs
+from the stored one (saving an unrelated field sends the same flag and appends
+nothing); `deactivateMember`/`reactivateMember` do the same. `memberInactivePeriods`
+pairs those events into dated periods — a missing closing event is an ongoing
+period (`to: null`), and a transfer-out, restore, or reactivation closes one.
+The membership timeline shows the events, and the history dialog's "Inactive
+history" card lists the periods or states "None recorded" when the member has
+never been switched off.
 
 The Special Duties panel (`DutyRolesPanel`) is a **fixed set of fields**, not one
 picker per configured ranking: **Destinado** (a required plain-text field, with

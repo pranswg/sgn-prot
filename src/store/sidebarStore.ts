@@ -14,21 +14,25 @@ interface SidebarState {
   isSidebarExpanded: boolean
   /** Radix drawer state, only ever read on mobile. */
   isMobileDrawerOpen: boolean
+  /** Section labels whose items are showing. Starts empty so the sidebar opens
+   *  as a list of group headings; the user opens the section they need. */
+  expandedSections: string[]
   setNavigationOpen: (open: boolean) => void
   toggleNavigation: () => void
   setSidebarExpanded: (expanded: boolean) => void
   toggleSidebarExpanded: () => void
   setMobileDrawerOpen: (open: boolean) => void
+  /** Opens or closes one section group's rows. */
+  toggleSection: (label: string) => void
 }
 
-/**
- * Read once at module load. `isNavigationOpen` is intentionally NOT persisted:
- * the spec's default is the current viewport, so a reload re-evaluates it rather
- * than restoring a stale decision made on a different screen.
- */
 function initialNavigationOpen(): boolean {
   if (typeof window === 'undefined') return true
   return defaultNavigationOpen(window.innerWidth)
+}
+
+function initialExpandedSections(): string[] {
+  return []
 }
 
 export const useSidebarStore = create<SidebarState>()(
@@ -37,6 +41,7 @@ export const useSidebarStore = create<SidebarState>()(
       isNavigationOpen: initialNavigationOpen(),
       isSidebarExpanded: true,
       isMobileDrawerOpen: false,
+      expandedSections: initialExpandedSections(),
 
       setNavigationOpen: (open) => set({ isNavigationOpen: open }),
       toggleNavigation: () => set((s) => ({ isNavigationOpen: !s.isNavigationOpen })),
@@ -46,15 +51,27 @@ export const useSidebarStore = create<SidebarState>()(
         set((s) => ({ isSidebarExpanded: !s.isSidebarExpanded })),
 
       setMobileDrawerOpen: (open) => set({ isMobileDrawerOpen: open }),
+
+      toggleSection: (label) =>
+        set((s) => ({
+          expandedSections: s.expandedSections.includes(label)
+            ? s.expandedSections.filter((l) => l !== label)
+            : [...s.expandedSections, label],
+        })),
     }),
     {
-      // Key name is the `localStorage.sidebarExpanded` the spec asked for.
       name: 'sidebarExpanded',
-      version: 1,
-      // Persist expansion only. Actions, the drawer flag, and
-      // `isNavigationOpen` are left out so the viewport default above survives
-      // a reload.
-      partialize: (state) => ({ isSidebarExpanded: state.isSidebarExpanded }),
+      version: 3,
+      partialize: (state) => ({
+        isSidebarExpanded: state.isSidebarExpanded,
+        expandedSections: state.expandedSections,
+      }),
+      // Version 2 stored every section as open; sections now start closed, so
+      // drop the old list rather than restoring a sidebar that looks unchanged.
+      migrate: (persisted) => ({
+        ...(persisted as SidebarState),
+        expandedSections: [],
+      }),
     },
   ),
 )

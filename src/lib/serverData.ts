@@ -11,6 +11,7 @@ import type {
 import type { StoredWorshipSchedule } from '@/store/worshipScheduleStore'
 import type { AssignmentPreset } from '@/store/assignmentPresetStore'
 import type { ExtraOccasionBatch } from '@/store/extraOccasionBatchStore'
+import type { AttendanceSheet } from '@/store/attendanceStore'
 
 /**
  * Server reads for Phase 3. Every domain table stores one store record per row
@@ -49,6 +50,8 @@ export interface ServerDataSnapshot {
   batches: ExtraOccasionBatch[]
   /** Per-user presets; RLS already scopes the read to the signed-in owner. */
   presets: AssignmentPreset[]
+  /** Attendance sheets created from the Master List. */
+  attendance: AttendanceSheet[]
   /** `null` when no settings row exists yet (leave local defaults untouched). */
   settings: ServerSettingsData | null
 }
@@ -113,6 +116,7 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
     organistaRes,
     presetsRes,
     batchesRes,
+    attendanceRes,
     settingsRes,
   ] = await Promise.all([
     client.from('members').select('id, data').order('updated_at'),
@@ -126,6 +130,7 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
       .select('id, data')
       .order('updated_at', { ascending: false }),
     client.from('extra_occasion_batches').select('id, data').order('updated_at'),
+    client.from('attendance_sheets').select('id, data').order('updated_at'),
     client.from('settings').select('data').eq('id', 1).maybeSingle(),
   ])
 
@@ -146,6 +151,15 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
       'extra_occasion_batches is missing on the server; run `npm run db:push` to enable planning sessions.',
     )
   }
+  // Additive table: tolerate a database that has not run migration 0018 yet.
+  if (attendanceRes.error && !isMissingTableError(attendanceRes.error)) {
+    throw attendanceRes.error
+  }
+  if (attendanceRes.error) {
+    console.warn(
+      'attendance_sheets is missing on the server; run `npm run db:push` to enable attendance records.',
+    )
+  }
   if (settingsRes.error) throw settingsRes.error
 
   return {
@@ -161,6 +175,9 @@ export async function readServerData(): Promise<ServerDataSnapshot> {
     ),
     batches: unwrapRows<ExtraOccasionBatch>(
       batchesRes.data as DataRow<ExtraOccasionBatch>[] | null,
+    ),
+    attendance: unwrapRows<AttendanceSheet>(
+      attendanceRes.data as DataRow<AttendanceSheet>[] | null,
     ),
     settings: settingsRowToStoreData(
       settingsRes.data as DataRow<unknown> | null,

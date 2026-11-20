@@ -80,12 +80,11 @@ test('resolvedNavGroups preserves group order and item order', () => {
   assert.deepEqual(
     resolved.map((g) => g.items.map((i) => i.label)),
     [
-      ['Dashboard'],
+      ['Dashboard', 'Koro Maker'],
       [
         'AWS Master List',
         'AWS Nagsasanay',
         'AWS Members History',
-        'Koro Maker',
       ],
       [
         'AWS Choir Suguan',

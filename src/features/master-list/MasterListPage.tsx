@@ -13,8 +13,14 @@ import {
   ShieldCheck,
   Venus,
   X,
+  CalendarPlus,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +52,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useMemberStore } from '@/store/memberStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useAttendanceStore } from '@/store/attendanceStore'
 import { useNavStore } from '@/store/navStore'
 import { useSidebarStore } from '@/store/sidebarStore'
 import { formatPHTDateTime } from '@/lib/phDate'
@@ -100,6 +107,8 @@ import {
   type MobileFilterSection,
 } from './mobileFilters'
 import { MobileMemberFormDialog } from './MobileMemberFormDialog'
+import { AttendanceHistory } from './AttendanceHistory'
+import { AttendanceRecordView } from './AttendanceRecordView'
 import {
   MasterListPdfSetupDialog,
 } from './MasterListPdfSetupDialog'
@@ -254,6 +263,18 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
   // null closes the sheet; otherwise it names the one filter being edited.
   const [filterSheetSection, setFilterSheetSection] =
     useState<MobileFilterSection | null>(null)
+  const [attendanceTab, setAttendanceTab] = useState<
+    'members' | 'attendance'
+  >('members')
+  const [openSheetId, setOpenSheetId] = useState<string | null>(null)
+  const attendanceStore = useAttendanceStore()
+  const sheet = useMemo(
+    () => (openSheetId ? attendanceStore.getSheet(openSheetId) : undefined),
+    [openSheetId, attendanceStore],
+  )
+  useEffect(() => {
+    if (openSheetId && !sheet) setOpenSheetId(null)
+  }, [openSheetId, sheet])
 
   // References are built from this choir's persisted roster so M-001 codes
   // never shift for the remaining members when someone is transferred out. The
@@ -519,6 +540,13 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
     >,
     format: MasterListAttendanceExportFormat,
   ) => {
+    const sheet = attendanceStore.createSheet({ ...options, choir })
+    if (!sheet) {
+      toast.error('Could not create the attendance sheet.')
+      return
+    }
+    setOpenSheetId(sheet.id)
+    setAttendanceSetupOpen(false)
     const extension = format === 'pdf' ? 'pdf' : 'docx'
     const fileName = exportFileName(options.title, extension)
     requestExport({
@@ -540,6 +568,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
             } else {
               await exportMasterListAttendanceWord(exportOptions)
             }
+            attendanceStore.markExported(sheet.id)
             toast.success(
               `Attendance sheet exported as ${format === 'pdf' ? 'PDF' : 'Word'}.`,
             )
@@ -591,7 +620,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                 Add Member
               </Button>
             )}
-            {canExportDocuments && (
+            {canExportDocuments && attendanceTab === 'members' ? (
               <ExportMenu
                 compact
                 onCsv={() => handleExport('csv')}
@@ -600,6 +629,11 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                 onPdf={() => setPdfSetupOpen(true)}
                 onAttendance={() => setAttendanceSetupOpen(true)}
               />
+            ) : (
+              <Button onClick={() => setAttendanceSetupOpen(true)}>
+                <CalendarPlus className="size-4" />
+                New Attendance Sheet
+              </Button>
             )}
           </>
         }
@@ -618,7 +652,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                 Add Member
               </Button>
             )}
-            {canExportDocuments && (
+            {canExportDocuments && attendanceTab === 'members' ? (
               <ExportMenu
                 onCsv={() => handleExport('csv')}
                 onExcel={() => handleExport('excel')}
@@ -626,18 +660,55 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
                 onPdf={() => setPdfSetupOpen(true)}
                 onAttendance={() => setAttendanceSetupOpen(true)}
               />
+            ) : (
+              <Button onClick={() => setAttendanceSetupOpen(true)}>
+                <CalendarPlus className="size-4" />
+                New Attendance Sheet
+              </Button>
             )}
           </>
         }
       />
 
-      <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
+      <Tabs
+        value={attendanceTab}
+        onValueChange={(value) =>
+          setAttendanceTab(value as 'members' | 'attendance')
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {/* Search & filter toolbar. The direct filters live here (choir segment,
-          voices, positions, sort); status is owned by the KPI strip above, so
-          it is not repeated as a control. Sticky under the screen header so
-          the filters stay with you while the list scrolls. */}
-      <div
+      {attendanceTab === 'attendance' && openSheetId && sheet ? (
+        <AttendanceRecordView
+          sheet={sheet}
+          choir={choir}
+          members={members}
+          trainees={trainees}
+          voices={voices}
+          canEditMembers={canEditMembers}
+          onClose={() => setOpenSheetId(null)}
+        />
+      ) : attendanceTab === 'attendance' ? (
+        <AttendanceHistory
+          choir={choir}
+          members={members}
+          trainees={trainees}
+          canEditMembers={canEditMembers}
+          onOpen={(id) => setOpenSheetId(id)}
+        />
+      ) : (
+        <>
+          <StatCards stats={stats} selected={selectedStat} onSelect={selectStat} />
+
+          {/* Search & filter toolbar. The direct filters live here (choir segment,
+              voices, positions, sort); status is owned by the KPI strip above, so
+              it is not repeated as a control. Sticky under the screen header so
+              the filters stay with you while the list scrolls. */}
+          <div
         className={cn(
           'sticky top-14 z-20 -mx-4 flex flex-col gap-2.5 border-b border-border/70 bg-background px-4 py-2.5',
           'md:top-14 md:mx-0 md:gap-3 md:rounded-xl md:border md:px-3 md:py-3 md:bg-card',
@@ -987,7 +1058,8 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
           </div>
         </div>
       </section>
-
+      </>
+      )}
       {/* Mobile filter dialog */}
       <MobileFilterDialog
         open={filterSheetSection !== null}

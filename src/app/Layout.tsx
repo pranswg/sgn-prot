@@ -163,8 +163,8 @@ const PAGE_META: Record<
     subtitle: 'Track PNK trainees and promote them into the PNK Master List.',
   },
   'koro-maker': {
-    group: 'AWS Choir',
-    groupTarget: 'master-list',
+    group: 'Overview',
+    groupTarget: 'dashboard',
     title: 'Koro Maker',
     subtitle: 'Arrange choir members and voice parts for special occasions.',
   },

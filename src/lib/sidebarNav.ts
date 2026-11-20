@@ -109,10 +109,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
 ]
 
 export const NAV_GROUPS: readonly NavGroup[] = [
-  { label: 'Overview', pages: ['dashboard'] },
+  { label: 'Overview', pages: ['dashboard', 'koro-maker'] },
   {
     label: 'AWS Choir',
-    pages: ['master-list', 'trainees', 'members-history', 'koro-maker'],
+    pages: ['master-list', 'trainees', 'members-history'],
   },
   {
     label: 'AWS Suguan',

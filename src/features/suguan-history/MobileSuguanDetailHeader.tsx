@@ -21,7 +21,8 @@ import { useNavStore } from '@/store/navStore'
  * stacked on one screen read as a bug. The negative margins cancel the
  * `p-4 pt-5` page gutter so the bar stays flush with the viewport edge.
  */
-export function MobileSuguanDetailHeader() {
+/** The record's service and date, so the phone bar names what it is showing. */
+export function MobileSuguanDetailHeader({ subtitle }: { subtitle?: string }) {
   const navigate = useNavStore((s) => s.navigate)
   const signOut = useAuthStore((s) => s.signOut)
   const currentAccountId = useAuthStore((s) => s.currentAccountId)
@@ -45,7 +46,7 @@ export function MobileSuguanDetailHeader() {
           Suguan Detail
         </p>
         <p className="truncate text-[0.625rem] text-muted-foreground">
-          Review a saved Suguan schedule and its assignments.
+          {subtitle ?? 'Review a saved Suguan schedule and its assignments.'}
         </p>
       </div>
 

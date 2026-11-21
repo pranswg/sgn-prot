@@ -699,6 +699,7 @@ export function MasterListPage({ choir = 'aws' }: { choir?: Choir }) {
           trainees={trainees}
           canEditMembers={canEditMembers}
           onOpen={(id) => setOpenSheetId(id)}
+          onCreate={() => setAttendanceSetupOpen(true)}
         />
       ) : (
         <>

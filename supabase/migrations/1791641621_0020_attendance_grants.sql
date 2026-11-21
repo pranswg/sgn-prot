@@ -1,0 +1,12 @@
+-- Phase 6c: grant the authenticated write privileges attendance_sheets never had.
+-- Migrations 0018 and 0019 created the RLS policies (insert/update/delete gated
+-- by `public.has_permission(...)`) but only granted SELECT to `authenticated` and
+-- left INSERT/UPDATE/DELETE with `service_role`. An RLS policy is not a table
+-- privilege: both are required, so every client write failed with
+-- `permission denied for table attendance_sheets` (SQLSTATE 42501) and the
+-- optimistic sheet was rolled back with "Could not create the attendance sheet."
+--
+-- This mirrors the grant every other write-through table got when its policy
+-- landed (0006-0009). The permission RLS from 0019 still decides which rows a
+-- caller may write.
+grant insert, update, delete on public.attendance_sheets to authenticated;

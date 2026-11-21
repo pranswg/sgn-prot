@@ -47,7 +47,12 @@ interface AttendanceState {
   createSheet: (input: AttendanceSheetInput) => AttendanceSheet | null
   getSheet: (id: string) => AttendanceSheet | undefined
   setPresent: (sheetId: string, personKey: string, dateKey: DateKey, present: boolean) => void
-  updatePresent: (sheetId: string, present: Record<string, DateKey[]>) => void
+  /** Resolves to whether the server accepted the write, so an editor can report
+   *  the real outcome instead of a premature "saved". */
+  updatePresent: (
+    sheetId: string,
+    present: Record<string, DateKey[]>,
+  ) => Promise<boolean>
   markExported: (id: string) => void
   deleteSheet: (id: string) => void
   importData: (sheets: AttendanceSheet[]) => void
@@ -64,8 +69,8 @@ function writeSheet(
   previous: AttendanceSheet[],
   sheet: AttendanceSheet,
   failure: string,
-) {
-  persistWrite({
+): Promise<boolean> {
+  return persistWrite({
     write: upsertRow('attendance_sheets', sheet.id, sheet),
     rollback: () => set({ sheets: previous }),
     failure,
@@ -135,7 +140,7 @@ export const useAttendanceStore = create<AttendanceState>()(
       updatePresent: (sheetId, present) => {
         const previous = get().sheets
         const existing = previous.find((sheet) => sheet.id === sheetId)
-        if (!existing) return
+        if (!existing) return Promise.resolve(false)
         const next: AttendanceSheet = {
           ...existing,
           present,
@@ -144,7 +149,12 @@ export const useAttendanceStore = create<AttendanceState>()(
         set((s) => ({
           sheets: s.sheets.map((sheet) => (sheet.id === sheetId ? next : sheet)),
         }))
-        writeSheet(set, previous, next, 'Could not save the attendance. It was reverted.')
+        return writeSheet(
+          set,
+          previous,
+          next,
+          'Could not save the attendance. It was reverted.',
+        )
       },
 
       markExported: (id) => {

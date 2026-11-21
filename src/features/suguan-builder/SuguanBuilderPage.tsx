@@ -56,6 +56,7 @@ export function SuguanBuilderPage() {
   const dismissNewSuguan = useNavStore((s) => s.dismissNewSuguan)
   const clearBuilderReturnPage = useNavStore((s) => s.clearBuilderReturnPage)
   const builderSuguanId = useNavStore((s) => s.builderSuguanId)
+  const copySuguanId = useNavStore((s) => s.copySuguanId)
   const suguanList = useSuguanStore((s) => s.suguan)
   const createSuguan = useSuguanStore((s) => s.createSuguan)
   const updateSuguan = useSuguanStore((s) => s.updateSuguan)
@@ -86,7 +87,21 @@ export function SuguanBuilderPage() {
     [suguanList, editingId],
   )
 
-  const initialKey = editingId ?? '__new__'
+  // "Save as new": a saved record seeds the draft, but `editingId` stays null,
+  // so saving writes a new row instead of overwriting the one that was viewed.
+  const copySource = useMemo<Suguan | null>(
+    () =>
+      copySuguanId
+        ? suguanList.find((s) => s.id === copySuguanId) ?? null
+        : null,
+    [suguanList, copySuguanId],
+  )
+  const draftFromCopy = (source: Suguan): SuguanDraft => ({
+    ...draftFromSuguan(source),
+    copiedFromId: source.id,
+  })
+
+  const initialKey = copySource ? `copy:${copySource.id}` : editingId ?? '__new__'
   const [loadedKey, setLoadedKey] = useState(initialKey)
   const [step, setStep] = useState(
     existing ? BUILDER_STEPS.length - 1 : 0,
@@ -94,19 +109,23 @@ export function SuguanBuilderPage() {
   const [draft, setDraft] = useState<SuguanDraft>(() =>
     existing
       ? draftFromSuguan(existing)
-      : createEmptyDraft(voices, scheduleCategories, pagsambaId),
+      : copySource
+        ? draftFromCopy(copySource)
+        : createEmptyDraft(voices, scheduleCategories, pagsambaId),
   )
-  const [startOpen, setStartOpen] = useState(!existing)
+  const [startOpen, setStartOpen] = useState(!existing && !copySource)
 
   if (loadedKey !== initialKey) {
     setLoadedKey(initialKey)
     setDraft(
       existing
         ? draftFromSuguan(existing)
-        : createEmptyDraft(voices, scheduleCategories, pagsambaId),
+        : copySource
+          ? draftFromCopy(copySource)
+          : createEmptyDraft(voices, scheduleCategories, pagsambaId),
     )
     setStep(existing ? BUILDER_STEPS.length - 1 : 0)
-    setStartOpen(!existing)
+    setStartOpen(!existing && !copySource)
   }
 
   const patch = (p: Partial<SuguanDraft>) =>
@@ -192,7 +211,11 @@ pagsasanayDate: draft.pagsasanayDate || undefined,
 
   const [saveSuguan, savingSuguan] = useAsyncAction(handleSave)
 
-  const title = existing ? 'Edit Suguan' : 'Worship Service Suguan'
+  const title = existing
+    ? 'Edit Suguan'
+    : copySource
+      ? 'Save as new Suguan'
+      : 'Worship Service Suguan'
 
   const subtitle = draft.date ? formatDate(draft.date) : 'New Suguan'
 

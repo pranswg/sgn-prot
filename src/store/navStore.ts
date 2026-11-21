@@ -33,6 +33,14 @@ interface NavState {
   /** The saved Organist Suguan the maker should open for editing. */
   organistaSuguanId: string | null
   extraOccasionSuguanId: string | null
+  /**
+   * A saved Suguan the builder should open as a **new** record: the draft is
+   * seeded from the source, but no id is carried, so saving creates another
+   * row instead of overwriting the one that was viewed.
+   */
+  copySuguanId: string | null
+  /** The same, for the Extra Occasion single maker. */
+  copyExtraOccasionSuguanId: string | null
   /** A saved planning session to open on the next visit to the page. */
   extraOccasionBatchId: string | null
   extraOccasionMode: ExtraOccasionMode | null
@@ -89,9 +97,13 @@ interface NavState {
   /** Forgets the remembered return page once the user has committed to a draft. */
   clearBuilderReturnPage: () => void
   editSuguanInBuilder: (id: string) => void
+  /** Open the builder seeded from a saved Suguan, detached so Save creates a new one. */
+  copySuguanAsNew: (id: string) => void
   /** Open the Organist Suguan maker loaded with a saved record. */
   editOrganistaSuguan: (id: string) => void
   editExtraOccasionSuguan: (id: string) => void
+  /** Open the Extra Occasion maker seeded from a saved record, detached like `copySuguanAsNew`. */
+  copyExtraOccasionSuguanAsNew: (id: string) => void
   /** Switch the Extra Occasion page to a workflow (or back to the chooser). */
   setExtraOccasionMode: (mode: ExtraOccasionMode) => void
   /** Open a saved Multiple Extra Occasion planning session. */
@@ -106,6 +118,8 @@ export const useNavStore = create<NavState>()(
       builderSuguanId: null,
       organistaSuguanId: null,
       extraOccasionSuguanId: null,
+      copySuguanId: null,
+      copyExtraOccasionSuguanId: null,
       extraOccasionBatchId: null,
       extraOccasionMode: null,
       selectedHistoryMemberId: null,
@@ -119,6 +133,8 @@ export const useNavStore = create<NavState>()(
           builderSuguanId: null,
           organistaSuguanId: null,
           extraOccasionSuguanId: null,
+          copySuguanId: null,
+          copyExtraOccasionSuguanId: null,
           // Entering the page shows the chooser; leaving it clears the mode.
           extraOccasionBatchId: null,
           extraOccasionMode: page === 'extra-occasion-suguan' ? 'choose' : null,
@@ -146,6 +162,8 @@ export const useNavStore = create<NavState>()(
           builderSuguanId: null,
           organistaSuguanId: null,
           extraOccasionSuguanId: null,
+          copySuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
           selectedHistoryMemberId: null,
@@ -168,6 +186,8 @@ export const useNavStore = create<NavState>()(
           builderSuguanId: null,
           organistaSuguanId: null,
           extraOccasionSuguanId: null,
+          copySuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
           selectedHistoryMemberId: null,
@@ -182,6 +202,8 @@ export const useNavStore = create<NavState>()(
           builderSuguanId: null,
           organistaSuguanId: null,
           extraOccasionSuguanId: null,
+          copySuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
           builderReturnPage: null,
@@ -202,6 +224,8 @@ export const useNavStore = create<NavState>()(
           builderSuguanId: null,
           organistaSuguanId: null,
           extraOccasionSuguanId: null,
+          copySuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
           selectedSuguanId: null,
@@ -230,12 +254,30 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'suguan-builder',
           builderSuguanId: id,
+          copySuguanId: null,
           organistaSuguanId: null,
           extraOccasionSuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
+          builderReturnPage: null,
+          directoryStart: null,
+        }),
+      copySuguanAsNew: (id) =>
+        set({
+          page: 'suguan-builder',
+          builderSuguanId: null,
+          copySuguanId: id,
+          organistaSuguanId: null,
+          extraOccasionSuguanId: null,
+          copyExtraOccasionSuguanId: null,
+          extraOccasionBatchId: null,
+          extraOccasionMode: null,
+          selectedSuguanId: null,
+          selectedHistoryMemberId: null,
+          // No start dialog opens for a copy, so there is nothing to return to.
           builderReturnPage: null,
           directoryStart: null,
         }),
@@ -244,7 +286,9 @@ export const useNavStore = create<NavState>()(
           page: 'organista-suguan-maker',
           organistaSuguanId: id,
           builderSuguanId: null,
+          copySuguanId: null,
           extraOccasionSuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: null,
           selectedSuguanId: null,
@@ -256,9 +300,26 @@ export const useNavStore = create<NavState>()(
         set({
           page: 'extra-occasion-suguan',
           extraOccasionSuguanId: id,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: null,
           extraOccasionMode: 'single',
           builderSuguanId: null,
+          copySuguanId: null,
+          organistaSuguanId: null,
+          selectedSuguanId: null,
+          selectedHistoryMemberId: null,
+          builderReturnPage: null,
+          directoryStart: null,
+        }),
+      copyExtraOccasionSuguanAsNew: (id) =>
+        set({
+          page: 'extra-occasion-suguan',
+          extraOccasionSuguanId: null,
+          copyExtraOccasionSuguanId: id,
+          extraOccasionBatchId: null,
+          extraOccasionMode: 'single',
+          builderSuguanId: null,
+          copySuguanId: null,
           organistaSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,
@@ -270,9 +331,11 @@ export const useNavStore = create<NavState>()(
         set((s) => ({
           page: 'extra-occasion-suguan',
           extraOccasionSuguanId: null,
+          copyExtraOccasionSuguanId: null,
           extraOccasionBatchId: id,
           extraOccasionMode: 'multi',
           builderSuguanId: null,
+          copySuguanId: null,
           organistaSuguanId: null,
           selectedSuguanId: null,
           selectedHistoryMemberId: null,

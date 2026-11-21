@@ -20,6 +20,8 @@ function reset(page: Page = 'dashboard') {
     builderSuguanId: null,
     organistaSuguanId: null,
     extraOccasionSuguanId: null,
+    copySuguanId: null,
+    copyExtraOccasionSuguanId: null,
     extraOccasionBatchId: null,
     extraOccasionMode: null,
     builderReturnPage: null,
@@ -105,6 +107,37 @@ test('editing a saved Suguan does not arm a return, because no dialog opens', ()
   assert.equal(useNavStore.getState().page, 'suguan-builder')
   assert.equal(useNavStore.getState().builderSuguanId, 'sg1')
   assert.equal(useNavStore.getState().builderReturnPage, null)
+})
+
+test('save-as-new opens the builder detached from the record it copied', () => {
+  reset('suguan-detail')
+  useNavStore.getState().copySuguanAsNew('sg1')
+  assert.equal(useNavStore.getState().page, 'suguan-builder')
+  assert.equal(useNavStore.getState().copySuguanId, 'sg1')
+  // No edit target means Save creates a new record instead of overwriting.
+  assert.equal(useNavStore.getState().builderSuguanId, null)
+  // A copy opens no start dialog, so there is no origin to return to.
+  assert.equal(useNavStore.getState().builderReturnPage, null)
+})
+
+test('save-as-new for an Extra Occasion opens the maker detached from its record', () => {
+  reset('suguan-detail')
+  useNavStore.getState().copyExtraOccasionSuguanAsNew('extra-1')
+  assert.equal(useNavStore.getState().page, 'extra-occasion-suguan')
+  assert.equal(useNavStore.getState().copyExtraOccasionSuguanId, 'extra-1')
+  assert.equal(useNavStore.getState().extraOccasionSuguanId, null)
+  assert.equal(useNavStore.getState().extraOccasionMode, 'single')
+
+  useNavStore.getState().navigate('suguan-history')
+  assert.equal(useNavStore.getState().copyExtraOccasionSuguanId, null)
+})
+
+test('editing a saved record clears a stale save-as-new target', () => {
+  reset('suguan-history')
+  useNavStore.getState().copySuguanAsNew('sg1')
+  useNavStore.getState().editSuguanInBuilder('sg2')
+  assert.equal(useNavStore.getState().copySuguanId, null)
+  assert.equal(useNavStore.getState().builderSuguanId, 'sg2')
 })
 
 test('editing an Extra Occasion record opens its maker and plain navigation clears the edit target', () => {

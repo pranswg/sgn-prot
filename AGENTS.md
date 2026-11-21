@@ -366,8 +366,14 @@ change. There is no router, so `page` is the entire navigation model, and the
   fires later and yanks the user away from a builder they are working in.
 - `editSuguanInBuilder` deliberately leaves it `null`: editing a saved Suguan
   opens no dialog, so there is nothing to dismiss.
+- `copySuguanAsNew` / `copyExtraOccasionSuguanAsNew` (Suguan Detail's "Save as
+  new") also leave it `null`. They open the editor seeded from the viewed
+  record through `copySuguanId` / `copyExtraOccasionSuguanId` while leaving the
+  edit targets (`builderSuguanId` / `extraOccasionSuguanId`) `null`, so pressing
+  Save writes a new history entry instead of overwriting the original.
 - The one-shot flags (`directoryStart`, `selectedHistoryMemberId`,
-  `builderReturnPage`) and the open-record targets (`builderSuguanId`,
+  `builderReturnPage`, `copySuguanId`, `copyExtraOccasionSuguanId`) and the
+  open-record targets (`builderSuguanId`,
   `organistaSuguanId`, `extraOccasionSuguanId`) are deliberately **not** persisted,
   so a reload cannot re-open a dialog or replay a filtered directory. The
   rehydrate `merge` also drops a persisted `suguan-builder` page to the dashboard,
@@ -951,7 +957,10 @@ boundaries, so a change in one feature rarely reaches another.
   their own clicks and keydowns so selecting or opening a menu never navigates.
   Choir and Organist rows carry the same action set: Edit (pencil, `edit-suguan`),
   View (eye), and a kebab with the exports (`export-documents`) and Delete
-  (`delete-suguan`). Editing an Organist record calls
+  (`delete-suguan`). A Suguan's detail screen adds **Save as new**
+  (`create-suguan`) beside Edit: it opens the Choir builder or the Extra
+  Occasion maker seeded from the viewed record but detached from it, so Save
+  creates another history entry and leaves the original untouched. Editing an Organist record calls
   `navStore.editOrganistaSuguan`, which seeds the maker from the saved record
   (`organistaSuguanId`), turns Save into `organistaSuguanStore.updateRecord`
   (id and `createdAt` preserved, `updatedAt` moves), and returns to history

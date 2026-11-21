@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import {
   ArrowLeft,
+  CopyPlus,
   FileDown,
   FileSpreadsheet,
   FileText,
@@ -51,6 +52,7 @@ import {
 } from '@/features/extra-occasion-suguan/extraOccasionExport'
 import { extraOccasionRecordLabel } from '@/features/extra-occasion-suguan/extraOccasionData'
 import { useExportPreview } from '@/hooks/useExportPreview'
+import { usePermissions } from '@/hooks/usePermissions'
 import { MobileSuguanDetailHeader } from './MobileSuguanDetailHeader'
 
 function MetaChip({ children }: { children: ReactNode }) {
@@ -68,8 +70,14 @@ export function SuguanDetailPage() {
   const navigate = useNavStore((s) => s.navigate)
   const editSuguanInBuilder = useNavStore((s) => s.editSuguanInBuilder)
   const editExtraOccasionSuguan = useNavStore((s) => s.editExtraOccasionSuguan)
+  const copySuguanAsNew = useNavStore((s) => s.copySuguanAsNew)
+  const copyExtraOccasionSuguanAsNew = useNavStore(
+    (s) => s.copyExtraOccasionSuguanAsNew,
+  )
   const members = useMemberStore((s) => s.members)
   const allVoices = useSettingsStore((s) => s.allVoices)
+  const { can } = usePermissions()
+  const canCreateSuguan = can('create-suguan')
 
   const s = suguan.find((su) => su.id === selectedSuguanId) ?? null
 
@@ -116,6 +124,12 @@ export function SuguanDetailPage() {
     isExtraOccasion
       ? editExtraOccasionSuguan(s.id)
       : editSuguanInBuilder(s.id)
+  // Opens the matching editor seeded with this record but detached from it, so
+  // pressing Save adds a new history entry and leaves this one untouched.
+  const saveAsNew = () =>
+    isExtraOccasion
+      ? copyExtraOccasionSuguanAsNew(s.id)
+      : copySuguanAsNew(s.id)
 
   const events = s.events ?? []
 
@@ -256,6 +270,12 @@ export function SuguanDetailPage() {
             <FileText className="size-3.5" />
             Edit Suguan
           </Button>
+          {canCreateSuguan && (
+            <Button variant="outline" size="sm" onClick={saveAsNew}>
+              <CopyPlus className="size-3.5" />
+              Save as new
+            </Button>
+          )}
           <Button
             variant="destructive"
             size="icon-sm"
@@ -316,6 +336,12 @@ export function SuguanDetailPage() {
               <FileText className="size-4" />
               Edit
             </Button>
+            {canCreateSuguan && (
+              <Button variant="outline" onClick={saveAsNew}>
+                <CopyPlus className="size-4" />
+                Save as new
+              </Button>
+            )}
             <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="size-4" />
             </Button>

@@ -58,6 +58,19 @@ export function ExtraOccasionSingleMaker() {
         record.id === extraOccasionSuguanId && Boolean(record.extraOccasion),
     ),
   )
+  // "Save as new": the form is seeded from a saved occasion but no id is
+  // carried, so Save writes another record instead of updating that one.
+  const copyExtraOccasionSuguanId = useNavStore(
+    (state) => state.copyExtraOccasionSuguanId,
+  )
+  const copySource = useSuguanStore((state) =>
+    state.suguan.find(
+      (record) =>
+        record.id === copyExtraOccasionSuguanId && Boolean(record.extraOccasion),
+    ),
+  )
+  /** What the form starts from: the record being edited, else the copied one. */
+  const seedRecord = existingRecord ?? copySource
   const createSuguan = useSuguanStore((state) => state.createSuguan)
   const updateSuguan = useSuguanStore((state) => state.updateSuguan)
   const suguan = useSuguanStore((state) => state.suguan)
@@ -72,9 +85,9 @@ export function ExtraOccasionSingleMaker() {
   /** Stable identity for a brand-new occasion, before it has a saved id. */
   const [localKey] = useState(() => nanoid())
   const [state, setState] = useState<ExtraOccasionOccasionState>(() =>
-    existingRecord
+    seedRecord
       ? occasionStateFromSuguan(
-          existingRecord,
+          seedRecord,
           voices,
           useSettingsStore.getState().allServiceTypes(),
         )
@@ -94,10 +107,13 @@ export function ExtraOccasionSingleMaker() {
     () =>
       occasionRefFromInput(state, {
         key: existingRecord?.id ?? localKey,
-        savedId: existingRecord?.id ?? null,
+        // While copying, the source is named here only so `comparisonRefs`
+        // leaves it out: a fresh copy must not warn against the very record it
+        // was copied from. `existingRecord` still decides update-vs-create.
+        savedId: existingRecord?.id ?? copySource?.id ?? null,
         label: occasionLabel(state) || 'Extra Occasion',
       }),
-    [state, existingRecord, localKey],
+    [state, existingRecord, copySource, localKey],
   )
   // The single maker holds one occasion, so there is never a sibling session
   // occasion to compare against — only the saved Extra Occasions in History.
@@ -257,7 +273,13 @@ export function ExtraOccasionSingleMaker() {
       <ExtraOccasionHeader
         title="Extra Occasion Suguan"
         subtitle={`${state.name.trim() || 'Extra occasion'} · ${occasionChoirLabel(state.draft.group)}`}
-        badge={existingRecord ? 'Editing saved occasion' : 'Single occasion'}
+        badge={
+          existingRecord
+            ? 'Editing saved occasion'
+            : copySource
+              ? 'Copy of a saved occasion'
+              : 'Single occasion'
+        }
       />
 
       <ExtraOccasionOccasionForm
